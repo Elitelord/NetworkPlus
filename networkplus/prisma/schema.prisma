@@ -3,13 +3,97 @@
 
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  name      String
+  email     String     @unique
+  image     String?
+  contacts  Contact[]  @relation("UserContacts")
+  reminders Reminder[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Contact {
+  id                String        @id @default(cuid())
+  ownerId           String
+  owner             User          @relation("UserContacts", fields: [ownerId], references: [id])
+  name              String
+  category          Category      @default(FRIEND)
+  phone             String?
+  email             String?
+  relationship      Relationship? @relation(fields: [relationshipId], references: [id])
+  relationshipId    String?
+  interactions      Interaction[]
+  createdAt         DateTime      @default(now())
+  lastInteractionAt DateTime?
+  lastPlatform      Platform? // most recent
+  commonPlatform    Platform?
+  Reminder          Reminder[]
+}
+
+model Relationship {
+  id         String    @id @default(cuid())
+  contactAId String
+  contactBId String
+  type       String // "family", "friend", "coworker", "mutual"
+  notes      String?
+  createdAt  DateTime  @default(now())
+  Contact    Contact[]
+}
+
+model Interaction {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id])
+  type      String // "message", "call", "meeting", etc.
+  content   String?
+  platform  Platform @default(OTHER) // 🆕 platform tracking
+  date      DateTime @default(now())
+}
+
+model Reminder {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  contactId   String?
+  contact     Contact? @relation(fields: [contactId], references: [id])
+  message     String
+  dueDate     DateTime
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+enum Category {
+  FRIEND
+  FAMILY
+  WORK
+  MUTUAL
+  OTHER
+}
+
+enum Platform {
+  SMS
+  CALL
+  EMAIL
+  INSTAGRAM
+  DISCORD
+  WHATSAPP
+  FACEBOOK
+  LINKEDIN
+  SNAPCHAT
+  TELEGRAM
+  IN_PERSON
+  OTHER
 }
