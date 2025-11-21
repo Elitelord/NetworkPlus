@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Navbar  from "../components/navbar";
+import Navbar  from "../../components/navbar";
 export default function Home() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
@@ -7,7 +7,7 @@ export default function Home() {
         <header>
           {/* <Navbar /> */}
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
-            Welcome to NetworkPlus!
+            Welcome to Plus!
           </h1>
         </header>
       </main>
