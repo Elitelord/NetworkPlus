@@ -1,16 +1,12 @@
 import Image from "next/image";
 import Navbar  from "../../components/navbar";
+import { LoginForm } from "@/components/auth/login-form";
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between  ">
-        <header>
-          {/* <Navbar /> */}
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
-            Welcome to Network!
-          </h1>
-        </header>
-      </main>
+    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+      <div className="w-full max-w-sm">
+        <LoginForm />
+      </div>
     </div>
   );
 }
