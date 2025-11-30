@@ -11,13 +11,15 @@ const graphData =
           "id": "id1",
           "name": "name1",
           "val": 1,
-          "group": "Family"
+          "group": "Family",
+          "color": "blue"
         },
         {
           "id": "id2",
           "name": "name2",
           "val": 10,
-          "group": "Friends"
+          "group": "Friends",
+          "color": "red"
         }
         
     ],
@@ -36,7 +38,14 @@ export default function Home() {
   useEffect(() => {
     const el = graphRef.current;
     if (!el) return;
-    const myGraph = new ForceGraph(el).graphData(graphData);
+    const myGraph = new ForceGraph(el).nodeAutoColorBy("group").
+    enablePanInteraction(true).
+    enableZoomInteraction(true).
+    onNodeClick(node => {
+        // Center/zoom on node
+        myGraph.centerAt(node.x, node.y, 1000);
+        myGraph.zoom(8, 2000);
+      }).graphData(graphData);
     return () => {
       // Basic cleanup: reset graph data to avoid leaks
       try {
