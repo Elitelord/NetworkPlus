@@ -23,6 +23,7 @@ model User {
   reminders Reminder[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  Node      Node[]
 }
 
 model Contact {
@@ -96,4 +97,31 @@ enum Platform {
   TELEGRAM
   IN_PERSON
   OTHER
+}
+
+// Node / Link graph models for network visualization and relationships
+model Node {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  metadata    Json?
+  ownerId     String?
+  owner       User?    @relation(fields: [ownerId], references: [id])
+  outgoing    Link[]   @relation("from")
+  incoming    Link[]   @relation("to")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Link {
+  id        String   @id @default(cuid())
+  fromId    String
+  toId      String
+  from      Node     @relation("from", fields: [fromId], references: [id])
+  to        Node     @relation("to", fields: [toId], references: [id])
+  label     String?
+  weight    Float?   @default(1.0)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
