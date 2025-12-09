@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Navbar from "../../components/navbar";
 import { Button } from "@/components/ui/button";
 import ForceGraph from "force-graph";
@@ -54,7 +54,7 @@ export default function Home() {
     };
   }, [nodes, links]);
 
-  async function createNode(e?: React.FormEvent) {
+  async function createNode(e?: FormEvent) {
     e?.preventDefault();
     await fetch("/api/nodes", {
       method: "POST",
@@ -66,7 +66,7 @@ export default function Home() {
     await loadData();
   }
 
-  async function createLink(e?: React.FormEvent) {
+  async function createLink(e?: FormEvent) {
     e?.preventDefault();
     await fetch("/api/links", {
       method: "POST",
