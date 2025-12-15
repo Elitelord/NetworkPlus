@@ -3,6 +3,11 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import Navbar from "../../components/navbar";
 import { Button } from "@/components/ui/button";
 import ForceGraph from "force-graph";
+import {
+  NativeSelect,
+  NativeSelectOptGroup,
+  NativeSelectOption,
+} from "@/components/ui/native-select"
 
 type NodeType = { id: string; title: string; description?: string };
 type LinkType = { id: string; fromId: string; toId: string; label?: string };
@@ -103,6 +108,16 @@ export default function Home() {
                 <li key={n.id} className="text-sm">{n.title} — {n.id}</li>
               ))}
             </ul>
+            <NativeSelect>
+              <NativeSelectOption value="">Select a fruit</NativeSelectOption>
+              <NativeSelectOption value="apple">Apple</NativeSelectOption>
+              <NativeSelectOption value="banana">Banana</NativeSelectOption>
+              <NativeSelectOption value="blueberry">Blueberry</NativeSelectOption>
+              <NativeSelectOption value="grapes" disabled>
+                Grapes
+              </NativeSelectOption>
+              <NativeSelectOption value="pineapple">Pineapple</NativeSelectOption>
+            </NativeSelect>
           </div>
 
           <div className="p-4 bg-white rounded shadow">
