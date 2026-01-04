@@ -1,15 +1,15 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import Navbar from "../../components/navbar";
+import { useEffect, useRef, useState, useMemo, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import ForceGraph from "force-graph";
 import {
   NativeSelect,
-  NativeSelectOptGroup,
   NativeSelectOption,
 } from "@/components/ui/native-select"
 
-type NodeType = { id: string; title: string; description?: string };
+type NodeMetadata = { group?: string; [key: string]: any };
+
+type NodeType = { id: string; title: string; description?: string; metadata?: NodeMetadata };
 type LinkType = { id: string; fromId: string; toId: string; label?: string };
 
 export default function Home() {
@@ -21,25 +21,83 @@ export default function Home() {
   const [fromId, setFromId] = useState("");
   const [toId, setToId] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   async function loadData() {
-    const [nRes, lRes] = await Promise.all([fetch("/api/nodes"), fetch("/api/links")]);
-    const [nJson, lJson] = await Promise.all([nRes.json(), lRes.json()]);
-    setNodes(nJson || []);
-    setLinks(lJson || []);
+    setError(null);
+    try {
+      const [nRes, lRes] = await Promise.all([fetch("/api/nodes"), fetch("/api/links")]);
+
+      const parseResponse = async (res: Response) => {
+        const ct = res.headers.get("content-type") || "";
+        if (!res.ok) {
+          const txt = await res.text();
+          console.error("Fetch failed:", res.status, txt);
+          throw new Error(`Request failed (${res.status})`);
+        }
+        if (ct.includes("application/json")) {
+          try {
+            return await res.json();
+          } catch (err) {
+            console.error("JSON parse error:", err);
+            throw new Error("Invalid JSON response");
+          }
+        }
+        // not JSON
+        const txt = await res.text();
+        console.error("Unexpected content type while fetching JSON:", ct, txt.slice(0, 500));
+        throw new Error("Unexpected response format");
+      };
+
+      const [nJson, lJson] = await Promise.all([parseResponse(nRes), parseResponse(lRes)]);
+      setNodes(Array.isArray(nJson) ? nJson : []);
+      setLinks(Array.isArray(lJson) ? lJson : []);
+    } catch (err: unknown) {
+      console.error("loadData error:", err);
+      setError(String(err));
+      setNodes([]);
+      setLinks([]);
+    }
   }
 
   useEffect(() => {
     loadData();
   }, []);
 
+  const groups = useMemo(() => {
+    const s = new Set<string>();
+    nodes.forEach((n) => {
+      const g = (n as NodeType & { group?: string }).group ?? n.metadata?.group;
+      if (g !== undefined && g !== null && g !== "") s.add(String(g));
+    });
+    return Array.from(s).sort();
+  }, [nodes]);
+
   useEffect(() => {
     const el = graphRef.current;
     if (!el) return;
+
+    // compute visible nodes/links based on selectedGroup
+    const visibleNodes = nodes.filter((n) => {
+      if (!selectedGroup) return true; // show all
+      const g = (n as NodeType & { group?: string }).group ?? n.metadata?.group;
+      return String(g) === selectedGroup;
+    });
+    const visibleIds = new Set(visibleNodes.map((n) => n.id));
+
     const graphData = {
-      nodes: nodes.map((n) => ({ id: n.id, name: n.title, group: "default" })),
-      links: links.map((l) => ({ source: l.fromId, target: l.toId })),
+      nodes: visibleNodes.map((n) => ({
+        id: n.id,
+        name: n.title,
+        group: (n as NodeType & { group?: string }).group ?? n.metadata?.group ?? "default",
+      })),
+
+      links: links
+        .filter((l) => visibleIds.has(l.fromId) && visibleIds.has(l.toId))
+        .map((l) => ({ source: l.fromId, target: l.toId })),
     };
+
     const myGraph = new ForceGraph(el)
       .nodeAutoColorBy("group")
       .enablePanInteraction(true)
@@ -57,31 +115,62 @@ export default function Home() {
         // ignore
       }
     };
-  }, [nodes, links]);
+  }, [nodes, links, selectedGroup]);
+
+  // if groups change and current selection no longer exists, reset to all
+  useEffect(() => {
+    if (selectedGroup && !groups.includes(selectedGroup)) {
+      setSelectedGroup("");
+    }
+  }, [groups, selectedGroup]);
 
   async function createNode(e?: FormEvent) {
     e?.preventDefault();
-    await fetch("/api/nodes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description }),
-    });
-    setTitle("");
-    setDescription("");
-    await loadData();
+    setError(null);
+    try {
+      const res = await fetch("/api/nodes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Create node failed:", res.status, txt);
+        setError(`Create node failed: ${res.status}`);
+        return;
+      }
+      setTitle("");
+      setDescription("");
+      await loadData();
+    } catch (err: any) {
+      console.error(err);
+      setError(String(err?.message ?? err));
+    }
   }
 
   async function createLink(e?: FormEvent) {
     e?.preventDefault();
-    await fetch("/api/links", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fromId, toId, label: linkLabel }),
-    });
-    setFromId("");
-    setToId("");
-    setLinkLabel("");
-    await loadData();
+    setError(null);
+    try {
+      const res = await fetch("/api/links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fromId, toId, label: linkLabel }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Create link failed:", res.status, txt);
+        setError(`Create link failed: ${res.status}`);
+        return;
+      }
+      setFromId("");
+      setToId("");
+      setLinkLabel("");
+      await loadData();
+    } catch (err: any) {
+      console.error(err);
+      setError(String(err?.message ?? err));
+    }
   }
 
   return (
@@ -90,6 +179,7 @@ export default function Home() {
         <header className="mb-6">
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Network Editor</h1>
         </header>
+        {error && <div className="mb-4 text-sm text-red-600">{error}</div>} 
 
         <section className="grid grid-cols-2 gap-6">
           <div className="p-4 bg-white rounded shadow">
@@ -108,15 +198,14 @@ export default function Home() {
                 <li key={n.id} className="text-sm">{n.title} — {n.id}</li>
               ))}
             </ul>
-            <NativeSelect>
-              <NativeSelectOption value="">Select a fruit</NativeSelectOption>
-              <NativeSelectOption value="apple">Apple</NativeSelectOption>
-              <NativeSelectOption value="banana">Banana</NativeSelectOption>
-              <NativeSelectOption value="blueberry">Blueberry</NativeSelectOption>
-              <NativeSelectOption value="grapes" disabled>
-                Grapes
-              </NativeSelectOption>
-              <NativeSelectOption value="pineapple">Pineapple</NativeSelectOption>
+
+            <label className="block mt-4 text-sm font-medium text-muted-foreground">Filter by group</label>
+            <NativeSelect value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
+              <NativeSelectOption value="">All groups</NativeSelectOption>
+              {groups.length === 0 && <NativeSelectOption value="" disabled>No groups found</NativeSelectOption>}
+              {groups.map((g) => (
+                <NativeSelectOption key={g} value={g}>{g}</NativeSelectOption>
+              ))}
             </NativeSelect>
           </div>
 
