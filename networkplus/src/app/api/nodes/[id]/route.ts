@@ -3,10 +3,10 @@ import prisma from "@/lib/prisma";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const node = await prisma.node.findUnique({
       where: { id },
       include: { outgoing: true, incoming: true },
@@ -18,9 +18,9 @@ export async function GET(
   }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
     const { title, description, metadata } = body;
     const node = await prisma.node.update({
@@ -33,9 +33,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     // remove links that reference this node first to avoid FK errors
     await prisma.link.deleteMany({ where: { OR: [{ fromId: id }, { toId: id }] } });
     await prisma.node.delete({ where: { id } });

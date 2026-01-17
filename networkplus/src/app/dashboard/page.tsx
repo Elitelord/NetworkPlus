@@ -1,13 +1,13 @@
 "use client";
 import { useEffect, useRef, useState, useMemo, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import ForceGraph from "force-graph";
+
 import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select"
 
-type NodeMetadata = { group?: string; [key: string]: any };
+type NodeMetadata = { group?: string;[key: string]: any };
 
 type NodeType = { id: string; title: string; description?: string; metadata?: NodeMetadata };
 type LinkType = { id: string; fromId: string; toId: string; label?: string };
@@ -98,19 +98,22 @@ export default function Home() {
         .map((l) => ({ source: l.fromId, target: l.toId })),
     };
 
-    const myGraph = new ForceGraph(el)
-      .nodeAutoColorBy("group")
-      .enablePanInteraction(true)
-      .enableZoomInteraction(true)
-      .onNodeClick((node: any) => {
-        myGraph.centerAt(node.x, node.y, 1000);
-        myGraph.zoom(8, 2000);
-      })
-      .graphData(graphData as any);
+    let myGraph: any;
+    import("force-graph").then(({ default: ForceGraph }) => {
+      myGraph = new ForceGraph(el)
+        .nodeAutoColorBy("group")
+        .enablePanInteraction(true)
+        .enableZoomInteraction(true)
+        .onNodeClick((node: any) => {
+          myGraph.centerAt(node.x, node.y, 1000);
+          myGraph.zoom(8, 2000);
+        })
+        .graphData(graphData as any);
+    });
 
     return () => {
       try {
-        myGraph.graphData({ nodes: [], links: [] });
+        if (myGraph) myGraph.graphData({ nodes: [], links: [] });
       } catch {
         // ignore
       }
@@ -179,7 +182,7 @@ export default function Home() {
         <header className="mb-6">
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Network Editor</h1>
         </header>
-        {error && <div className="mb-4 text-sm text-red-600">{error}</div>} 
+        {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
 
         <section className="grid grid-cols-2 gap-6">
           <div className="p-4 bg-white rounded shadow">
