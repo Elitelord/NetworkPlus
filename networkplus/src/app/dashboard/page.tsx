@@ -6,6 +6,8 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select"
+import { DueSoonList } from "@/components/DueSoonList";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 type NodeMetadata = { group?: string;[key: string]: any };
 
@@ -177,32 +179,23 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen items-start justify-center bg-zinc-50 font-sans dark:bg-black p-6">
-      <main className="w-full max-w-5xl">
-        <header className="mb-6">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Network Editor</h1>
-        </header>
-        {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
+    <div className="flex min-h-screen bg-zinc-50 dark:bg-black font-sans">
+      {/* Left Sidebar */}
+      <aside className="w-80 border-r bg-background p-6 flex flex-col gap-6 shrink-0 h-screen sticky top-0 overflow-y-auto">
+        <div className="flex items-center gap-2">
+          <div className="size-8 bg-primary rounded-lg"></div>
+          <h1 className="font-bold text-xl tracking-tight">Network+</h1>
+        </div>
 
-        <section className="grid grid-cols-2 gap-6">
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="font-semibold mb-2">Add Node</h2>
-            <form onSubmit={createNode}>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className="w-full p-2 border mb-2" />
-              <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full p-2 border mb-2" />
-              <div className="flex gap-2">
-                <Button type="submit">Create Node</Button>
-              </div>
-            </form>
+        <DueSoonList />
 
-            <h3 className="mt-4 font-semibold">Nodes</h3>
-            <ul>
-              {nodes.map((n) => (
-                <li key={n.id} className="text-sm">{n.title} — {n.id}</li>
-              ))}
-            </ul>
-
-            <label className="block mt-4 text-sm font-medium text-muted-foreground">Filter by group</label>
+        {/* Existing Navigation or Filters could go here */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <label className="block text-xs font-medium text-muted-foreground mb-2">Filter by group</label>
             <NativeSelect value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
               <NativeSelectOption value="">All groups</NativeSelectOption>
               {groups.length === 0 && <NativeSelectOption value="" disabled>No groups found</NativeSelectOption>}
@@ -210,42 +203,74 @@ export default function Home() {
                 <NativeSelectOption key={g} value={g}>{g}</NativeSelectOption>
               ))}
             </NativeSelect>
-          </div>
+          </CardContent>
+        </Card>
+      </aside>
 
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="font-semibold mb-2">Add Link</h2>
-            <form onSubmit={createLink}>
-              <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="w-full p-2 border mb-2">
+      {/* Main Content - Graph */}
+      <main className="flex-1 relative overflow-hidden flex flex-col">
+        <div id="graph" ref={graphRef} className="flex-1 w-full h-full bg-zinc-100 dark:bg-zinc-900/50"></div>
+        {error && (
+          <div className="absolute top-4 left-4 right-4 bg-destructive/10 text-destructive p-3 rounded-md border border-destructive/20 text-sm">
+            {error}
+          </div>
+        )}
+      </main>
+
+      {/* Right Sidebar - Tools */}
+      <aside className="w-80 border-l bg-background p-6 flex flex-col gap-6 shrink-0 h-screen sticky top-0 overflow-y-auto">
+        <h2 className="font-semibold text-lg">Tools</h2>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Add Node</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={createNode} className="flex flex-col gap-3">
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className="w-full p-2 border rounded-md text-sm bg-background" />
+              <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full p-2 border rounded-md text-sm bg-background" />
+              <Button type="submit" className="w-full">Create Node</Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Add Link</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={createLink} className="flex flex-col gap-3">
+              <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="w-full p-2 border rounded-md text-sm bg-background">
                 <option value="">Select source</option>
                 {nodes.map((n) => (
                   <option key={n.id} value={n.id}>{n.title}</option>
                 ))}
               </select>
-              <select value={toId} onChange={(e) => setToId(e.target.value)} className="w-full p-2 border mb-2">
+              <select value={toId} onChange={(e) => setToId(e.target.value)} className="w-full p-2 border rounded-md text-sm bg-background">
                 <option value="">Select target</option>
                 {nodes.map((n) => (
                   <option key={n.id} value={n.id}>{n.title}</option>
                 ))}
               </select>
-              <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Label" className="w-full p-2 border mb-2" />
-              <div className="flex gap-2">
-                <Button type="submit">Create Link</Button>
-              </div>
+              <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Label (optional)" className="w-full p-2 border rounded-md text-sm bg-background" />
+              <Button type="submit" className="w-full">Create Link</Button>
             </form>
+          </CardContent>
+        </Card>
 
-            <h3 className="mt-4 font-semibold">Links</h3>
-            <ul>
-              {links.map((l) => (
-                <li key={l.id} className="text-sm">{l.label ?? "link"} — {l.fromId} → {l.toId}</li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        <section className="mt-6 p-4 bg-white rounded shadow">
-          <div id="graph" ref={graphRef} style={{ width: "100%", height: "500px" }}></div>
-        </section>
-      </main>
+        <div className="py-4">
+          <h3 className="font-semibold text-sm mb-2">Recent Nodes</h3>
+          <ul className="space-y-1">
+            {nodes.slice(-5).reverse().map((n) => (
+              <li key={n.id} className="text-xs text-muted-foreground truncate hover:text-foreground cursor-pointer" onClick={() => {
+                // Start simple - maybe center graph on it later?
+              }}>
+                {n.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </aside>
     </div>
   );
 }
