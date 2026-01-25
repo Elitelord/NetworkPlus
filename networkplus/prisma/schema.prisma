@@ -99,6 +99,7 @@ model Node {
   id          String   @id @default(cuid())
   title       String
   description String?
+  group       String?
   metadata    Json?
   ownerId     String?
   owner       User?    @relation(fields: [ownerId], references: [id])

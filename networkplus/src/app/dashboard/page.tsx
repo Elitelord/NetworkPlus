@@ -8,22 +8,33 @@ import {
 } from "@/components/ui/native-select"
 import { DueSoonList } from "@/components/DueSoonList";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 
 type NodeMetadata = { group?: string;[key: string]: any };
 
-type NodeType = { id: string; title: string; description?: string; metadata?: NodeMetadata };
+type NodeType = { id: string; title: string; description?: string; group?: string | null; metadata?: NodeMetadata };
 type LinkType = { id: string; fromId: string; toId: string; label?: string };
 
 export default function Home() {
   const graphRef = useRef<HTMLDivElement | null>(null);
+  const graphInstanceRef = useRef<any>(null);
   const [nodes, setNodes] = useState<NodeType[]>([]);
   const [links, setLinks] = useState<LinkType[]>([]);
   const [title, setTitle] = useState("");
+
   const [description, setDescription] = useState("");
+  const [groupInput, setGroupInput] = useState("");
   const [fromId, setFromId] = useState("");
   const [toId, setToId] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("");
+  const [selectedNode, setSelectedNode] = useState<NodeType | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadData() {
@@ -70,7 +81,7 @@ export default function Home() {
   const groups = useMemo(() => {
     const s = new Set<string>();
     nodes.forEach((n) => {
-      const g = (n as NodeType & { group?: string }).group ?? n.metadata?.group;
+      const g = n.group ?? (n as any).group ?? n.metadata?.group;
       if (g !== undefined && g !== null && g !== "") s.add(String(g));
     });
     return Array.from(s).sort();
@@ -83,7 +94,7 @@ export default function Home() {
     // compute visible nodes/links based on selectedGroup
     const visibleNodes = nodes.filter((n) => {
       if (!selectedGroup) return true; // show all
-      const g = (n as NodeType & { group?: string }).group ?? n.metadata?.group;
+      const g = n.group ?? (n as any).group ?? n.metadata?.group;
       return String(g) === selectedGroup;
     });
     const visibleIds = new Set(visibleNodes.map((n) => n.id));
@@ -92,25 +103,81 @@ export default function Home() {
       nodes: visibleNodes.map((n) => ({
         id: n.id,
         name: n.title,
-        group: (n as NodeType & { group?: string }).group ?? n.metadata?.group ?? "default",
+        group: n.group ?? (n as any).group ?? n.metadata?.group ?? "default",
       })),
 
       links: links
         .filter((l) => visibleIds.has(l.fromId) && visibleIds.has(l.toId))
-        .map((l) => ({ source: l.fromId, target: l.toId })),
+        .map((l) => ({ source: l.fromId, target: l.toId, label: l.label })),
     };
 
     let myGraph: any;
     import("force-graph").then(({ default: ForceGraph }) => {
       myGraph = new ForceGraph(el)
         .nodeAutoColorBy("group")
+        .linkCanvasObjectMode(() => "after")
+        .linkCanvasObject((link: any, ctx) => {
+          const label = link.label;
+          if (!label) return;
+
+          const MAX_FONT_SIZE = 4;
+          const LABEL_NODE_MARGIN = myGraph.nodeRelSize() * 1.5;
+
+          const start = link.source;
+          const end = link.target;
+
+          // ignore unbound links
+          if (typeof start !== "object" || typeof end !== "object") return;
+
+          // calculate label positioning
+          const textPos = Object.assign(
+            {},
+            ...["x", "y"].map((c) => ({
+              [c]: start[c] + (end[c] - start[c]) / 2, // calc middle point
+            }))
+          );
+
+          const relLink = { x: end.x - start.x, y: end.y - start.y };
+
+          const maxTextLength = Math.sqrt(Math.pow(relLink.x, 2) + Math.pow(relLink.y, 2)) - LABEL_NODE_MARGIN * 2;
+
+          let textAngle = Math.atan2(relLink.y, relLink.x);
+          // maintain label vertical orientation for legibility
+          if (textAngle > Math.PI / 2) textAngle = -(Math.PI - textAngle);
+          if (textAngle < -Math.PI / 2) textAngle = -(-Math.PI - textAngle);
+
+          // estimate fontSize to fit in link length
+          ctx.font = "1px Sans-Serif";
+          const fontSize = Math.min(MAX_FONT_SIZE, maxTextLength / ctx.measureText(label).width);
+          ctx.font = `${fontSize}px Sans-Serif`;
+          const textWidth = ctx.measureText(label).width;
+          const bckgDimensions = [textWidth, fontSize].map((n) => n + fontSize * 0.2); // some padding
+
+          // draw text label (with background rect)
+          ctx.save();
+          ctx.translate(textPos.x, textPos.y);
+          ctx.rotate(textAngle);
+
+          ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+          ctx.fillRect(-bckgDimensions[0] / 2, -bckgDimensions[1] / 2, ...bckgDimensions as [number, number]);
+
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "#666"; // dark gray text
+          ctx.fillText(label, 0, 0);
+          ctx.restore();
+        })
         .enablePanInteraction(true)
         .enableZoomInteraction(true)
         .onNodeClick((node: any) => {
           myGraph.centerAt(node.x, node.y, 1000);
           myGraph.zoom(8, 2000);
+          const originalNode = nodes.find((n) => n.id === node.id);
+          setSelectedNode(originalNode || null);
         })
         .graphData(graphData as any);
+
+      graphInstanceRef.current = myGraph;
     });
 
     return () => {
@@ -136,7 +203,7 @@ export default function Home() {
       const res = await fetch("/api/nodes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description }),
+        body: JSON.stringify({ title, description, group: groupInput }),
       });
       if (!res.ok) {
         const txt = await res.text();
@@ -146,6 +213,7 @@ export default function Home() {
       }
       setTitle("");
       setDescription("");
+      setGroupInput("");
       await loadData();
     } catch (err: any) {
       console.error(err);
@@ -177,6 +245,39 @@ export default function Home() {
       setError(String(err?.message ?? err));
     }
   }
+
+  const focusNode = (nodeId: string) => {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (node) {
+      setSelectedNode(node);
+      const instance = graphInstanceRef.current;
+      if (instance) {
+        // centerAt(x, y, duration)
+        // force-graph nodes have x, y properties added by the engine
+        // We find the internal node object from the graph data if needed, 
+        // but often the data object we pass in gets mutated with x/y.
+        // To be safe, let's try to pass the coordinates if we can find them in the instance's graphData.
+
+        // ForceGraph doesn't expose a "getNode" method directly, but we can look at the graphData()
+        const internalNode = instance.graphData().nodes.find((n: any) => n.id === nodeId);
+        if (internalNode) {
+          instance.centerAt(internalNode.x, internalNode.y, 1000);
+          instance.zoom(8, 2000);
+        }
+      }
+    }
+  };
+
+  const connectedNeighbors = useMemo(() => {
+    if (!selectedNode) return [];
+    return links
+      .filter((l) => l.fromId === selectedNode.id || l.toId === selectedNode.id)
+      .map((l) => {
+        const neighborId = l.fromId === selectedNode.id ? l.toId : l.fromId;
+        return nodes.find((n) => n.id === neighborId);
+      })
+      .filter((n): n is NodeType => n !== undefined);
+  }, [selectedNode, links, nodes]);
 
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-black font-sans">
@@ -229,6 +330,22 @@ export default function Home() {
             <form onSubmit={createNode} className="flex flex-col gap-3">
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className="w-full p-2 border rounded-md text-sm bg-background" />
               <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full p-2 border rounded-md text-sm bg-background" />
+
+              <div className="relative">
+                <input
+                  list="group-suggestions"
+                  value={groupInput}
+                  onChange={(e) => setGroupInput(e.target.value)}
+                  placeholder="Group (optional)"
+                  className="w-full p-2 border rounded-md text-sm bg-background"
+                />
+                <datalist id="group-suggestions">
+                  {groups.map((g) => (
+                    <option key={g} value={g} />
+                  ))}
+                </datalist>
+              </div>
+
               <Button type="submit" className="w-full">Create Node</Button>
             </form>
           </CardContent>
@@ -263,7 +380,7 @@ export default function Home() {
           <ul className="space-y-1">
             {nodes.slice(-5).reverse().map((n) => (
               <li key={n.id} className="text-xs text-muted-foreground truncate hover:text-foreground cursor-pointer" onClick={() => {
-                // Start simple - maybe center graph on it later?
+                focusNode(n.id);
               }}>
                 {n.title}
               </li>
@@ -271,6 +388,46 @@ export default function Home() {
           </ul>
         </div>
       </aside>
-    </div>
+
+
+      <Sheet open={!!selectedNode} onOpenChange={(open) => !open && setSelectedNode(null)}>
+        <SheetContent side="right" className="w-[400px] sm:w-[540px]">
+          <SheetHeader>
+            <SheetTitle>{selectedNode?.title}</SheetTitle>
+            <SheetDescription>
+              {selectedNode?.description || "No description provided."}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-sm font-medium text-muted-foreground">Group:</span>
+              <span className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground ring-1 ring-inset ring-gray-500/10">
+                {selectedNode?.group ?? (selectedNode as any)?.group ?? selectedNode?.metadata?.group ?? "None"}
+              </span>
+            </div>
+
+            <h3 className="font-semibold text-sm mb-3">Connected Nodes ({connectedNeighbors.length})</h3>
+            {connectedNeighbors.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No connections found.</p>
+            ) : (
+              <ul className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+                {connectedNeighbors.map((neighbor) => (
+                  <li
+                    key={neighbor.id}
+                    className="flex flex-col gap-1 p-3 rounded-lg border bg-card text-card-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+                    onClick={() => focusNode(neighbor.id)}
+                  >
+                    <span className="font-medium text-sm">{neighbor.title}</span>
+                    {neighbor.description && (
+                      <span className="text-xs text-muted-foreground line-clamp-1">{neighbor.description}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div >
   );
 }

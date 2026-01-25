@@ -15,10 +15,10 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { title, description, metadata, ownerId } = body;
+    const { title, description, metadata, group, ownerId } = body;
     if (!title) return NextResponse.json({ error: "title is required" }, { status: 400 });
     const node = await prisma.node.create({
-      data: { title, description, metadata, ownerId },
+      data: { title, description, metadata, group, ownerId },
     });
     return NextResponse.json(node, { status: 201 });
   } catch (err) {
@@ -29,13 +29,14 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    const { id, title, description, metadata, ownerId } = body;
+    const { id, title, description, metadata, group, ownerId } = body;
     if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
     const data: any = {};
     if (title !== undefined) data.title = title;
     if (description !== undefined) data.description = description;
     if (metadata !== undefined) data.metadata = metadata;
+    if (group !== undefined) data.group = group;
     if (ownerId !== undefined) data.ownerId = ownerId;
 
     const updated = await prisma.node.update({ where: { id }, data });
