@@ -18,7 +18,6 @@ model User {
   updatedAt DateTime   @updatedAt
   contacts  Contact[]  @relation("UserContacts")
   reminders Reminder[]
-  Node      Node[]
 }
 
 model Contact {
@@ -28,8 +27,12 @@ model Contact {
   category          Category      @default(FRIEND)
   phone             String?
   email             String?
+  description       String?       // Merged from Node
+  group             String?       // Merged from Node
+  metadata          Json?         // Merged from Node
   relationshipId    String?
   createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt @default(now()) // Added default to handle existing rows if any, though usually @updatedAt handles updates. Using @default(now()) for new rows.
   lastInteractionAt DateTime?
   lastPlatform      Platform?
   commonPlatform    Platform?
@@ -37,6 +40,8 @@ model Contact {
   relationship      Relationship? @relation(fields: [relationshipId], references: [id])
   interactions      Interaction[]
   Reminder          Reminder[]
+  outgoing          Link[]        @relation("from")
+  incoming          Link[]        @relation("to")
 }
 
 model Relationship {
@@ -95,26 +100,14 @@ enum Platform {
 }
 
 // Node / Link graph models for network visualization and relationships
-model Node {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  group       String?
-  metadata    Json?
-  ownerId     String?
-  owner       User?    @relation(fields: [ownerId], references: [id])
-  outgoing    Link[]   @relation("from")
-  incoming    Link[]   @relation("to")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
+// Node model removed. Merged into Contact.
 
 model Link {
   id        String   @id @default(cuid())
   fromId    String
   toId      String
-  from      Node     @relation("from", fields: [fromId], references: [id])
-  to        Node     @relation("to", fields: [toId], references: [id])
+  from      Contact  @relation("from", fields: [fromId], references: [id])
+  to        Contact  @relation("to", fields: [toId], references: [id])
   label     String?
   weight    Float?   @default(1.0)
   metadata  Json?

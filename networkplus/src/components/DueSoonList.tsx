@@ -1,46 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-type Contact = {
+export type Contact = {
     id: string;
     name: string;
     lastInteractionAt?: string;
     interactions?: { date: string }[];
 };
 
-export function DueSoonList({ className }: { className?: string }) {
-    const [contacts, setContacts] = useState<Contact[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+interface DueSoonListProps {
+    className?: string;
+    onSelect?: (contact: Contact) => void;
+    contacts: Contact[];
+    isLoading?: boolean;
+}
 
-    useEffect(() => {
-        async function fetchDueSoon() {
-            try {
-                const res = await fetch("/api/contacts/due-soon?days=30");
-                if (!res.ok) {
-                    throw new Error(`Failed to fetch: ${res.status}`);
-                }
-                const data = await res.json();
-                setContacts(data);
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        }
-
-        fetchDueSoon();
-    }, []);
-
-    if (loading) {
+export function DueSoonList({ className, onSelect, contacts, isLoading = false }: DueSoonListProps) {
+    if (isLoading) {
         return <div className="text-sm text-muted-foreground animate-pulse">Checking for due contacts...</div>;
-    }
-
-    if (error) {
-        return <div className="text-sm text-red-500">Error: {error}</div>;
     }
 
     if (contacts.length === 0) {
@@ -65,7 +44,11 @@ export function DueSoonList({ className }: { className?: string }) {
             </CardHeader>
             <CardContent className="grid gap-4">
                 {contacts.map((contact) => (
-                    <div key={contact.id} className="flex items-center justify-between p-2 border rounded-lg bg-background/50">
+                    <div
+                        key={contact.id}
+                        className={`flex items-center justify-between p-2 border rounded-lg bg-background/50 ${onSelect ? 'cursor-pointer hover:bg-accent transition-colors' : ''}`}
+                        onClick={() => onSelect?.(contact)}
+                    >
                         <div>
                             <p className="font-medium text-sm">{contact.name}</p>
                             <p className="text-xs text-muted-foreground">

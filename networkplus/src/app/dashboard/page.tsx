@@ -18,8 +18,66 @@ import {
 
 type NodeMetadata = { group?: string;[key: string]: any };
 
-type NodeType = { id: string; title: string; description?: string; group?: string | null; metadata?: NodeMetadata };
+type Contact = {
+  id: string;
+  name: string;
+  description?: string;
+  group?: string | null;
+  metadata?: NodeMetadata;
+  lastInteractionAt?: string;
+  interactions?: { date: string }[];
+};
+
+type NodeType = Contact; // Alias for graph compatibility if needed, or just use Contact
+
+
+// type NodeType = { id: string; title: string; description?: string; group?: string | null; metadata?: NodeMetadata };
 type LinkType = { id: string; fromId: string; toId: string; label?: string };
+
+function GroupEditor({
+  initialGroup,
+  groups,
+  onSave
+}: {
+  initialGroup: string;
+  groups: string[];
+  onSave: (newGroup: string) => void;
+}) {
+  const [value, setValue] = useState(initialGroup);
+
+  // Reset value when the node (represented by initialGroup) changes externally
+  // We use initialGroup as a key/dependency to reset local state
+  useEffect(() => {
+    setValue(initialGroup);
+  }, [initialGroup]);
+
+  return (
+    <div className="relative">
+      <input
+        list="group-suggestions-edit"
+        className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground ring-1 ring-inset ring-gray-500/10 border-0 focus:ring-2 focus:ring-primary w-40"
+        placeholder="None"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => {
+          if (value !== initialGroup) {
+            onSave(value);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.currentTarget.blur();
+          }
+        }}
+      />
+      <datalist id="group-suggestions-edit">
+        {groups.map((g) => (
+          <option key={g} value={g} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
 
 export default function Home() {
   const graphRef = useRef<HTMLDivElement | null>(null);
@@ -35,12 +93,16 @@ export default function Home() {
   const [linkLabel, setLinkLabel] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("");
   const [selectedNode, setSelectedNode] = useState<NodeType | null>(null);
+  const [highlightNodes, setHighlightNodes] = useState<Set<string>>(new Set());
+  const [showDueNodes, setShowDueNodes] = useState(false);
+  const [dueNodeIds, setDueNodeIds] = useState<Set<string>>(new Set());
+  const [dueContacts, setDueContacts] = useState<Contact[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function loadData() {
     setError(null);
     try {
-      const [nRes, lRes] = await Promise.all([fetch("/api/nodes"), fetch("/api/links")]);
+      const [nRes, lRes] = await Promise.all([fetch("/api/contacts"), fetch("/api/links")]);
 
       const parseResponse = async (res: Response) => {
         const ct = res.headers.get("content-type") || "";
@@ -66,6 +128,23 @@ export default function Home() {
       const [nJson, lJson] = await Promise.all([parseResponse(nRes), parseResponse(lRes)]);
       setNodes(Array.isArray(nJson) ? nJson : []);
       setLinks(Array.isArray(lJson) ? lJson : []);
+
+      // Fetch due nodes
+      // Fetch due nodes
+      fetch("/api/contacts/due-soon?days=30")
+        .then(res => res.ok ? res.json() : [])
+        .then((data: Contact[]) => {
+          setDueContacts(data);
+          const ids = new Set<string>();
+          if (Array.isArray(data)) {
+            data.forEach(c => {
+              ids.add(c.id);
+            });
+          }
+          setDueNodeIds(ids);
+        })
+        .catch(err => console.error("Failed to fetch due nodes:", err));
+
     } catch (err: unknown) {
       console.error("loadData error:", err);
       setError(String(err));
@@ -102,7 +181,7 @@ export default function Home() {
     const graphData = {
       nodes: visibleNodes.map((n) => ({
         id: n.id,
-        name: n.title,
+        name: n.name, // was title
         group: n.group ?? (n as any).group ?? n.metadata?.group ?? "default",
       })),
 
@@ -115,6 +194,43 @@ export default function Home() {
     import("force-graph").then(({ default: ForceGraph }) => {
       myGraph = new ForceGraph(el)
         .nodeAutoColorBy("group")
+        .nodeCanvasObject((node: any, ctx) => {
+          const size = 5;
+          const isHighlighted = highlightNodes.has(node.id);
+
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
+          ctx.fillStyle = node.color || "#ccc"; // autoColorBy adds .color
+          ctx.fill();
+
+          if (isHighlighted) {
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, size + 2, 0, 2 * Math.PI, false);
+            ctx.strokeStyle = "#facc15"; // Yellow highlight
+            ctx.lineWidth = 2;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+
+          if (showDueNodes && dueNodeIds.has(node.id)) {
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, size + 4, 0, 2 * Math.PI, false);
+            ctx.strokeStyle = "#ff4444"; // Red alarm
+            ctx.lineWidth = 2;
+            ctx.setLineDash([2, 1]); // Dotted line
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset
+          }
+
+          // Node Label
+          const label = node.name;
+          const fontSize = 3.5;
+          ctx.font = `${fontSize}px Sans-Serif`;
+          ctx.fillStyle = isHighlighted ? "#000" : "#666";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(label, node.x, node.y + size + fontSize);
+        })
         .linkCanvasObjectMode(() => "after")
         .linkCanvasObject((link: any, ctx) => {
           const label = link.label;
@@ -187,7 +303,7 @@ export default function Home() {
         // ignore
       }
     };
-  }, [nodes, links, selectedGroup]);
+  }, [nodes, links, selectedGroup, highlightNodes, showDueNodes, dueNodeIds]);
 
   // if groups change and current selection no longer exists, reset to all
   useEffect(() => {
@@ -200,10 +316,10 @@ export default function Home() {
     e?.preventDefault();
     setError(null);
     try {
-      const res = await fetch("/api/nodes", {
+      const res = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, group: groupInput }),
+        body: JSON.stringify({ name: title, description, group: groupInput }),
       });
       if (!res.ok) {
         const txt = await res.text();
@@ -246,6 +362,89 @@ export default function Home() {
     }
   }
 
+
+  async function logInteraction(contactName: string) {
+    // Find contact ID from dueContacts
+    const contact = dueContacts.find(c => c.name === contactName);
+    if (!contact) return;
+
+    // Optimistic update: Remove from list and highlights immediately
+    const previousDueContacts = [...dueContacts];
+    setDueContacts(prev => prev.filter(c => c.id !== contact.id));
+
+    // Update IDs set
+    const newIds = new Set(dueNodeIds);
+    // Find node ID for this contact
+    const node = nodes.find(n => n.id === contact.id);
+    if (node && newIds.has(node.id)) {
+      newIds.delete(node.id);
+      setDueNodeIds(newIds);
+    }
+
+    try {
+      const res = await fetch("/api/interactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contactId: contact.id,
+          type: "OTHER",
+          content: "Logged via Dashboard",
+          date: new Date().toISOString()
+        })
+      });
+
+      if (!res.ok) throw new Error("Failed to log interaction");
+
+    } catch (err) {
+      console.error("Log interaction failed", err);
+      // Revert state
+      setDueContacts(previousDueContacts);
+      if (node) {
+        newIds.add(node.id);
+        setDueNodeIds(newIds);
+      }
+      setError("Failed to log interaction");
+    }
+  }
+
+  async function updateNode(id: string, updates: Partial<NodeType>) {
+    // Optimistic update
+    const previousNodes = [...nodes];
+    const targetNode = nodes.find(n => n.id === id);
+    if (!targetNode) return;
+
+    const updatedNode = { ...targetNode, ...updates };
+
+    // Update local state immediately
+    setNodes(nodes.map(n => n.id === id ? updatedNode : n));
+    if (selectedNode?.id === id) {
+      setSelectedNode(updatedNode);
+    }
+
+    try {
+      const res = await fetch(`/api/contacts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Update failed: ${res.status}`);
+      }
+
+      // Optionally reload data to ensure consistency, but if optimistic works, maybe not strictly needed
+      // await loadData(); 
+    } catch (err: any) {
+      console.error("Update node failed:", err);
+      // Revert on error
+      setNodes(previousNodes);
+      if (selectedNode?.id === id) {
+        setSelectedNode(targetNode);
+      }
+      setError(String(err?.message ?? err));
+    }
+  }
+
   const focusNode = (nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId);
     if (node) {
@@ -279,6 +478,17 @@ export default function Home() {
       .filter((n): n is NodeType => n !== undefined);
   }, [selectedNode, links, nodes]);
 
+  // Validation Logic
+  const isNodeNameEmpty = title.trim() === "";
+
+  const isSelfLink = fromId !== "" && toId !== "" && fromId === toId;
+  const isDuplicateLink = useMemo(() => {
+    if (fromId === "" || toId === "") return false;
+    return links.some(l => l.fromId === fromId && l.toId === toId);
+  }, [fromId, toId, links]);
+
+  const isLinkInvalid = fromId === "" || toId === "" || isSelfLink || isDuplicateLink;
+
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-black font-sans">
       {/* Left Sidebar */}
@@ -288,7 +498,39 @@ export default function Home() {
           <h1 className="font-bold text-xl tracking-tight">Network+</h1>
         </div>
 
-        <DueSoonList />
+        <DueSoonList contacts={dueContacts} onSelect={(contact) => {
+          // Find logic to center on node
+          const targetNode = nodes.find(n => n.id === contact.id); // Direct ID match
+          if (targetNode) {
+            const instance = graphInstanceRef.current;
+            if (instance) {
+              // Find internal node for coordinates
+              const internalNode = instance.graphData().nodes.find((n: any) => n.id === targetNode.id);
+              if (internalNode) {
+                instance.centerAt(internalNode.x, internalNode.y, 1000);
+                instance.zoom(6, 2000); // Fairly zoomed in
+              }
+            }
+
+            // Highlight logic
+            // Find neighbors
+            const neighborIds = new Set<string>();
+            neighborIds.add(targetNode.id);
+            links.forEach(l => {
+              if (l.fromId === targetNode.id) neighborIds.add(l.toId);
+              if (l.toId === targetNode.id) neighborIds.add(l.fromId);
+            });
+
+            setHighlightNodes(neighborIds);
+
+            // Clear highlight after 3 seconds
+            setTimeout(() => {
+              setHighlightNodes(new Set());
+            }, 3000);
+          } else {
+            console.warn("No matching node found for contact:", contact.name);
+          }
+        }} />
 
         {/* Existing Navigation or Filters could go here */}
         <Card>
@@ -306,20 +548,22 @@ export default function Home() {
             </NativeSelect>
           </CardContent>
         </Card>
-      </aside>
+      </aside >
 
       {/* Main Content - Graph */}
-      <main className="flex-1 relative overflow-hidden flex flex-col">
+      < main className="flex-1 relative overflow-hidden flex flex-col" >
         <div id="graph" ref={graphRef} className="flex-1 w-full h-full bg-zinc-100 dark:bg-zinc-900/50"></div>
-        {error && (
-          <div className="absolute top-4 left-4 right-4 bg-destructive/10 text-destructive p-3 rounded-md border border-destructive/20 text-sm">
-            {error}
-          </div>
-        )}
-      </main>
+        {
+          error && (
+            <div className="absolute top-4 left-4 right-4 bg-destructive/10 text-destructive p-3 rounded-md border border-destructive/20 text-sm">
+              {error}
+            </div>
+          )
+        }
+      </main >
 
       {/* Right Sidebar - Tools */}
-      <aside className="w-80 border-l bg-background p-6 flex flex-col gap-6 shrink-0 h-screen sticky top-0 overflow-y-auto">
+      < aside className="w-80 border-l bg-background p-6 flex flex-col gap-6 shrink-0 h-screen sticky top-0 overflow-y-auto" >
         <h2 className="font-semibold text-lg">Tools</h2>
 
         <Card>
@@ -346,7 +590,12 @@ export default function Home() {
                 </datalist>
               </div>
 
-              <Button type="submit" className="w-full">Create Node</Button>
+              <Button type="submit" className="w-full" disabled={isNodeNameEmpty}>
+                Create Node
+              </Button>
+              {isNodeNameEmpty && title !== "" && (
+                <p className="text-xs text-destructive">Name is required.</p>
+              )}
             </form>
           </CardContent>
         </Card>
@@ -360,17 +609,21 @@ export default function Home() {
               <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="w-full p-2 border rounded-md text-sm bg-background">
                 <option value="">Select source</option>
                 {nodes.map((n) => (
-                  <option key={n.id} value={n.id}>{n.title}</option>
+                  <option key={n.id} value={n.id}>{n.name}</option>
                 ))}
               </select>
               <select value={toId} onChange={(e) => setToId(e.target.value)} className="w-full p-2 border rounded-md text-sm bg-background">
                 <option value="">Select target</option>
                 {nodes.map((n) => (
-                  <option key={n.id} value={n.id}>{n.title}</option>
+                  <option key={n.id} value={n.id}>{n.name}</option>
                 ))}
               </select>
               <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Label (optional)" className="w-full p-2 border rounded-md text-sm bg-background" />
-              <Button type="submit" className="w-full">Create Link</Button>
+              <Button type="submit" className="w-full" disabled={isLinkInvalid}>
+                Create Link
+              </Button>
+              {isSelfLink && <p className="text-xs text-destructive">Cannot link a node to itself.</p>}
+              {isDuplicateLink && <p className="text-xs text-destructive">Link already exists.</p>}
             </form>
           </CardContent>
         </Card>
@@ -382,28 +635,43 @@ export default function Home() {
               <li key={n.id} className="text-xs text-muted-foreground truncate hover:text-foreground cursor-pointer" onClick={() => {
                 focusNode(n.id);
               }}>
-                {n.title}
+                {n.name}
               </li>
             ))}
           </ul>
         </div>
-      </aside>
+      </aside >
 
 
       <Sheet open={!!selectedNode} onOpenChange={(open) => !open && setSelectedNode(null)}>
         <SheetContent side="right" className="w-[400px] sm:w-[540px]">
           <SheetHeader>
-            <SheetTitle>{selectedNode?.title}</SheetTitle>
+            <SheetTitle>{selectedNode?.name}</SheetTitle>
             <SheetDescription>
               {selectedNode?.description || "No description provided."}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6">
+            {selectedNode && dueNodeIds.has(selectedNode.id) && (
+              <div className="mb-6 p-4 border border-red-200 bg-red-50 dark:bg-red-900/10 rounded-lg flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Due for follow-up</h4>
+                  <p className="text-xs text-red-600/80">Last interaction was over 30 days ago.</p>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => selectedNode && logInteraction(selectedNode.name)}>
+                  Log Interaction
+                </Button>
+              </div>
+            )}
+
             <div className="flex items-center gap-2 mb-4">
               <span className="text-sm font-medium text-muted-foreground">Group:</span>
-              <span className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground ring-1 ring-inset ring-gray-500/10">
-                {selectedNode?.group ?? (selectedNode as any)?.group ?? selectedNode?.metadata?.group ?? "None"}
-              </span>
+              <GroupEditor
+                key={selectedNode?.id}
+                initialGroup={selectedNode?.group ?? (selectedNode as any)?.group ?? selectedNode?.metadata?.group ?? ""}
+                groups={groups}
+                onSave={(newGroup) => selectedNode && updateNode(selectedNode.id, { group: newGroup })}
+              />
             </div>
 
             <h3 className="font-semibold text-sm mb-3">Connected Nodes ({connectedNeighbors.length})</h3>
@@ -417,7 +685,7 @@ export default function Home() {
                     className="flex flex-col gap-1 p-3 rounded-lg border bg-card text-card-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
                     onClick={() => focusNode(neighbor.id)}
                   >
-                    <span className="font-medium text-sm">{neighbor.title}</span>
+                    <span className="font-medium text-sm">{neighbor.name}</span>
                     {neighbor.description && (
                       <span className="text-xs text-muted-foreground line-clamp-1">{neighbor.description}</span>
                     )}

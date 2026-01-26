@@ -22,10 +22,25 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   try {
     const { id } = await params;
     const body = await req.json();
-    const { title, description, metadata } = body;
+    const { title, description, metadata, group } = body;
     const node = await prisma.node.update({
       where: { id },
-      data: { title, description, metadata },
+      data: { title, description, metadata, group },
+    });
+    return NextResponse.json(node);
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const body = await req.json();
+    // Only update fields that are present in the body
+    const node = await prisma.node.update({
+      where: { id },
+      data: body,
     });
     return NextResponse.json(node);
   } catch (err) {
