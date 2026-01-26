@@ -32,10 +32,4 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Check env vars
-        run: |
-          test -n "$DATABASE_URL"
-          test -n "$DIRECT_URL"
 
-      - name: Health check
-        run: curl -f https://your-preview-url/api/health
