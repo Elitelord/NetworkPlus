@@ -15,6 +15,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { ContactImportModal } from "@/components/contact-import-modal";
 
 type NodeMetadata = { group?: string;[key: string]: any };
 
@@ -625,6 +626,18 @@ export default function Home() {
               {isSelfLink && <p className="text-xs text-destructive">Cannot link a node to itself.</p>}
               {isDuplicateLink && <p className="text-xs text-destructive">Link already exists.</p>}
             </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Data</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ContactImportModal onSuccess={() => {
+              loadData();
+              // Optional: show a toast or something, but modal success state handles feedback
+            }} />
           </CardContent>
         </Card>
 
