@@ -16,6 +16,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { ContactImportModal } from "@/components/contact-import-modal";
+import { EditNodeDialog } from "@/components/edit-node-dialog";
 
 type NodeMetadata = { group?: string;[key: string]: any };
 
@@ -24,6 +25,9 @@ type Contact = {
   name: string;
   description?: string;
   group?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  commonPlatform?: string | null;
   metadata?: NodeMetadata;
   lastInteractionAt?: string;
   interactions?: { date: string }[];
@@ -99,6 +103,7 @@ export default function Home() {
   const [dueNodeIds, setDueNodeIds] = useState<Set<string>>(new Set());
   const [dueContacts, setDueContacts] = useState<Contact[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   async function loadData() {
     setError(null);
@@ -659,11 +664,33 @@ export default function Home() {
       <Sheet open={!!selectedNode} onOpenChange={(open) => !open && setSelectedNode(null)}>
         <SheetContent side="right" className="w-[400px] sm:w-[540px]">
           <SheetHeader>
-            <SheetTitle>{selectedNode?.name}</SheetTitle>
+            <div className="flex items-center justify-between">
+              <SheetTitle>{selectedNode?.name}</SheetTitle>
+              <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(true)}>
+                Edit
+              </Button>
+            </div>
             <SheetDescription>
               {selectedNode?.description || "No description provided."}
             </SheetDescription>
           </SheetHeader>
+          <EditNodeDialog
+            open={isEditDialogOpen}
+            onOpenChange={setIsEditDialogOpen}
+            node={selectedNode ? {
+              id: selectedNode.id,
+              name: selectedNode.name,
+              description: selectedNode.description || "",
+              group: selectedNode.group || "",
+              email: selectedNode.email || "",
+              phone: selectedNode.phone || "",
+              commonPlatform: selectedNode.commonPlatform || "",
+            } : null}
+            groups={groups}
+            onSave={async (id, updates) => {
+              await updateNode(id, updates);
+            }}
+          />
           <div className="mt-6">
             {selectedNode && dueNodeIds.has(selectedNode.id) && (
               <div className="mb-6 p-4 border border-red-200 bg-red-50 dark:bg-red-900/10 rounded-lg flex items-center justify-between">
@@ -681,7 +708,7 @@ export default function Home() {
               <span className="text-sm font-medium text-muted-foreground">Group:</span>
               <GroupEditor
                 key={selectedNode?.id}
-                initialGroup={selectedNode?.group ?? (selectedNode as any)?.group ?? selectedNode?.metadata?.group ?? ""}
+                initialGroup={selectedNode?.group ?? selectedNode?.metadata?.group ?? ""}
                 groups={groups}
                 onSave={(newGroup) => selectedNode && updateNode(selectedNode.id, { group: newGroup })}
               />
