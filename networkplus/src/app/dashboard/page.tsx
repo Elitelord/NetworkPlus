@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sheet";
 import { ContactImportModal } from "@/components/contact-import-modal";
 import { EditNodeDialog } from "@/components/edit-node-dialog";
+import { ContactDetailSheet } from "@/components/contact-detail-sheet";
 
 type NodeMetadata = { group?: string;[key: string]: any };
 
@@ -661,81 +662,27 @@ export default function Home() {
       </aside >
 
 
-      <Sheet open={!!selectedNode} onOpenChange={(open) => !open && setSelectedNode(null)}>
-        <SheetContent side="right" className="w-[400px] sm:w-[540px]">
-          <SheetHeader>
-            <div className="flex items-center justify-between">
-              <SheetTitle>{selectedNode?.name}</SheetTitle>
-              <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(true)}>
-                Edit
-              </Button>
-            </div>
-            <SheetDescription>
-              {selectedNode?.description || "No description provided."}
-            </SheetDescription>
-          </SheetHeader>
-          <EditNodeDialog
-            open={isEditDialogOpen}
-            onOpenChange={setIsEditDialogOpen}
-            node={selectedNode ? {
-              id: selectedNode.id,
-              name: selectedNode.name,
-              description: selectedNode.description || "",
-              group: selectedNode.group || "",
-              email: selectedNode.email || "",
-              phone: selectedNode.phone || "",
-              commonPlatform: selectedNode.commonPlatform || "",
-            } : null}
-            groups={groups}
-            onSave={async (id, updates) => {
-              await updateNode(id, updates);
-            }}
-          />
-          <div className="mt-6">
-            {selectedNode && dueNodeIds.has(selectedNode.id) && (
-              <div className="mb-6 p-4 border border-red-200 bg-red-50 dark:bg-red-900/10 rounded-lg flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Due for follow-up</h4>
-                  <p className="text-xs text-red-600/80">Last interaction was over 30 days ago.</p>
-                </div>
-                <Button size="sm" variant="secondary" onClick={() => selectedNode && logInteraction(selectedNode.name)}>
-                  Log Interaction
-                </Button>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-sm font-medium text-muted-foreground">Group:</span>
-              <GroupEditor
-                key={selectedNode?.id}
-                initialGroup={selectedNode?.group ?? selectedNode?.metadata?.group ?? ""}
-                groups={groups}
-                onSave={(newGroup) => selectedNode && updateNode(selectedNode.id, { group: newGroup })}
-              />
-            </div>
-
-            <h3 className="font-semibold text-sm mb-3">Connected Nodes ({connectedNeighbors.length})</h3>
-            {connectedNeighbors.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No connections found.</p>
-            ) : (
-              <ul className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
-                {connectedNeighbors.map((neighbor) => (
-                  <li
-                    key={neighbor.id}
-                    className="flex flex-col gap-1 p-3 rounded-lg border bg-card text-card-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
-                    onClick={() => focusNode(neighbor.id)}
-                  >
-                    <span className="font-medium text-sm">{neighbor.name}</span>
-                    {neighbor.description && (
-                      <span className="text-xs text-muted-foreground line-clamp-1">{neighbor.description}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <ContactDetailSheet
+        open={!!selectedNode}
+        onOpenChange={(open) => !open && setSelectedNode(null)}
+        node={selectedNode ? {
+          id: selectedNode.id,
+          name: selectedNode.name,
+          description: selectedNode.description || "",
+          group: selectedNode.group || "",
+          email: selectedNode.email || "",
+          phone: selectedNode.phone || "",
+          commonPlatform: selectedNode.commonPlatform || "",
+          interactions: selectedNode.interactions,
+          lastInteractionAt: selectedNode.lastInteractionAt
+        } : null}
+        groups={groups}
+        dueNodeIds={dueNodeIds}
+        onLogInteraction={logInteraction}
+        onUpdateNode={updateNode}
+        onFocusNode={focusNode}
+        connectedNeighbors={connectedNeighbors}
+      />
     </div >
   );
 }
