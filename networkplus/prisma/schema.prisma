@@ -28,7 +28,7 @@ model Contact {
   phone             String?
   email             String?
   description       String?       // Merged from Node
-  group             String?       // Merged from Node
+  groups            String[]      @default([])       // Merged from Node
   metadata          Json?         // Merged from Node
   relationshipId    String?
   createdAt         DateTime      @default(now())

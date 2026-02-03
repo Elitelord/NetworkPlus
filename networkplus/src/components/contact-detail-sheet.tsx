@@ -22,7 +22,7 @@ type NodeData = {
     id: string;
     name: string;
     description?: string;
-    group?: string | null;
+    groups?: string[];
     email?: string | null;
     phone?: string | null;
     commonPlatform?: string | null;
@@ -53,22 +53,22 @@ interface ContactDetailSheetProps {
     connectedNeighbors: NodeData[];
 }
 
-function GroupEditor({
-    initialGroup,
+function GroupsEditor({
+    initialGroups,
     groups,
     onSave
 }: {
-    initialGroup: string;
+    initialGroups: string[];
     groups: string[];
-    onSave: (newGroup: string) => void;
+    onSave: (newGroups: string[]) => void;
 }) {
-    const [value, setValue] = useState(initialGroup);
+    const [value, setValue] = useState(initialGroups.join(", "));
 
     // Reset value when the node (represented by initialGroup) changes externally
     // Simple useEffect sync
     useMemo(() => {
-        setValue(initialGroup);
-    }, [initialGroup]);
+        setValue(initialGroups.join(", "));
+    }, [initialGroups]);
 
     return (
         <div className="relative">
@@ -79,8 +79,12 @@ function GroupEditor({
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 onBlur={() => {
-                    if (value !== initialGroup) {
-                        onSave(value);
+                    const split = value.split(",").map(g => g.trim()).filter(g => g !== "");
+                    // Check if changed
+                    const current = initialGroups.join(", ");
+                    const newStr = split.join(", ");
+                    if (current !== newStr) {
+                        onSave(split);
                     }
                 }}
                 onKeyDown={(e) => {
@@ -171,7 +175,7 @@ export function ContactDetailSheet({
                                     id: node.id,
                                     name: node.name,
                                     description: node.description || "",
-                                    group: node.group || "",
+                                    groups: node.groups || [],
                                     email: node.email || "",
                                     phone: node.phone || "",
                                     commonPlatform: node.commonPlatform || "",
@@ -203,12 +207,12 @@ export function ContactDetailSheet({
                                 )}
 
                                 <div className="flex items-center gap-2 mb-4">
-                                    <span className="text-sm font-medium text-muted-foreground">Group:</span>
-                                    <GroupEditor
+                                    <span className="text-sm font-medium text-muted-foreground">Groups:</span>
+                                    <GroupsEditor
                                         key={node?.id}
-                                        initialGroup={node?.group ?? node?.metadata?.group ?? ""}
+                                        initialGroups={node?.groups ?? node?.metadata?.groups ?? []}
                                         groups={groups}
-                                        onSave={(newGroup) => onUpdateNode(node.id, { group: newGroup })}
+                                        onSave={(newGroups) => onUpdateNode(node.id, { groups: newGroups })}
                                     />
                                 </div>
 

@@ -106,6 +106,11 @@ export async function POST(req: Request) {
                     continue;
                 }
 
+                // Parse groups
+                const groups = group
+                    ? String(group).split(',').map(g => g.trim()).filter(g => g)
+                    : [];
+
                 // Create
                 const newContact = await prisma.contact.create({
                     data: {
@@ -114,13 +119,16 @@ export async function POST(req: Request) {
                         email: email || null,
                         phone: phone || null,
                         description: description || null,
-                        group: group || null,
+                        groups: groups,
                         category: normalizeEnum<Category>(category, Category) || Category.FRIEND,
                         metadata: metadata || undefined,
                         lastInteractionAt: parseDate(lastInteractionAt),
-                        // Default usage for other fields handled by schema
                     },
                 });
+
+                // Trigger inference
+                const { updateInferredLinks } = await import("@/lib/inference");
+                await updateInferredLinks(newContact.id);
 
                 importedContacts.push(newContact);
 

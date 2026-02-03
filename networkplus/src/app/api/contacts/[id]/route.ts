@@ -22,11 +22,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     try {
         const { id } = await params;
         const body = await req.json();
-        // Only update fields that are present in the body
+        const { name, description, groups, group, email, phone, commonPlatform } = body;
+
+        // Handle backward compatibility: if `group` string provided, add to `groups`.
+        let validGroups = Array.isArray(groups) ? groups : [];
+        if (group && typeof group === 'string' && !validGroups.includes(group)) {
+            validGroups.push(group);
+        }
+
         const contact = await prisma.contact.update({
             where: { id },
-            data: body,
+            data: {
+                name,
+                description,
+                groups: validGroups, // Replaces existing groups with new list
+                email,
+                phone,
+                commonPlatform
+            },
         });
+
+        // Trigger inference
+        const { updateInferredLinks } = await import("@/lib/inference");
+        await updateInferredLinks(contact.id);
+
         return NextResponse.json(contact);
     } catch (err) {
         return NextResponse.json({ error: String(err) }, { status: 500 });

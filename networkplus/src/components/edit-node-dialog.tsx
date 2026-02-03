@@ -37,7 +37,7 @@ export type EditNodeData = {
     id: string;
     name: string;
     description?: string;
-    group?: string;
+    groups?: string[];
     phone?: string;
     email?: string;
     commonPlatform?: string;
@@ -59,6 +59,7 @@ export function EditNodeDialog({
     onSave,
 }: EditNodeDialogProps) {
     const [formData, setFormData] = useState<Partial<EditNodeData>>({});
+    const [groupString, setGroupString] = useState(""); // Local state for comma-separated input
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -66,17 +67,24 @@ export function EditNodeDialog({
             setFormData({
                 name: node.name,
                 description: node.description || "",
-                group: node.group || "",
+                groups: node.groups || [],
                 phone: node.phone || "",
                 email: node.email || "",
                 commonPlatform: node.commonPlatform || "",
             });
+            setGroupString((node.groups || []).join(", "));
         }
     }, [node]);
 
-    const handleChange = (field: keyof EditNodeData, value: string) => {
+    const handleChange = (field: keyof EditNodeData, value: any) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
     };
+
+    const handleGroupChange = (value: string) => {
+        setGroupString(value);
+        const splitGroups = value.split(",").map(g => g.trim()).filter(g => g !== "");
+        handleChange("groups", splitGroups);
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -127,22 +135,23 @@ export function EditNodeDialog({
                         />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="group" className="text-right">
-                            Group
+                        <Label htmlFor="groups" className="text-right">
+                            Groups
                         </Label>
                         <div className="col-span-3 relative">
                             <Input
-                                id="group"
+                                id="groups"
                                 list="group-suggestions-dialog"
-                                value={formData.group || ""}
-                                onChange={(e) => handleChange("group", e.target.value)}
-                                placeholder="None"
+                                value={groupString}
+                                onChange={(e) => handleGroupChange(e.target.value)}
+                                placeholder="Group1, Group2"
                             />
                             <datalist id="group-suggestions-dialog">
                                 {groups.map((g) => (
                                     <option key={g} value={g} />
                                 ))}
                             </datalist>
+                            <p className="text-[10px] text-muted-foreground mt-1">Separate specific groups with commas</p>
                         </div>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">

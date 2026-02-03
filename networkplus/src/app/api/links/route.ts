@@ -23,6 +23,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Source or target contact not found" }, { status: 400 });
     }
 
+    // Cleanup: If an inferred link exists between these two, delete it so the manual one takes precedence
+    await prisma.link.deleteMany({
+      where: {
+        OR: [
+          { fromId: fromId, toId: toId },
+          { fromId: toId, toId: fromId },
+        ],
+        metadata: {
+          path: ["source"],
+          equals: "inferred"
+        }
+      }
+    });
+
     const link = await prisma.link.create({
       data: {
         fromId,

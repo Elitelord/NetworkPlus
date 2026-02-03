@@ -17,7 +17,7 @@ export async function GET(
         const interactions = await prisma.interaction.findMany({
             where: {
                 contactId: id,
-            },
+            },                     
             orderBy: {
                 date: "desc",
             },
@@ -25,7 +25,7 @@ export async function GET(
 
         return NextResponse.json(interactions);
     } catch (err) {
-        console.error("Fetch interactions failed:", err);
+        console.error("Fetch interactions failed:", err);  
         return NextResponse.json(
             { error: "Internal Server Error" },
             { status: 500 }

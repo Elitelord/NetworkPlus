@@ -18,14 +18,15 @@ import {
 import { ContactImportModal } from "@/components/contact-import-modal";
 import { EditNodeDialog } from "@/components/edit-node-dialog";
 import { ContactDetailSheet } from "@/components/contact-detail-sheet";
+import { EditLinkDialog } from "@/components/edit-link-dialog";
 
-type NodeMetadata = { group?: string;[key: string]: any };
+type NodeMetadata = { groups?: string[];[key: string]: any };
 
 type Contact = {
   id: string;
   name: string;
   description?: string;
-  group?: string | null;
+  groups?: string[];
   phone?: string | null;
   email?: string | null;
   commonPlatform?: string | null;
@@ -38,24 +39,24 @@ type NodeType = Contact; // Alias for graph compatibility if needed, or just use
 
 
 // type NodeType = { id: string; title: string; description?: string; group?: string | null; metadata?: NodeMetadata };
-type LinkType = { id: string; fromId: string; toId: string; label?: string };
+type LinkType = { id: string; fromId: string; toId: string; label?: string; metadata?: any };
 
-function GroupEditor({
-  initialGroup,
+function GroupsEditor({
+  initialGroups,
   groups,
   onSave
 }: {
-  initialGroup: string;
+  initialGroups: string[];
   groups: string[];
-  onSave: (newGroup: string) => void;
+  onSave: (newGroups: string[]) => void;
 }) {
-  const [value, setValue] = useState(initialGroup);
+  const [value, setValue] = useState(initialGroups.join(", "));
 
   // Reset value when the node (represented by initialGroup) changes externally
   // We use initialGroup as a key/dependency to reset local state
   useEffect(() => {
-    setValue(initialGroup);
-  }, [initialGroup]);
+    setValue(initialGroups.join(", "));
+  }, [initialGroups]);
 
   return (
     <div className="relative">
@@ -66,8 +67,12 @@ function GroupEditor({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => {
-          if (value !== initialGroup) {
-            onSave(value);
+          const split = value.split(",").map(g => g.trim()).filter(g => g !== "");
+          // Check if changed
+          const current = initialGroups.join(", ");
+          const newStr = split.join(", ");
+          if (current !== newStr) {
+            onSave(split);
           }
         }}
         onKeyDown={(e) => {
@@ -105,6 +110,7 @@ export default function Home() {
   const [dueContacts, setDueContacts] = useState<Contact[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedLink, setSelectedLink] = useState<{ id: string; label?: string; fromName?: string; toName?: string } | null>(null);
 
   async function loadData() {
     setError(null);
@@ -167,8 +173,16 @@ export default function Home() {
   const groups = useMemo(() => {
     const s = new Set<string>();
     nodes.forEach((n) => {
-      const g = n.group ?? (n as any).group ?? n.metadata?.group;
-      if (g !== undefined && g !== null && g !== "") s.add(String(g));
+      // Prioritize `groups` array, fallback to `group` (legacy) if exists and not in array?
+      // But we just use `groups` primarily now.
+      const gs = n.groups ?? n.metadata?.groups ?? [];
+      gs.forEach(g => {
+        if (g) s.add(g);
+      });
+      // Handle legacy single-group if any (though migration should fix it)
+      if ((n as any).group && !gs.includes((n as any).group)) {
+        s.add((n as any).group);
+      }
     });
     return Array.from(s).sort();
   }, [nodes]);
@@ -180,27 +194,66 @@ export default function Home() {
     // compute visible nodes/links based on selectedGroup
     const visibleNodes = nodes.filter((n) => {
       if (!selectedGroup) return true; // show all
-      const g = n.group ?? (n as any).group ?? n.metadata?.group;
-      return String(g) === selectedGroup;
+      const gs = n.groups ?? n.metadata?.groups ?? [];
+      return gs.includes(selectedGroup);
     });
     const visibleIds = new Set(visibleNodes.map((n) => n.id));
+
+    // Calculate Curvature for multi-links
+    // Map of "A:B" -> [linkId, linkId...]
+    const pairMap = new Map<string, string[]>();
+    const nodeLinks = links
+      .filter((l) => visibleIds.has(l.fromId) && visibleIds.has(l.toId));
+
+    nodeLinks.forEach(l => {
+      const [a, b] = [l.fromId, l.toId].sort();
+      const key = `${a}:${b}`;
+      if (!pairMap.has(key)) pairMap.set(key, []);
+      pairMap.get(key)?.push(l.id);
+    });
+
+    const getCurvature = (link: any) => {
+      const [a, b] = [link.source, link.target].sort(); // source/target might be objects or ids
+      // ForceGraph might pass objects for source/target if they exist.
+      const sId = typeof link.source === 'object' ? link.source.id : link.source;
+      const tId = typeof link.target === 'object' ? link.target.id : link.target;
+      const [id1, id2] = [sId, tId].sort();
+      const key = `${id1}:${id2}`;
+      const siblings = pairMap.get(key) || [];
+      const index = siblings.indexOf(link.id);
+      const count = siblings.length;
+
+      if (count <= 1) return 0;
+
+      // Spread curvature: 0, 0.2, -0.2, 0.4, -0.4 ...
+      // Or simpler: (index - (count - 1) / 2) * scale
+      return (index - (count - 1) / 2) * 0.2;
+    };
 
     const graphData = {
       nodes: visibleNodes.map((n) => ({
         id: n.id,
         name: n.name, // was title
-        group: n.group ?? (n as any).group ?? n.metadata?.group ?? "default",
+        groups: n.groups ?? n.metadata?.groups ?? [],
+        // Use first group for color or "default"
+        group: (n.groups && n.groups.length > 0) ? n.groups[0] : "default",
       })),
 
-      links: links
-        .filter((l) => visibleIds.has(l.fromId) && visibleIds.has(l.toId))
-        .map((l) => ({ source: l.fromId, target: l.toId, label: l.label })),
+      links: nodeLinks.map((l) => ({
+        source: l.fromId,
+        target: l.toId,
+        label: l.label,
+        metadata: l.metadata,
+        id: l.id // Ensure ID is passed
+      })),
     };
 
     let myGraph: any;
     import("force-graph").then(({ default: ForceGraph }) => {
       myGraph = new ForceGraph(el)
         .nodeAutoColorBy("group")
+        .linkLineDash((link: any) => link.metadata?.source === "inferred" ? [4, 4] : [])
+        .linkCurvature((link: any) => getCurvature(link))
         .nodeCanvasObject((node: any, ctx) => {
           const size = 5;
           const isHighlighted = highlightNodes.has(node.id);
@@ -240,55 +293,10 @@ export default function Home() {
         })
         .linkCanvasObjectMode(() => "after")
         .linkCanvasObject((link: any, ctx) => {
-          const label = link.label;
-          if (!label) return;
-
-          const MAX_FONT_SIZE = 4;
-          const LABEL_NODE_MARGIN = myGraph.nodeRelSize() * 1.5;
-
-          const start = link.source;
-          const end = link.target;
-
-          // ignore unbound links
-          if (typeof start !== "object" || typeof end !== "object") return;
-
-          // calculate label positioning
-          const textPos = Object.assign(
-            {},
-            ...["x", "y"].map((c) => ({
-              [c]: start[c] + (end[c] - start[c]) / 2, // calc middle point
-            }))
-          );
-
-          const relLink = { x: end.x - start.x, y: end.y - start.y };
-
-          const maxTextLength = Math.sqrt(Math.pow(relLink.x, 2) + Math.pow(relLink.y, 2)) - LABEL_NODE_MARGIN * 2;
-
-          let textAngle = Math.atan2(relLink.y, relLink.x);
-          // maintain label vertical orientation for legibility
-          if (textAngle > Math.PI / 2) textAngle = -(Math.PI - textAngle);
-          if (textAngle < -Math.PI / 2) textAngle = -(-Math.PI - textAngle);
-
-          // estimate fontSize to fit in link length
-          ctx.font = "1px Sans-Serif";
-          const fontSize = Math.min(MAX_FONT_SIZE, maxTextLength / ctx.measureText(label).width);
-          ctx.font = `${fontSize}px Sans-Serif`;
-          const textWidth = ctx.measureText(label).width;
-          const bckgDimensions = [textWidth, fontSize].map((n) => n + fontSize * 0.2); // some padding
-
-          // draw text label (with background rect)
-          ctx.save();
-          ctx.translate(textPos.x, textPos.y);
-          ctx.rotate(textAngle);
-
-          ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-          ctx.fillRect(-bckgDimensions[0] / 2, -bckgDimensions[1] / 2, ...bckgDimensions as [number, number]);
-
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillStyle = "#666"; // dark gray text
-          ctx.fillText(label, 0, 0);
-          ctx.restore();
+          // No labels drawn anymore, just the interaction
+          // Use a wider transparent line for easier clicking if needed, but default interaction usually works.
+          // The request said "just a line". So we remove the text drawing code.
+          return;
         })
         .enablePanInteraction(true)
         .enableZoomInteraction(true)
@@ -297,6 +305,12 @@ export default function Home() {
           myGraph.zoom(8, 2000);
           const originalNode = nodes.find((n) => n.id === node.id);
           setSelectedNode(originalNode || null);
+        })
+        .onLinkClick((link: any) => {
+          // link.source and link.target are objects in force-graph
+          const fromName = link.source.name || link.source.id;
+          const toName = link.target.name || link.target.id;
+          setSelectedLink({ id: link.id, label: link.label, fromName, toName });
         })
         .graphData(graphData as any);
 
@@ -323,10 +337,11 @@ export default function Home() {
     e?.preventDefault();
     setError(null);
     try {
+      const splitGroups = groupInput.split(",").map(g => g.trim()).filter(g => g !== "");
       const res = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: title, description, group: groupInput }),
+        body: JSON.stringify({ name: title, description, groups: splitGroups }),
       });
       if (!res.ok) {
         const txt = await res.text();
@@ -452,6 +467,35 @@ export default function Home() {
     }
   }
 
+  async function updateLink(id: string, label: string) {
+    try {
+      const res = await fetch(`/api/links/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      await loadData();
+    } catch (err: any) {
+      console.error(err);
+      setError("Failed to update link");
+    }
+  }
+
+  async function deleteLink(id: string) {
+    try {
+      const res = await fetch(`/api/links/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Delete failed");
+      setSelectedLink(null);
+      await loadData();
+    } catch (err: any) {
+      console.error(err);
+      setError("Failed to delete link");
+    }
+  }
+
   const focusNode = (nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId);
     if (node) {
@@ -491,6 +535,10 @@ export default function Home() {
   const isSelfLink = fromId !== "" && toId !== "" && fromId === toId;
   const isDuplicateLink = useMemo(() => {
     if (fromId === "" || toId === "") return false;
+    // Basic check for duplicate MANUAL link?
+    // User might want to create multiple links now manually?
+    // But usually one link per pair manually.
+    // Let's keep duplicate check for Manual creation to avoid accidental double clicks.
     return links.some(l => l.fromId === fromId && l.toId === toId);
   }, [fromId, toId, links]);
 
@@ -587,7 +635,7 @@ export default function Home() {
                   list="group-suggestions"
                   value={groupInput}
                   onChange={(e) => setGroupInput(e.target.value)}
-                  placeholder="Group (optional)"
+                  placeholder="Groups (comma separated)"
                   className="w-full p-2 border rounded-md text-sm bg-background"
                 />
                 <datalist id="group-suggestions">
@@ -595,6 +643,7 @@ export default function Home() {
                     <option key={g} value={g} />
                   ))}
                 </datalist>
+                <p className="text-[10px] text-muted-foreground mt-1">Eg: "Friends, Gym"</p>
               </div>
 
               <Button type="submit" className="w-full" disabled={isNodeNameEmpty}>
@@ -669,7 +718,7 @@ export default function Home() {
           id: selectedNode.id,
           name: selectedNode.name,
           description: selectedNode.description || "",
-          group: selectedNode.group || "",
+          groups: selectedNode.groups || [],
           email: selectedNode.email || "",
           phone: selectedNode.phone || "",
           commonPlatform: selectedNode.commonPlatform || "",
@@ -682,6 +731,14 @@ export default function Home() {
         onUpdateNode={updateNode}
         onFocusNode={focusNode}
         connectedNeighbors={connectedNeighbors}
+      />
+
+      <EditLinkDialog
+        open={!!selectedLink}
+        onOpenChange={(open) => !open && setSelectedLink(null)}
+        link={selectedLink}
+        onUpdate={updateLink}
+        onDelete={deleteLink}
       />
     </div >
   );
