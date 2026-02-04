@@ -29,6 +29,8 @@ type NodeData = {
     metadata?: any;
     lastInteractionAt?: string;
     interactions?: { date: string }[];
+    strengthScore?: number;
+    manualStrengthBias?: number;
 };
 
 type Interaction = {
@@ -162,6 +164,18 @@ export function ContactDetailSheet({
                     </div>
                     <SheetDescription>
                         {node?.description || "No description provided."}
+                        {node?.strengthScore !== undefined && (
+                            <div className="flex items-center gap-2 mt-2">
+                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Relationship Strength</span>
+                                <div className="h-2 w-24 bg-secondary rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-primary"
+                                        style={{ width: `${Math.min(100, Math.max(0, node.strengthScore))}%` }}
+                                    />
+                                </div>
+                                <span className="text-xs font-mono">{node.strengthScore.toFixed(1)}</span>
+                            </div>
+                        )}
                     </SheetDescription>
                 </SheetHeader>
 
@@ -179,6 +193,8 @@ export function ContactDetailSheet({
                                     email: node.email || "",
                                     phone: node.phone || "",
                                     commonPlatform: node.commonPlatform || "",
+                                    strengthScore: node.strengthScore,
+                                    manualStrengthBias: node.manualStrengthBias,
                                 }}
                                 groups={groups}
                                 onSave={async (id, updates) => {

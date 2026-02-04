@@ -33,6 +33,8 @@ type Contact = {
   metadata?: NodeMetadata;
   lastInteractionAt?: string;
   interactions?: { date: string }[];
+  strengthScore?: number;
+  manualStrengthBias?: number;
 };
 
 type NodeType = Contact; // Alias for graph compatibility if needed, or just use Contact
@@ -237,6 +239,7 @@ export default function Home() {
         groups: n.groups ?? n.metadata?.groups ?? [],
         // Use first group for color or "default"
         group: (n.groups && n.groups.length > 0) ? n.groups[0] : "default",
+        strengthScore: n.strengthScore || 0, // Pass strengthScore to graph
       })),
 
       links: nodeLinks.map((l) => ({
@@ -254,8 +257,13 @@ export default function Home() {
         .nodeAutoColorBy("group")
         .linkLineDash((link: any) => link.metadata?.source === "inferred" ? [4, 4] : [])
         .linkCurvature((link: any) => getCurvature(link))
+        // Physics size
+        .nodeVal((node: any) => Math.max(3, Math.min((node.strengthScore || 0) / 4, 15)))
         .nodeCanvasObject((node: any, ctx) => {
-          const size = 5;
+          // Visual size: range 3 to 15 based on score 0-100? 
+          // 0 -> 3, 100 -> 15. Linear: 3 + (score/100)*12
+          const score = node.strengthScore || 0;
+          const size = 3 + (score / 100) * 12; // Smoother scaling
           const isHighlighted = highlightNodes.has(node.id);
 
           ctx.beginPath();
@@ -409,6 +417,25 @@ export default function Home() {
         setDueNodeIds(ids);
       })
       .catch(err => console.error("Failed to refresh due nodes:", err));
+
+    // Refresh specific nodes to get updated strengthScore
+    // We do this in parallel for all involved contacts
+    await Promise.all(contactIds.map(async (id) => {
+      try {
+        const res = await fetch(`/api/contacts/${id}`);
+        if (res.ok) {
+          const updatedNode = await res.json();
+          // Update nodes list
+          setNodes(prev => prev.map(n => n.id === id ? updatedNode : n));
+          // Update selected node if it's the one currently open
+          if (selectedNode?.id === id) {
+            setSelectedNode(updatedNode);
+          }
+        }
+      } catch (e) {
+        console.error(`Failed to refresh contact ${id}:`, e);
+      }
+    }));
   }
 
   async function updateNode(id: string, updates: Partial<NodeType>) {
@@ -436,8 +463,15 @@ export default function Home() {
         throw new Error(`Update failed: ${res.status}`);
       }
 
-      // Optionally reload data to ensure consistency, but if optimistic works, maybe not strictly needed
-      // await loadData(); 
+      const updatedData = await res.json();
+
+      // Update local state with the actual server response (contains recalculated score)
+      setNodes(prev => prev.map(n => n.id === id ? updatedData : n));
+
+      // Update selected node if it's the one currently open
+      if (selectedNode?.id === id) {
+        setSelectedNode(updatedData);
+      }
     } catch (err: any) {
       console.error("Update node failed:", err);
       // Revert on error
@@ -705,7 +739,9 @@ export default function Home() {
           phone: selectedNode.phone || "",
           commonPlatform: selectedNode.commonPlatform || "",
           interactions: selectedNode.interactions,
-          lastInteractionAt: selectedNode.lastInteractionAt
+          lastInteractionAt: selectedNode.lastInteractionAt,
+          strengthScore: selectedNode.strengthScore,
+          manualStrengthBias: selectedNode.manualStrengthBias,
         } : null}
         groups={groups}
         dueNodeIds={dueNodeIds}

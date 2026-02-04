@@ -23,11 +23,9 @@ export async function POST(req: Request) {
         const interactionDate = date ? new Date(date) : new Date();
 
         // Transaction to ensure atomicity
-        // 1. Create interaction interacting with multiple contacts
-        // 2. Update each contact's lastInteractionAt
-
-        const [interaction] = await prisma.$transaction([
-            prisma.interaction.create({
+        const interaction = await prisma.$transaction(async (tx) => {
+            // 1. Create interaction
+            const interaction = await tx.interaction.create({
                 data: {
                     type,
                     content,
@@ -37,17 +35,24 @@ export async function POST(req: Request) {
                         connect: targets.map((id: string) => ({ id })),
                     },
                 },
-            }),
-            ...targets.map((id: string) =>
-                prisma.contact.update({
+            });
+
+            // 2. Update each contact's lastInteractionAt and recalculate score
+            const { recalculateContactScore } = await import("@/lib/strength-scoring");
+
+            await Promise.all(targets.map(async (id: string) => {
+                await tx.contact.update({
                     where: { id },
                     data: {
                         lastInteractionAt: interactionDate,
                         lastPlatform: platform,
                     },
-                })
-            ),
-        ]);
+                });
+                await recalculateContactScore(id, tx);
+            }));
+
+            return interaction;
+        });
 
         return NextResponse.json(interaction);
     } catch (err) {

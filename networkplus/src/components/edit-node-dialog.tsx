@@ -41,6 +41,8 @@ export type EditNodeData = {
     phone?: string;
     email?: string;
     commonPlatform?: string;
+    manualStrengthBias?: number;
+    strengthScore?: number;
 };
 
 interface EditNodeDialogProps {
@@ -60,6 +62,7 @@ export function EditNodeDialog({
 }: EditNodeDialogProps) {
     const [formData, setFormData] = useState<Partial<EditNodeData>>({});
     const [groupString, setGroupString] = useState(""); // Local state for comma-separated input
+    const [biasInput, setBiasInput] = useState("0");
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -71,8 +74,10 @@ export function EditNodeDialog({
                 phone: node.phone || "",
                 email: node.email || "",
                 commonPlatform: node.commonPlatform || "",
+                manualStrengthBias: node.manualStrengthBias || 0,
             });
             setGroupString((node.groups || []).join(", "));
+            setBiasInput((node.manualStrengthBias ?? 0).toString());
         }
     }, [node]);
 
@@ -92,7 +97,11 @@ export function EditNodeDialog({
 
         setLoading(true);
         try {
-            await onSave(node.id, formData);
+            const finalBias = parseFloat(biasInput);
+            await onSave(node.id, {
+                ...formData,
+                manualStrengthBias: isNaN(finalBias) ? 0 : finalBias
+            });
             onOpenChange(false);
         } catch (error) {
             console.error("Failed to save node:", error);
@@ -192,6 +201,24 @@ export function EditNodeDialog({
                                 <NativeSelectOption key={p} value={p}>{p}</NativeSelectOption>
                             ))}
                         </NativeSelect>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="manualStrengthBias" className="text-right">
+                            Bias
+                        </Label>
+                        <div className="col-span-3">
+                            <Input
+                                id="manualStrengthBias"
+                                type="number"
+                                min={-20}
+                                max={20}
+                                value={biasInput}
+                                onChange={(e) => setBiasInput(e.target.value)}
+                            />
+                            <p className="text-[10px] text-muted-foreground mt-1">
+                                Adjust score manualy (-20 to +20). Current Score: {(node?.strengthScore || 0).toFixed(1)}
+                            </p>
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

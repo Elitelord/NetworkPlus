@@ -35,18 +35,18 @@ import { Check, ChevronsUpDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const PLATFORMS = [
-    "Sms",
-    "Call",
-    "Email",
-    "Instagram",
-    "Discord",
-    "Whatsapp",
-    "Facebook",
-    "Linkedin",
-    "Snapchat",
-    "Telegram",
-    "In Person",
-    "Other",
+    { value: "SMS", label: "SMS" },
+    { value: "CALL", label: "Call" },
+    { value: "EMAIL", label: "Email" },
+    { value: "INSTAGRAM", label: "Instagram" },
+    { value: "DISCORD", label: "Discord" },
+    { value: "WHATSAPP", label: "WhatsApp" },
+    { value: "FACEBOOK", label: "Facebook" },
+    { value: "LINKEDIN", label: "LinkedIn" },
+    { value: "SNAPCHAT", label: "Snapchat" },
+    { value: "TELEGRAM", label: "Telegram" },
+    { value: "IN_PERSON", label: "In Person" },
+    { value: "OTHER", label: "Other" },
 ];
 
 interface LogInteractionModalProps {
@@ -262,8 +262,8 @@ export function LogInteractionModal({
                             className="col-span-3"
                         >
                             {PLATFORMS.map((p) => (
-                                <NativeSelectOption key={p} value={p}>
-                                    {p}
+                                <NativeSelectOption key={p.value} value={p.value}>
+                                    {p.label}
                                 </NativeSelectOption>
                             ))}
                         </NativeSelect>

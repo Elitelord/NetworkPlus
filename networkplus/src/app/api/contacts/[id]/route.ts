@@ -22,7 +22,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     try {
         const { id } = await params;
         const body = await req.json();
-        const { name, description, groups, group, email, phone, commonPlatform } = body;
+        const { name, description, groups, group, email, phone, commonPlatform, manualStrengthBias } = body;
 
         // Handle backward compatibility: if `group` string provided, add to `groups`.
         let validGroups = Array.isArray(groups) ? groups : [];
@@ -38,7 +38,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 groups: validGroups, // Replaces existing groups with new list
                 email,
                 phone,
-                commonPlatform
+                commonPlatform: commonPlatform === "" ? null : commonPlatform,
+                manualStrengthBias, // Allow updating manual bias
             },
         });
 
@@ -46,8 +47,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { updateInferredLinks } = await import("@/lib/inference");
         await updateInferredLinks(contact.id);
 
+        // Recalculate score if bias changed
+        if (manualStrengthBias !== undefined) {
+            console.log("Recalculating score for contact:", contact.id);
+            try {
+                const { recalculateContactScore } = await import("@/lib/strength-scoring");
+                await recalculateContactScore(contact.id);
+                console.log("Score recalculation successful");
+            } catch (scoreErr) {
+                console.error("Score recalculation failed:", scoreErr);
+                throw scoreErr; // Re-throw to be caught by outer catch
+            }
+            // Re-fetch contact to get the updated score
+            const updatedContact = await prisma.contact.findUnique({ where: { id } });
+            return NextResponse.json(updatedContact);
+        }
+
         return NextResponse.json(contact);
     } catch (err) {
+        console.error("PATCH contact failed:", err);
         return NextResponse.json({ error: String(err) }, { status: 500 });
     }
 }

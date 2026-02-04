@@ -36,6 +36,8 @@ model Contact {
   lastInteractionAt DateTime?
   lastPlatform      Platform?
   commonPlatform    Platform?
+  strengthScore     Float         @default(0)
+  manualStrengthBias Float        @default(0)
   owner             User          @relation("UserContacts", fields: [ownerId], references: [id])
   relationship      Relationship? @relation(fields: [relationshipId], references: [id])
   interactions      Interaction[]
