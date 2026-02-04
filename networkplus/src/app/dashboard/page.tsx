@@ -385,48 +385,30 @@ export default function Home() {
   }
 
 
-  async function logInteraction(contactName: string) {
-    // Find contact ID from dueContacts
-    const contact = dueContacts.find(c => c.name === contactName);
-    if (!contact) return;
-
-    // Optimistic update: Remove from list and highlights immediately
+  async function handleInteractionLogged(contactIds: string[]) {
+    // Optimistic update: Remove from due list and highlights immediately
     const previousDueContacts = [...dueContacts];
-    setDueContacts(prev => prev.filter(c => c.id !== contact.id));
+    setDueContacts(prev => prev.filter(c => !contactIds.includes(c.id)));
 
     // Update IDs set
     const newIds = new Set(dueNodeIds);
-    // Find node ID for this contact
-    const node = nodes.find(n => n.id === contact.id);
-    if (node && newIds.has(node.id)) {
-      newIds.delete(node.id);
-      setDueNodeIds(newIds);
-    }
+    contactIds.forEach(id => {
+      newIds.delete(id);
+    });
+    setDueNodeIds(newIds);
 
-    try {
-      const res = await fetch("/api/interactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contactId: contact.id,
-          type: "OTHER",
-          content: "Logged via Dashboard",
-          date: new Date().toISOString()
-        })
-      });
-
-      if (!res.ok) throw new Error("Failed to log interaction");
-
-    } catch (err) {
-      console.error("Log interaction failed", err);
-      // Revert state
-      setDueContacts(previousDueContacts);
-      if (node) {
-        newIds.add(node.id);
-        setDueNodeIds(newIds);
-      }
-      setError("Failed to log interaction");
-    }
+    // Refresh due contacts from server to be sure
+    fetch("/api/contacts/due-soon?days=30")
+      .then(res => res.ok ? res.json() : [])
+      .then((data: Contact[]) => {
+        setDueContacts(data);
+        const ids = new Set<string>();
+        if (Array.isArray(data)) {
+          data.forEach(c => ids.add(c.id));
+        }
+        setDueNodeIds(ids);
+      })
+      .catch(err => console.error("Failed to refresh due nodes:", err));
   }
 
   async function updateNode(id: string, updates: Partial<NodeType>) {
@@ -727,7 +709,7 @@ export default function Home() {
         } : null}
         groups={groups}
         dueNodeIds={dueNodeIds}
-        onLogInteraction={logInteraction}
+        onLogInteraction={handleInteractionLogged}
         onUpdateNode={updateNode}
         onFocusNode={focusNode}
         connectedNeighbors={connectedNeighbors}

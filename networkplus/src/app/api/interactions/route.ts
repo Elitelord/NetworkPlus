@@ -11,32 +11,42 @@ export async function POST(req: Request) {
         // }
 
         const body = await req.json();
-        const { contactId, type = "OTHER", content, date, platform = "OTHER" } = body;
+        const { contactIds, type = "OTHER", content, date, platform = "OTHER" } = body;
 
-        if (!contactId) {
-            return NextResponse.json({ error: "Missing contactId" }, { status: 400 });
+        // Fallback for single contactId support (if needed during transition or just for safety)
+        const targets = contactIds || (body.contactId ? [body.contactId] : []);
+
+        if (!targets || targets.length === 0) {
+            return NextResponse.json({ error: "Missing contactIds" }, { status: 400 });
         }
 
         const interactionDate = date ? new Date(date) : new Date();
 
         // Transaction to ensure atomicity
+        // 1. Create interaction interacting with multiple contacts
+        // 2. Update each contact's lastInteractionAt
+
         const [interaction] = await prisma.$transaction([
             prisma.interaction.create({
                 data: {
-                    contactId,
                     type,
                     content,
                     date: interactionDate,
                     platform,
+                    contacts: {
+                        connect: targets.map((id: string) => ({ id })),
+                    },
                 },
             }),
-            prisma.contact.update({
-                where: { id: contactId },
-                data: {
-                    lastInteractionAt: interactionDate,
-                    lastPlatform: platform,
-                },
-            }),
+            ...targets.map((id: string) =>
+                prisma.contact.update({
+                    where: { id },
+                    data: {
+                        lastInteractionAt: interactionDate,
+                        lastPlatform: platform,
+                    },
+                })
+            ),
         ]);
 
         return NextResponse.json(interaction);

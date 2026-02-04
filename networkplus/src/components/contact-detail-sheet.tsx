@@ -45,7 +45,7 @@ interface ContactDetailSheetProps {
     node: NodeData | null;
     groups: string[];
     dueNodeIds: Set<string>; // To show alert
-    onLogInteraction: (contactName: string) => void; // Legacy/Quick action from alert? We might repurpose this or use it to refresh
+    onLogInteraction: (contactIds: string[]) => void; // Legacy/Quick action from alert? We might repurpose this or use it to refresh
     onUpdateNode: (id: string, updates: Partial<NodeData>) => Promise<void>;
     onFocusNode: (id: string) => void;
     // Passing "connectedNeighbors" or "links/nodes" to calculate them?
@@ -131,7 +131,7 @@ export function ContactDetailSheet({
         }
     }, [node?.id, open]);
 
-    const refreshHistory = () => {
+    const refreshHistory = (contactIds: string[]) => {
         if (node?.id) {
             fetch(`/api/contacts/${node.id}/interactions`)
                 .then((res) => res.ok ? res.json() : [])
@@ -141,7 +141,7 @@ export function ContactDetailSheet({
             // Also trigger parent refresh if needed, for "Due Soon" list
             // We can call onLogInteraction to trigger the optimistic update in parent 
             // effectively clearing the alert if it was due.
-            onLogInteraction(node.name);
+            onLogInteraction(contactIds);
         }
     };
 

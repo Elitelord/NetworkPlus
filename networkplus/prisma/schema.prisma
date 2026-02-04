@@ -55,13 +55,12 @@ model Relationship {
 }
 
 model Interaction {
-  id        String   @id @default(cuid())
-  contactId String
+  id        String    @id @default(cuid())
   type      String
   content   String?
-  platform  Platform @default(OTHER)
-  date      DateTime @default(now())
-  contact   Contact  @relation(fields: [contactId], references: [id])
+  platform  Platform  @default(OTHER)
+  date      DateTime  @default(now())
+  contacts  Contact[]
 }
 
 model Reminder {
