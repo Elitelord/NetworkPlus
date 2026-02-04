@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const node = await prisma.node.findUnique({
+    const node = await prisma.contact.findUnique({
       where: { id },
       include: { outgoing: true, incoming: true },
     });
@@ -23,9 +23,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const { id } = await params;
     const body = await req.json();
     const { title, description, metadata, group } = body;
-    const node = await prisma.node.update({
+    const node = await prisma.contact.update({
       where: { id },
-      data: { title, description, metadata, group },
+      data: { name: title, description, metadata, category: group },
     });
     return NextResponse.json(node);
   } catch (err) {
@@ -38,7 +38,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params;
     const body = await req.json();
     // Only update fields that are present in the body
-    const node = await prisma.node.update({
+    const node = await prisma.contact.update({
       where: { id },
       data: body,
     });
@@ -53,7 +53,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     const { id } = await params;
     // remove links that reference this node first to avoid FK errors
     await prisma.link.deleteMany({ where: { OR: [{ fromId: id }, { toId: id }] } });
-    await prisma.node.delete({ where: { id } });
+    await prisma.contact.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });

@@ -1,26 +1,32 @@
-import {NavigationMenu, NavigationMenuList, NavigationMenuItem, NavigationMenuTrigger, NavigationMenuContent, NavigationMenuLink} from "@/components/ui/navigation";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default function Navbar() {
-    return(<>
-    <NavigationMenu>
-        <NavigationMenuList>
-            <NavigationMenuItem>
-                <NavigationMenuLink>
-                    <Link href="/">Home</Link>
-                </NavigationMenuLink>
-            </NavigationMenuItem>
-            <NavigationMenuItem>
-                <NavigationMenuLink>
-                    <Link href="/dashboard">Dashboard</Link>
-                </NavigationMenuLink>
-            </NavigationMenuItem>
-            <NavigationMenuItem>
-                <NavigationMenuLink>
-                    <Link href="/signin">Sign In</Link>
-                </NavigationMenuLink>
-            </NavigationMenuItem>
-        </NavigationMenuList>
-    </NavigationMenu>
-</>);
+    return (
+        <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="container mx-auto flex h-14 max-w-screen-2xl items-center px-4 justify-between">
+                <div className="flex items-center gap-6">
+                    <Link href="/" className="mr-6 flex items-center space-x-2">
+                        <span className="font-bold sm:inline-block">NetworkPlus</span>
+                    </Link>
+                    <div className="hidden md:flex gap-6">
+                        <Link href="/" className="text-sm font-medium transition-colors hover:text-primary">
+                            Home
+                        </Link>
+                        <Link href="/dashboard" className="text-sm font-medium transition-colors hover:text-primary">
+                            Dashboard
+                        </Link>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Link href="/signin">
+                        <Button variant="ghost" size="sm">Sign In</Button>
+                    </Link>
+                    <Link href="/signup">
+                        <Button size="sm">Get Started</Button>
+                    </Link>
+                </div>
+            </div>
+        </nav>
+    );
 }
