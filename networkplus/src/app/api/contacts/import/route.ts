@@ -23,17 +23,12 @@ function normalizeEnum<T>(val: string | null | undefined, enumObj: any): T | nul
 export async function POST(req: Request) {
     try {
         const session = await auth();
-        let userId = session?.user?.id;
 
-        // Dev fallback
-        if (!userId && process.env.NODE_ENV === "development") {
-            const u = await prisma.user.findFirst();
-            userId = u?.id;
-        }
-
-        if (!userId) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        const userId = session.user.id;
 
         const body = await req.json();
         const { contacts } = body;

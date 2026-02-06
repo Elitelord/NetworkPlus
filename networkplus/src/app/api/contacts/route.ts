@@ -5,19 +5,19 @@ import prisma from "@/lib/prisma";
 export async function GET(req: Request) {
     try {
         const session = await auth();
-        // In dev mode, we might want to bypass or use fallback, but for now let's assume loose auth or none for public fetch
-        // If you need specific user data:
-        // const userId = session?.user?.id;
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
 
-        // Fetch all contacts (acting as nodes)
         const contacts = await prisma.contact.findMany({
+            where: {
+                ownerId: session.user.id
+            },
             include: {
                 // Include interactions if needed?
             }
         });
 
-        // Map to node format if frontend expects it, or return contacts directly and update frontend?
-        // Let's return contacts directly but ensure frontend handles "name" instead of "title".
         return NextResponse.json(contacts);
     } catch (err) {
         return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -43,20 +43,13 @@ export async function POST(req: Request) {
             validGroups.push(group);
         }
 
-        // We need an ownerId. Fallback to first user in dev if not authenticated?
-        let userId = session?.user?.id;
-        if (!userId && process.env.NODE_ENV === "development") {
-            const u = await prisma.user.findFirst();
-            userId = u?.id;
-        }
-
-        if (!userId) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const newContact = await prisma.contact.create({
             data: {
-                ownerId: userId,
+                ownerId: session.user.id,
                 name,
                 description,
                 groups: validGroups,

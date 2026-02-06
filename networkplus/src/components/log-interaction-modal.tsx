@@ -32,6 +32,9 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Check, ChevronsUpDown, X } from "lucide-react";
+import { format } from "date-fns";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 
 const PLATFORMS = [
@@ -227,17 +230,161 @@ export function LogInteractionModal({
                     </div>
 
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="date" className="text-right">
+                        <Label htmlFor="date" className="text-right pt-2">
                             Date
                         </Label>
-                        <Input
-                            id="date"
-                            type="datetime-local"
-                            value={formData.date}
-                            onChange={(e) => handleChange("date", e.target.value)}
-                            className="col-span-3"
-                            required
-                        />
+                        <div className="col-span-3">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn(
+                                            "w-full pl-3 text-left font-normal",
+                                            !formData.date && "text-muted-foreground"
+                                        )}
+                                    >
+                                        {formData.date ? (
+                                            format(new Date(formData.date), "PPP")
+                                        ) : (
+                                            <span>Pick a date</span>
+                                        )}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                        mode="single"
+                                        selected={new Date(formData.date)}
+                                        onSelect={(date) => {
+                                            if (date) {
+                                                // Preserve time
+                                                const current = new Date(formData.date);
+                                                date.setHours(current.getHours());
+                                                date.setMinutes(current.getMinutes());
+
+                                                const newDate = new Date(current);
+                                                newDate.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+
+                                                const offset = newDate.getTimezoneOffset() * 60000;
+                                                const localISOTime = (new Date(newDate.getTime() - offset)).toISOString().slice(0, 16);
+                                                handleChange("date", localISOTime);
+                                            }
+                                        }}
+                                        disabled={(date) =>
+                                            date > new Date() || date < new Date("1900-01-01")
+                                        }
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">
+                            Time
+                        </Label>
+                        <div className="col-span-3 flex gap-1 items-center">
+                            {/* Hour */}
+                            <NativeSelect
+                                value={(() => {
+                                    if (!formData.date) return "12";
+                                    const date = new Date(formData.date);
+                                    let h = date.getHours();
+                                    if (h === 0) h = 12;
+                                    else if (h > 12) h -= 12;
+                                    return h.toString();
+                                })()}
+                                onChange={(e) => {
+                                    const newHour12 = parseInt(e.target.value);
+                                    const date = new Date(formData.date);
+                                    let h = date.getHours();
+                                    const isPm = h >= 12;
+
+                                    let newHour24 = newHour12;
+                                    if (newHour12 === 12) {
+                                        newHour24 = 0;
+                                    }
+                                    if (isPm) {
+                                        newHour24 += 12;
+                                    }
+
+                                    // Fix specific PM/AM logic
+                                    if (isPm) {
+                                        if (newHour12 === 12) newHour24 = 12;
+                                        else newHour24 = newHour12 + 12;
+                                    } else {
+                                        if (newHour12 === 12) newHour24 = 0;
+                                        else newHour24 = newHour12;
+                                    }
+
+                                    date.setHours(newHour24);
+                                    const offset = date.getTimezoneOffset() * 60000;
+                                    const localISOTime = (new Date(date.getTime() - offset)).toISOString().slice(0, 16);
+                                    handleChange("date", localISOTime);
+                                }}
+                                className="w-[70px]"
+                            >
+                                {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                                    <NativeSelectOption key={h} value={h}>
+                                        {h}
+                                    </NativeSelectOption>
+                                ))}
+                            </NativeSelect>
+
+                            <span className="text-muted-foreground">:</span>
+
+                            {/* Minute */}
+                            <NativeSelect
+                                value={(() => {
+                                    if (!formData.date) return "00";
+                                    const m = new Date(formData.date).getMinutes();
+                                    return m.toString().padStart(2, '0');
+                                })()}
+                                onChange={(e) => {
+                                    const newMin = parseInt(e.target.value);
+                                    const date = new Date(formData.date);
+                                    date.setMinutes(newMin);
+                                    const offset = date.getTimezoneOffset() * 60000;
+                                    const localISOTime = (new Date(date.getTime() - offset)).toISOString().slice(0, 16);
+                                    handleChange("date", localISOTime);
+                                }}
+                                className="w-[70px]"
+                            >
+                                {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
+                                    <NativeSelectOption key={m} value={m.toString().padStart(2, '0')}>
+                                        {m.toString().padStart(2, '0')}
+                                    </NativeSelectOption>
+                                ))}
+                            </NativeSelect>
+
+                            {/* AM/PM */}
+                            <NativeSelect
+                                value={(() => {
+                                    if (!formData.date) return "AM";
+                                    return new Date(formData.date).getHours() >= 12 ? "PM" : "AM";
+                                })()}
+                                onChange={(e) => {
+                                    const newAmPm = e.target.value; // "AM" or "PM"
+                                    const date = new Date(formData.date);
+                                    let h = date.getHours();
+
+                                    if (newAmPm === "PM" && h < 12) {
+                                        h += 12;
+                                    } else if (newAmPm === "AM" && h >= 12) {
+                                        h -= 12;
+                                    }
+
+                                    date.setHours(h);
+                                    const offset = date.getTimezoneOffset() * 60000;
+                                    const localISOTime = (new Date(date.getTime() - offset)).toISOString().slice(0, 16);
+                                    handleChange("date", localISOTime);
+                                }}
+                                className="w-[70px]"
+                            >
+                                <NativeSelectOption value="AM">AM</NativeSelectOption>
+                                <NativeSelectOption value="PM">PM</NativeSelectOption>
+                            </NativeSelect>
+                        </div>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="type" className="text-right">

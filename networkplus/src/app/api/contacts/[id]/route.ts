@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 
 export async function GET(
@@ -6,9 +7,15 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const session = await auth();
+        if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
         const { id } = await params;
-        const contact = await prisma.contact.findUnique({
-            where: { id },
+        const contact = await prisma.contact.findFirst({
+            where: {
+                id,
+                ownerId: session.user.id
+            },
             include: { outgoing: true, incoming: true },
         });
         if (!contact) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -20,6 +27,9 @@ export async function GET(
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const session = await auth();
+        if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
         const { id } = await params;
         const body = await req.json();
         const { name, description, groups, group, email, phone, commonPlatform, manualStrengthBias } = body;
@@ -31,7 +41,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
 
         const contact = await prisma.contact.update({
-            where: { id },
+            where: {
+                id,
+                ownerId: session.user.id
+            },
             data: {
                 name,
                 description,
@@ -72,7 +85,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const session = await auth();
+        if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
         const { id } = await params;
+
+        // Verify ownership before deleting
+        const count = await prisma.contact.count({
+            where: { id, ownerId: session.user.id }
+        });
+        if (count === 0) return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
+
         // remove links that reference this contact first to avoid FK errors
         await prisma.link.deleteMany({ where: { OR: [{ fromId: id }, { toId: id }] } });
         await prisma.contact.delete({ where: { id } });

@@ -17,23 +17,26 @@ import {
     NativeSelectOption,
 } from "@/components/ui/native-select"
 
+import { MultiSelect } from "@/components/ui/multi-select";
+
 // Match the Platform enum from Prisma
+// Match the Platform enum from Prisma but provide nice labels
 const PLATFORMS = [
-    "SMS",
-    "CALL",
-    "EMAIL",
-    "INSTAGRAM",
-    "DISCORD",
-    "WHATSAPP",
-    "FACEBOOK",
-    "LINKEDIN",
-    "SNAPCHAT",
-    "TELEGRAM",
-    "IN_PERSON",
-    "OTHER",
+    { value: "SMS", label: "SMS" },
+    { value: "CALL", label: "Call" },
+    { value: "EMAIL", label: "Email" },
+    { value: "INSTAGRAM", label: "Instagram" },
+    { value: "DISCORD", label: "Discord" },
+    { value: "WHATSAPP", label: "WhatsApp" },
+    { value: "FACEBOOK", label: "Facebook" },
+    { value: "LINKEDIN", label: "LinkedIn" },
+    { value: "SNAPCHAT", label: "Snapchat" },
+    { value: "TELEGRAM", label: "Telegram" },
+    { value: "IN_PERSON", label: "In Person" },
+    { value: "OTHER", label: "Other" },
 ];
 
-export type EditNodeData = {
+export type EditContactData = {
     id: string;
     name: string;
     description?: string;
@@ -48,9 +51,9 @@ export type EditNodeData = {
 interface EditNodeDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    node: EditNodeData | null;
+    node: EditContactData | null;
     groups: string[];
-    onSave: (id: string, updates: Partial<EditNodeData>) => Promise<void>;
+    onSave: (id: string, updates: Partial<EditContactData>) => Promise<void>;
 }
 
 export function EditNodeDialog({
@@ -60,8 +63,7 @@ export function EditNodeDialog({
     groups,
     onSave,
 }: EditNodeDialogProps) {
-    const [formData, setFormData] = useState<Partial<EditNodeData>>({});
-    const [groupString, setGroupString] = useState(""); // Local state for comma-separated input
+    const [formData, setFormData] = useState<Partial<EditContactData>>({});
     const [biasInput, setBiasInput] = useState("0");
     const [loading, setLoading] = useState(false);
 
@@ -76,20 +78,13 @@ export function EditNodeDialog({
                 commonPlatform: node.commonPlatform || "",
                 manualStrengthBias: node.manualStrengthBias || 0,
             });
-            setGroupString((node.groups || []).join(", "));
             setBiasInput((node.manualStrengthBias ?? 0).toString());
         }
     }, [node]);
 
-    const handleChange = (field: keyof EditNodeData, value: any) => {
+    const handleChange = (field: keyof EditContactData, value: any) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
     };
-
-    const handleGroupChange = (value: string) => {
-        setGroupString(value);
-        const splitGroups = value.split(",").map(g => g.trim()).filter(g => g !== "");
-        handleChange("groups", splitGroups);
-    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -104,7 +99,7 @@ export function EditNodeDialog({
             });
             onOpenChange(false);
         } catch (error) {
-            console.error("Failed to save node:", error);
+            console.error("Failed to save contact:", error);
         } finally {
             setLoading(false);
         }
@@ -114,9 +109,9 @@ export function EditNodeDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle>Edit Node</DialogTitle>
+                    <DialogTitle>Edit Contact</DialogTitle>
                     <DialogDescription>
-                        Make changes to the node details here. Click save when you&apos;re done.
+                        Make changes to the contact details here. Click save when you&apos;re done.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="grid gap-4 py-4">
@@ -147,20 +142,13 @@ export function EditNodeDialog({
                         <Label htmlFor="groups" className="text-right">
                             Groups
                         </Label>
-                        <div className="col-span-3 relative">
-                            <Input
-                                id="groups"
-                                list="group-suggestions-dialog"
-                                value={groupString}
-                                onChange={(e) => handleGroupChange(e.target.value)}
-                                placeholder="Group1, Group2"
+                        <div className="col-span-3">
+                            <MultiSelect
+                                options={groups}
+                                selected={formData.groups || []}
+                                onChange={(newGroups) => handleChange("groups", newGroups)}
+                                placeholder="Select groups..."
                             />
-                            <datalist id="group-suggestions-dialog">
-                                {groups.map((g) => (
-                                    <option key={g} value={g} />
-                                ))}
-                            </datalist>
-                            <p className="text-[10px] text-muted-foreground mt-1">Separate specific groups with commas</p>
                         </div>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
@@ -198,7 +186,7 @@ export function EditNodeDialog({
                         >
                             <NativeSelectOption value="">None</NativeSelectOption>
                             {PLATFORMS.map(p => (
-                                <NativeSelectOption key={p} value={p}>{p}</NativeSelectOption>
+                                <NativeSelectOption key={p.value} value={p.value}>{p.label}</NativeSelectOption>
                             ))}
                         </NativeSelect>
                     </div>
@@ -216,7 +204,7 @@ export function EditNodeDialog({
                                 onChange={(e) => setBiasInput(e.target.value)}
                             />
                             <p className="text-[10px] text-muted-foreground mt-1">
-                                Adjust score manualy (-20 to +20). Current Score: {(node?.strengthScore || 0).toFixed(1)}
+                                Adjust score manually (-20 to +20). Current Score: {(node?.strengthScore || 0).toFixed(1)}
                             </p>
                         </div>
                     </div>

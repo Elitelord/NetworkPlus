@@ -8,17 +8,10 @@ import {
 } from "@/components/ui/native-select"
 import { DueSoonList } from "@/components/DueSoonList";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
 import { ContactImportModal } from "@/components/contact-import-modal";
-import { EditNodeDialog } from "@/components/edit-node-dialog";
 import { ContactDetailSheet } from "@/components/contact-detail-sheet";
 import { EditLinkDialog } from "@/components/edit-link-dialog";
+import { MultiSelect } from "@/components/ui/multi-select";
 
 type NodeMetadata = { groups?: string[];[key: string]: any };
 
@@ -43,55 +36,6 @@ type NodeType = Contact; // Alias for graph compatibility if needed, or just use
 // type NodeType = { id: string; title: string; description?: string; group?: string | null; metadata?: NodeMetadata };
 type LinkType = { id: string; fromId: string; toId: string; label?: string; metadata?: any };
 
-function GroupsEditor({
-  initialGroups,
-  groups,
-  onSave
-}: {
-  initialGroups: string[];
-  groups: string[];
-  onSave: (newGroups: string[]) => void;
-}) {
-  const [value, setValue] = useState(initialGroups.join(", "));
-
-  // Reset value when the node (represented by initialGroup) changes externally
-  // We use initialGroup as a key/dependency to reset local state
-  useEffect(() => {
-    setValue(initialGroups.join(", "));
-  }, [initialGroups]);
-
-  return (
-    <div className="relative">
-      <input
-        list="group-suggestions-edit"
-        className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground ring-1 ring-inset ring-gray-500/10 border-0 focus:ring-2 focus:ring-primary w-40"
-        placeholder="None"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={() => {
-          const split = value.split(",").map(g => g.trim()).filter(g => g !== "");
-          // Check if changed
-          const current = initialGroups.join(", ");
-          const newStr = split.join(", ");
-          if (current !== newStr) {
-            onSave(split);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.currentTarget.blur();
-          }
-        }}
-      />
-      <datalist id="group-suggestions-edit">
-        {groups.map((g) => (
-          <option key={g} value={g} />
-        ))}
-      </datalist>
-    </div>
-  );
-}
-
 export default function Home() {
   const graphRef = useRef<HTMLDivElement | null>(null);
   const graphInstanceRef = useRef<any>(null);
@@ -100,7 +44,7 @@ export default function Home() {
   const [title, setTitle] = useState("");
 
   const [description, setDescription] = useState("");
-  const [groupInput, setGroupInput] = useState("");
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [fromId, setFromId] = useState("");
   const [toId, setToId] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
@@ -345,21 +289,20 @@ export default function Home() {
     e?.preventDefault();
     setError(null);
     try {
-      const splitGroups = groupInput.split(",").map(g => g.trim()).filter(g => g !== "");
       const res = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: title, description, groups: splitGroups }),
+        body: JSON.stringify({ name: title, description, groups: selectedGroups }),
       });
       if (!res.ok) {
         const txt = await res.text();
-        console.error("Create node failed:", res.status, txt);
-        setError(`Create node failed: ${res.status}`);
+        console.error("Create contact failed:", res.status, txt);
+        setError(`Create contact failed: ${res.status}`);
         return;
       }
       setTitle("");
       setDescription("");
-      setGroupInput("");
+      setSelectedGroups([]);
       await loadData();
     } catch (err: any) {
       console.error(err);
@@ -416,7 +359,7 @@ export default function Home() {
         }
         setDueNodeIds(ids);
       })
-      .catch(err => console.error("Failed to refresh due nodes:", err));
+      .catch(err => console.error("Failed to refresh due contacts:", err));
 
     // Refresh specific nodes to get updated strengthScore
     // We do this in parallel for all involved contacts
@@ -467,6 +410,11 @@ export default function Home() {
 
       // Update local state with the actual server response (contains recalculated score)
       setNodes(prev => prev.map(n => n.id === id ? updatedData : n));
+
+      // If groups were updated, refresh links because the backend might have created/deleted inferred links
+      if (updates.groups) {
+        await loadData();
+      }
 
       // Update selected node if it's the one currently open
       if (selectedNode?.id === id) {
@@ -584,14 +532,9 @@ export default function Home() {
             }
 
             // Highlight logic
-            // Find neighbors
+            // Only highlight the target node itself
             const neighborIds = new Set<string>();
             neighborIds.add(targetNode.id);
-            links.forEach(l => {
-              if (l.fromId === targetNode.id) neighborIds.add(l.toId);
-              if (l.toId === targetNode.id) neighborIds.add(l.fromId);
-            });
-
             setHighlightNodes(neighborIds);
 
             // Clear highlight after 3 seconds
@@ -639,31 +582,24 @@ export default function Home() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Add Node</CardTitle>
+            <CardTitle className="text-base">Add Contact</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={createNode} className="flex flex-col gap-3">
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className="w-full p-2 border rounded-md text-sm bg-background" />
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Name" className="w-full p-2 border rounded-md text-sm bg-background" />
               <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full p-2 border rounded-md text-sm bg-background" />
 
               <div className="relative">
-                <input
-                  list="group-suggestions"
-                  value={groupInput}
-                  onChange={(e) => setGroupInput(e.target.value)}
-                  placeholder="Groups (comma separated)"
-                  className="w-full p-2 border rounded-md text-sm bg-background"
+                <MultiSelect
+                  options={groups}
+                  selected={selectedGroups}
+                  onChange={setSelectedGroups}
+                  placeholder="Select groups..."
                 />
-                <datalist id="group-suggestions">
-                  {groups.map((g) => (
-                    <option key={g} value={g} />
-                  ))}
-                </datalist>
-                <p className="text-[10px] text-muted-foreground mt-1">Eg: "Friends, Gym"</p>
               </div>
 
               <Button type="submit" className="w-full" disabled={isNodeNameEmpty}>
-                Create Node
+                Create Contact
               </Button>
               {isNodeNameEmpty && title !== "" && (
                 <p className="text-xs text-destructive">Name is required.</p>
@@ -694,7 +630,7 @@ export default function Home() {
               <Button type="submit" className="w-full" disabled={isLinkInvalid}>
                 Create Link
               </Button>
-              {isSelfLink && <p className="text-xs text-destructive">Cannot link a node to itself.</p>}
+              {isSelfLink && <p className="text-xs text-destructive">Cannot link a contact to itself.</p>}
               {isDuplicateLink && <p className="text-xs text-destructive">Link already exists.</p>}
             </form>
           </CardContent>
@@ -713,7 +649,7 @@ export default function Home() {
         </Card>
 
         <div className="py-4">
-          <h3 className="font-semibold text-sm mb-2">Recent Nodes</h3>
+          <h3 className="font-semibold text-sm mb-2">Recent Contacts</h3>
           <ul className="space-y-1">
             {nodes.slice(-5).reverse().map((n) => (
               <li key={n.id} className="text-xs text-muted-foreground truncate hover:text-foreground cursor-pointer" onClick={() => {

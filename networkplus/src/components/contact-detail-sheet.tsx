@@ -9,7 +9,7 @@ import {
     SheetTitle,
     SheetDescription,
 } from "@/components/ui/sheet";
-import { EditNodeDialog, EditNodeData } from "@/components/edit-node-dialog";
+import { EditNodeDialog, EditContactData } from "@/components/edit-node-dialog";
 import { LogInteractionModal } from "@/components/log-interaction-modal";
 // import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -55,6 +55,8 @@ interface ContactDetailSheetProps {
     connectedNeighbors: NodeData[];
 }
 
+import { MultiSelect } from "@/components/ui/multi-select";
+
 function GroupsEditor({
     initialGroups,
     groups,
@@ -64,42 +66,19 @@ function GroupsEditor({
     groups: string[];
     onSave: (newGroups: string[]) => void;
 }) {
-    const [value, setValue] = useState(initialGroups.join(", "));
-
-    // Reset value when the node (represented by initialGroup) changes externally
-    // Simple useEffect sync
-    useMemo(() => {
-        setValue(initialGroups.join(", "));
-    }, [initialGroups]);
-
+    // MultiSelect handles state internally given controlled props, but we need to trigger onSave only when needed?
+    // MultiSelect onChange triggers immediately. To avoid too many updates, we could debounce or just accept immediate updates for sheet.
+    // Dashboard sheet is kind of separate from "Edit Dialog". "GroupsEditor" here is an inline editor.
+    // Immediate save is fine for inline editing.
     return (
-        <div className="relative">
-            <input
-                list="group-suggestions-edit-sheet"
-                className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground ring-1 ring-inset ring-gray-500/10 border-0 focus:ring-2 focus:ring-primary w-40"
-                placeholder="None"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                onBlur={() => {
-                    const split = value.split(",").map(g => g.trim()).filter(g => g !== "");
-                    // Check if changed
-                    const current = initialGroups.join(", ");
-                    const newStr = split.join(", ");
-                    if (current !== newStr) {
-                        onSave(split);
-                    }
-                }}
-                onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                        e.currentTarget.blur();
-                    }
-                }}
+        <div className="w-full max-w-xs">
+            <MultiSelect
+                options={groups}
+                selected={initialGroups}
+                onChange={onSave}
+                placeholder="No groups"
+                className="min-h-8 h-auto"
             />
-            <datalist id="group-suggestions-edit-sheet">
-                {groups.map((g) => (
-                    <option key={g} value={g} />
-                ))}
-            </datalist>
         </div>
     );
 }
@@ -282,7 +261,7 @@ export function ContactDetailSheet({
                                     )}
                                 </div>
 
-                                <h3 className="font-semibold text-sm mb-3">Connected Nodes ({connectedNeighbors.length})</h3>
+                                <h3 className="font-semibold text-sm mb-3">Connected Contacts ({connectedNeighbors.length})</h3>
                                 {connectedNeighbors.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">No connections found.</p>
                                 ) : (
