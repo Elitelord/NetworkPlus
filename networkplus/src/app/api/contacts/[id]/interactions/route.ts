@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 
@@ -8,7 +9,7 @@ export async function GET(
 ) {
     try {
         const { id } = await params;
-        const session = await auth();
+        const session = await auth() as Session | null;
         // Minimal auth check
         // if (!session?.user) {
         //     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

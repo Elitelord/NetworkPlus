@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import { getDueSoonContacts } from "@/lib/contacts";
 import prisma from "@/lib/prisma";
 
 export async function GET(req: Request) {
     try {
-        const session = await auth();
+        const session = await auth() as Session | null;
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

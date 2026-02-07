@@ -1,5 +1,5 @@
 import prisma from "@/lib/prisma";
-import { Platform } from "@prisma/client";
+import { Platform } from "../generated/prisma/client";
 
 // Platform weights
 const PLATFORM_WEIGHTS: Record<Platform, number> = {

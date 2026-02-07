@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { Category, Platform } from "../../../../generated/prisma/client";
@@ -22,7 +23,7 @@ function normalizeEnum<T>(val: string | null | undefined, enumObj: any): T | nul
 
 export async function POST(req: Request) {
     try {
-        const session = await auth();
+        const session = await auth() as Session | null;
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
