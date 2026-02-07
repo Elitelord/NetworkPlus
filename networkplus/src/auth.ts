@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import authConfig from "./auth.config"
 
 export const { handlers, auth: nextAuthAuth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  adapter: PrismaAdapter(prisma as any),
   session: { strategy: "jwt" },
   pages: {
     signIn: "/signin",
