@@ -1,3 +1,6 @@
+"use client"
+
+import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -60,7 +63,11 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
             <FieldGroup>
               <Field>
                 <Button type="submit">Create Account</Button>
-                <Button variant="outline" type="button">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => signIn("google", { redirectTo: "/dashboard" })}
+                >
                   Sign up with Google
                 </Button>
                 <FieldDescription className="px-6 text-center">
