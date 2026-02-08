@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
-import { Category, Platform } from "../../../../generated/prisma/client";
+import { Category, Platform } from "@prisma/client";
 
 // Helper to validate and parse date
 function parseDate(dateStr: string | null | undefined): Date | null {
