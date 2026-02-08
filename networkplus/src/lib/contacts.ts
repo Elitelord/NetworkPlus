@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { prisma } from "@lib/prisma";
 
 /**
  * Fetches contacts that haven't been interacted with in the last `thresholdDays` days.

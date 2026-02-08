@@ -1,6 +1,6 @@
 import "dotenv/config";
-import prisma from "../src/lib/prisma";
-import { recalculateContactScore } from "../src/lib/strength-scoring";
+import prisma from "@/lib/prisma";
+import { recalculateContactScore } from "@/lib/strength-scoring";
 
 async function main() {
     console.log("Starting scoring verification...");

@@ -1,5 +1,5 @@
 
-import prisma from "@/lib/prisma";
+import prisma from "@lib/prisma";
 
 /**
  * Updates inferred links for a specific contact based on the "Shared Group" rule.

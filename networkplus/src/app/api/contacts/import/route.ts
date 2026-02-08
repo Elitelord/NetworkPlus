@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
-import prisma from "@/lib/prisma";
+import prisma from "@lib/prisma";
 import { Category, Platform } from "@prisma/client";
 
 // Helper to validate and parse date

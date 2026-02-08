@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { prisma } from "../src/lib/prisma"; // Adjust extension if needed or rely on resolution
-import { getDueSoonContacts } from "../src/lib/contacts";
+import { prisma } from "@/lib/prisma"; // Adjust extension if needed or rely on resolution
+import { getDueSoonContacts } from "@/lib/contacts";
 
 async function main() {
     console.log("Starting verification...");
