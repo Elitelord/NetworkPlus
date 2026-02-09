@@ -7,7 +7,7 @@ import { auth } from "@/auth";
 export async function GET() {
   try {
     const session = await auth() as Session | null;
-    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const links = await prisma.link.findMany({
       where: {

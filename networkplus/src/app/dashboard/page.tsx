@@ -61,7 +61,11 @@ export default function Home() {
   async function loadData() {
     setError(null);
     try {
-      const [nRes, lRes] = await Promise.all([fetch("/api/contacts"), fetch("/api/links")]);
+      const [nRes, lRes] = await Promise.all([fetch("/api/contacts", {
+        credentials: "include",
+      }), fetch("/api/links", {
+        credentials: "include",
+      })]);
 
       const parseResponse = async (res: Response) => {
         const ct = res.headers.get("content-type") || "";
