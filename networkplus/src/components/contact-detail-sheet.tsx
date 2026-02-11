@@ -30,7 +30,7 @@ type NodeData = {
     lastInteractionAt?: string;
     interactions?: { date: string }[];
     strengthScore?: number;
-    manualStrengthBias?: number;
+    monthsKnown?: number;
 };
 
 type Interaction = {
@@ -173,7 +173,7 @@ export function ContactDetailSheet({
                                     phone: node.phone || "",
                                     commonPlatform: node.commonPlatform || "",
                                     strengthScore: node.strengthScore,
-                                    manualStrengthBias: node.manualStrengthBias,
+                                    monthsKnown: node.monthsKnown,
                                 }}
                                 groups={groups}
                                 onSave={async (id, updates) => {
@@ -192,8 +192,8 @@ export function ContactDetailSheet({
                                 {dueNodeIds.has(node.id) && (
                                     <div className="mb-6 p-4 border border-red-200 bg-red-50 dark:bg-red-900/10 rounded-lg flex items-center justify-between">
                                         <div>
-                                            <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Due for follow-up</h4>
-                                            <p className="text-xs text-red-600/80">Last interaction was over 30 days ago.</p>
+                                            <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Consider catching up</h4>
+                                            <p className="text-xs text-red-600/80">Relationship strength is low.</p>
                                         </div>
                                         <Button size="sm" variant="secondary" onClick={() => setIsLogInteractionOpen(true)}>
                                             Log Interaction

@@ -1,35 +1,24 @@
 import { prisma } from "@lib/prisma";
+import { STRENGTH_THRESHOLD } from "@/lib/strength-scoring";
 
 /**
- * Fetches contacts that haven't been interacted with in the last `thresholdDays` days.
+ * Fetches contacts whose strengthScore is below the STRENGTH_THRESHOLD.
+ * These are contacts the user should consider catching up with.
  * @param userId - The ID of the user requesting the contacts.
- * @param thresholdDays - The number of days since the last interaction to consider a contact "due soon". Default is 30.
- * @returns A list of contacts.
+ * @returns A list of contacts ordered by weakest strength first.
  */
-export async function getDueSoonContacts(userId: string, thresholdDays: number = 30) {
-    const thresholdDate = new Date();
-    thresholdDate.setDate(thresholdDate.getDate() - thresholdDays);
-
+export async function getDueSoonContacts(userId: string) {
     const contacts = await prisma.contact.findMany({
         where: {
             ownerId: userId,
-            OR: [
-                {
-                    lastInteractionAt: {
-                        lt: thresholdDate,
-                    },
-                },
-                {
-                    lastInteractionAt: null,
-                },
-            ],
+            strengthScore: {
+                lt: STRENGTH_THRESHOLD,
+            },
         },
         orderBy: {
-            // Sort by last interaction date ascending (oldest interaction first - i.e. most overdue)
-            lastInteractionAt: 'asc',
+            strengthScore: 'asc',
         },
         include: {
-            // Optional: Include latest interaction to show "Last spoke on..."
             interactions: {
                 orderBy: {
                     date: 'desc'

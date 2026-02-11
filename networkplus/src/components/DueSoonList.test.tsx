@@ -18,7 +18,7 @@ describe('DueSoonList', () => {
 
     it('renders loading state initially', () => {
         render(<DueSoonList isLoading={true} contacts={[]} />);
-        expect(screen.getByText(/Checking for due contacts/i)).toBeTruthy();
+        expect(screen.getByText(/Checking contacts/i)).toBeTruthy();
     });
 
     it('renders contacts when provided', async () => {

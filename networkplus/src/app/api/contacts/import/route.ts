@@ -45,6 +45,7 @@ export async function POST(req: Request) {
         // 1. In-memory dedup of the incoming list itself (prefer first occurrence)
         const uniqueIncoming = new Map<string, any>();
         const skippedRows: any[] = [];
+        let duplicateCount = 0;
 
         contacts.forEach((contact: any, index: number) => {
             // Basic validation already done on client, but good to be safe
@@ -58,6 +59,7 @@ export async function POST(req: Request) {
             const key = `${contact.name}|${contact.email || ""}`;
             if (uniqueIncoming.has(key)) {
                 skippedRows.push({ row: index + 1, name: contact.name, reason: "Duplicate in import file" });
+                duplicateCount++;
             } else {
                 uniqueIncoming.set(key, { ...contact, originalIndex: index });
             }
@@ -99,6 +101,7 @@ export async function POST(req: Request) {
 
                 if (existing) {
                     skippedRows.push({ row: originalIndex + 1, name: name, reason: "Duplicate found in database" });
+                    duplicateCount++;
                     continue;
                 }
 
@@ -138,6 +141,7 @@ export async function POST(req: Request) {
         return NextResponse.json({
             importedCount: importedContacts.length,
             skippedCount: skippedRows.length,
+            duplicateCount,
             errors,
             skippedRows,
         });

@@ -17,6 +17,10 @@ const PLATFORM_WEIGHTS: Record<Platform, number> = {
     OTHER: 1.0,
 };
 
+// Strength threshold for catch-up list.
+// A weekly meaningful call (~4.0 weight) keeps score around 8–12.
+export const STRENGTH_THRESHOLD = 10;
+
 // Time decay stepped multipliers
 function getTimeDecayMultiplier(daysAgo: number): number {
     if (daysAgo <= 7) return 1.0;
@@ -46,10 +50,20 @@ export function calculateInteractionScore(
 }
 
 /**
+ * Computes the timeKnownModifier based on monthsKnown.
+ * Long-term relationships are more stable; new relationships weaken faster.
+ * Clamped between 1.0 and 1.8.
+ */
+function getTimeKnownModifier(monthsKnown: number): number {
+    const modifier = 1 + Math.log(1 + monthsKnown) / 5;
+    return Math.min(1.8, Math.max(1, modifier));
+}
+
+/**
  * Recalculates and updates the strengthScore for a given contact.
- * It sums up weighted interaction scores from the last 365 days 
- * and adds the manualStrengthBias.
- * 
+ * It sums up weighted interaction scores from the last 365 days
+ * and applies the timeKnownModifier based on monthsKnown.
+ *
  * Clamped between 0 and 100.
  */
 export async function recalculateContactScore(
@@ -62,28 +76,16 @@ export async function recalculateContactScore(
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(now.getFullYear() - 1);
 
-    // Fetch interactions from the last 365 days
-    // We fetch a bit more than 365 days if we want to include older ones with low weight, 
-    // but requirements said "sum(weighted interaction scores from last 365 days)".
-    // However, "365 days: ignore or apply 0.05" implies we might want to check them.
-    // "sum(weighted interaction scores from last 365 days)" assumes strictly < 365.
-    // I will stick to fetching all interactions to be safe but filtering in query is better for perf.
-    // Let's fetch all relevant interactions. Since decay for >365 is 0.05, maybe we should include them?
-    // "strengthScore = sum(weighted interaction scores from last 365 days) + manualStrengthBias"
-    // This line contradicts "365 days: ignore or apply 0.05". 
-    // I will follow the explicit formula: "sum(... from last 365 days)".
-    // So I'll filter >= 365 days ago.
-
     const contact = await db.contact.findUnique({
         where: { id: contactId },
-        select: { manualStrengthBias: true },
+        select: { monthsKnown: true },
     });
 
     if (!contact) return;
 
     const interactions = await db.interaction.findMany({
         where: {
-            contacts: { some: { id: contactId } }, // Ensure this matches schema relation
+            contacts: { some: { id: contactId } },
             date: { gte: oneYearAgo },
         },
         select: { platform: true, date: true },
@@ -95,8 +97,9 @@ export async function recalculateContactScore(
         rawScore += calculateInteractionScore(interaction.platform, interaction.date);
     }
 
-    // Add manual bias
-    let finalScore = rawScore + (contact.manualStrengthBias || 0);
+    // Apply time-known modifier
+    const modifier = getTimeKnownModifier(contact.monthsKnown || 0);
+    let finalScore = rawScore * modifier;
 
     // Clamp to 0-100
     finalScore = Math.min(100, Math.max(0, finalScore));

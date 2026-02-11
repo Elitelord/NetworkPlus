@@ -27,7 +27,7 @@ type Contact = {
   lastInteractionAt?: string;
   interactions?: { date: string }[];
   strengthScore?: number;
-  manualStrengthBias?: number;
+  monthsKnown?: number;
 };
 
 type NodeType = Contact; // Alias for graph compatibility if needed, or just use Contact
@@ -94,7 +94,7 @@ export default function Home() {
 
       // Fetch due nodes
       // Fetch due nodes
-      fetch("/api/contacts/due-soon?days=30")
+      fetch("/api/contacts/due-soon")
         .then(res => res.ok ? res.json() : [])
         .then((data: Contact[]) => {
           setDueContacts(data);
@@ -353,7 +353,7 @@ export default function Home() {
     setDueNodeIds(newIds);
 
     // Refresh due contacts from server to be sure
-    fetch("/api/contacts/due-soon?days=30")
+    fetch("/api/contacts/due-soon")
       .then(res => res.ok ? res.json() : [])
       .then((data: Contact[]) => {
         setDueContacts(data);
@@ -681,7 +681,7 @@ export default function Home() {
           interactions: selectedNode.interactions,
           lastInteractionAt: selectedNode.lastInteractionAt,
           strengthScore: selectedNode.strengthScore,
-          manualStrengthBias: selectedNode.manualStrengthBias,
+          monthsKnown: selectedNode.monthsKnown,
         } : null}
         groups={groups}
         dueNodeIds={dueNodeIds}

@@ -33,7 +33,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const { id } = await params;
         const body = await req.json();
-        const { name, description, groups, group, email, phone, commonPlatform, manualStrengthBias } = body;
+        const { name, description, groups, group, email, phone, commonPlatform, monthsKnown } = body;
 
         // Handle backward compatibility: if `group` string provided, add to `groups`.
         let validGroups = Array.isArray(groups) ? groups : [];
@@ -53,7 +53,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 email,
                 phone,
                 commonPlatform: commonPlatform === "" ? null : commonPlatform,
-                manualStrengthBias, // Allow updating manual bias
+                monthsKnown, // Months the user has known this contact
             },
         });
 
@@ -61,8 +61,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { updateInferredLinks } = await import("@/lib/inference");
         await updateInferredLinks(contact.id);
 
-        // Recalculate score if bias changed
-        if (manualStrengthBias !== undefined) {
+        // Recalculate score if monthsKnown changed (affects timeKnownModifier)
+        if (monthsKnown !== undefined) {
             console.log("Recalculating score for contact:", contact.id);
             try {
                 const { recalculateContactScore } = await import("@/lib/strength-scoring");

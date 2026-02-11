@@ -55,14 +55,24 @@ async function main() {
         updated = await prisma.contact.findUnique({ where: { id: contact.id } });
         console.log("Score after old Call (2.8) + Recent In-Person (5.0):", updated?.strengthScore);
 
-        // 4. Test Manual Bias
+        // 4. Test monthsKnown modifier
+        // monthsKnown = 12 → modifier = 1 + ln(13)/5 ≈ 1.513
         await prisma.contact.update({
             where: { id: contact.id },
-            data: { manualStrengthBias: 10 }
+            data: { monthsKnown: 12 }
         });
         await recalculateContactScore(contact.id);
         updated = await prisma.contact.findUnique({ where: { id: contact.id } });
-        console.log("Score with bias +10:", updated?.strengthScore);
+        console.log("Score with monthsKnown=12 (modifier ≈ 1.51):", updated?.strengthScore);
+
+        // 5. Test long-term relationship (60 months = 5 years, modifier capped at 1.8)
+        await prisma.contact.update({
+            where: { id: contact.id },
+            data: { monthsKnown: 60 }
+        });
+        await recalculateContactScore(contact.id);
+        updated = await prisma.contact.findUnique({ where: { id: contact.id } });
+        console.log("Score with monthsKnown=60 (modifier capped ≈ 1.8):", updated?.strengthScore);
 
     } catch (e) {
         console.error("Verification failed:", e);

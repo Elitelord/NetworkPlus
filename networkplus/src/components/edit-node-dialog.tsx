@@ -19,7 +19,6 @@ import {
 
 import { MultiSelect } from "@/components/ui/multi-select";
 
-// Match the Platform enum from Prisma
 // Match the Platform enum from Prisma but provide nice labels
 const PLATFORMS = [
     { value: "SMS", label: "SMS" },
@@ -44,7 +43,7 @@ export type EditContactData = {
     phone?: string;
     email?: string;
     commonPlatform?: string;
-    manualStrengthBias?: number;
+    monthsKnown?: number;
     strengthScore?: number;
 };
 
@@ -64,7 +63,7 @@ export function EditNodeDialog({
     onSave,
 }: EditNodeDialogProps) {
     const [formData, setFormData] = useState<Partial<EditContactData>>({});
-    const [biasInput, setBiasInput] = useState("0");
+    const [monthsKnownInput, setMonthsKnownInput] = useState("0");
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -76,9 +75,9 @@ export function EditNodeDialog({
                 phone: node.phone || "",
                 email: node.email || "",
                 commonPlatform: node.commonPlatform || "",
-                manualStrengthBias: node.manualStrengthBias || 0,
+                monthsKnown: node.monthsKnown || 0,
             });
-            setBiasInput((node.manualStrengthBias ?? 0).toString());
+            setMonthsKnownInput((node.monthsKnown ?? 0).toString());
         }
     }, [node]);
 
@@ -92,10 +91,10 @@ export function EditNodeDialog({
 
         setLoading(true);
         try {
-            const finalBias = parseFloat(biasInput);
+            const finalMonths = parseInt(monthsKnownInput, 10);
             await onSave(node.id, {
                 ...formData,
-                manualStrengthBias: isNaN(finalBias) ? 0 : finalBias
+                monthsKnown: isNaN(finalMonths) ? 0 : Math.max(0, finalMonths)
             });
             onOpenChange(false);
         } catch (error) {
@@ -104,6 +103,11 @@ export function EditNodeDialog({
             setLoading(false);
         }
     };
+
+    const monthsValue = parseInt(monthsKnownInput, 10) || 0;
+    const yearsDisplay = monthsValue >= 12
+        ? `≈ ${(monthsValue / 12).toFixed(1)} years`
+        : "";
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -191,20 +195,20 @@ export function EditNodeDialog({
                         </NativeSelect>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="manualStrengthBias" className="text-right">
-                            Bias
+                        <Label htmlFor="monthsKnown" className="text-right">
+                            Known for
                         </Label>
                         <div className="col-span-3">
                             <Input
-                                id="manualStrengthBias"
+                                id="monthsKnown"
                                 type="number"
-                                min={-20}
-                                max={20}
-                                value={biasInput}
-                                onChange={(e) => setBiasInput(e.target.value)}
+                                min={0}
+                                value={monthsKnownInput}
+                                onChange={(e) => setMonthsKnownInput(e.target.value)}
+                                placeholder="0"
                             />
                             <p className="text-[10px] text-muted-foreground mt-1">
-                                Adjust score manually (-20 to +20). Current Score: {(node?.strengthScore || 0).toFixed(1)}
+                                How long have you known this person? (months) {yearsDisplay}
                             </p>
                         </div>
                     </div>

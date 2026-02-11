@@ -19,15 +19,15 @@ interface DueSoonListProps {
 
 export function DueSoonList({ className, onSelect, contacts, isLoading = false }: DueSoonListProps) {
     if (isLoading) {
-        return <div className="text-sm text-muted-foreground animate-pulse">Checking for due contacts...</div>;
+        return <div className="text-sm text-muted-foreground animate-pulse">Checking contacts...</div>;
     }
 
     if (contacts.length === 0) {
         return (
             <Card className={className}>
                 <CardHeader>
-                    <CardTitle>Due Soon</CardTitle>
-                    <CardDescription>Contacts you haven't reached out to in a while.</CardDescription>
+                    <CardTitle>Catch Up</CardTitle>
+                    <CardDescription>Consider catching up with these contacts.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-muted-foreground">All caught up! No contacts pending.</p>
@@ -39,8 +39,8 @@ export function DueSoonList({ className, onSelect, contacts, isLoading = false }
     return (
         <Card className={className}>
             <CardHeader>
-                <CardTitle>Due Soon</CardTitle>
-                <CardDescription>Re-connect with these contacts.</CardDescription>
+                <CardTitle>Catch Up</CardTitle>
+                <CardDescription>Consider catching up with these contacts.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
                 {contacts.map((contact) => (
@@ -56,7 +56,7 @@ export function DueSoonList({ className, onSelect, contacts, isLoading = false }
                             </p>
                         </div>
                         <Badge variant="secondary" className="text-xs">
-                            Due
+                            Catch Up
                         </Badge>
                     </div>
                 ))}

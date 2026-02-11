@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Papa from "papaparse";
 import {
     Dialog,
     DialogContent,
@@ -12,88 +11,82 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, FileUp, AlertCircle, CheckCircle, Loader2, XCircle } from "lucide-react";
+import { Upload, FileUp, AlertCircle, CheckCircle, Loader2, XCircle, FileText, Contact } from "lucide-react";
+import {
+    parseFile,
+    detectFileType,
+    type NormalizedContact,
+    type SkippedRow,
+} from "@/lib/contact-parser";
 
-type ParseResult = {
-    name: string;
-    email?: string;
-    phone?: string;
-    description?: string;
-    group?: string;
-    category?: string;
-    metadata?: any;
-    lastInteractionAt?: string;
-};
-
-type SkippedRow = {
-    row: number;
-    name: string;
-    reason: string;
+type ImportSummary = {
+    imported: number;
+    skipped: number;
+    duplicates: number;
 };
 
 export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState<"IDLE" | "PREVIEW" | "UPLOADING" | "SUCCESS">("IDLE");
-    const [parsedContacts, setParsedContacts] = useState<ParseResult[]>([]);
+    const [parsedContacts, setParsedContacts] = useState<NormalizedContact[]>([]);
     const [skippedRows, setSkippedRows] = useState<SkippedRow[]>([]);
     const [uploadError, setUploadError] = useState<string | null>(null);
-    const [summary, setSummary] = useState<{ imported: number; skipped: number } | null>(null);
+    const [summary, setSummary] = useState<ImportSummary | null>(null);
+    const [fileType, setFileType] = useState<"csv" | "vcf" | null>(null);
+    const [largeFileWarning, setLargeFileWarning] = useState(false);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // Reset state
+        setUploadError(null);
+        setLargeFileWarning(false);
+
+        // Validate file size
         if (file.size > 2 * 1024 * 1024) {
             setUploadError("File size exceeds 2MB limit.");
             return;
         }
 
-        setUploadError(null);
-        setStep("IDLE"); // Reset step just in case mainly to show loading state if we want, but synchronous parse is fast
+        // Validate file type
+        const detected = detectFileType(file);
+        if (!detected) {
+            setUploadError("Unsupported file type. Please upload a .csv or .vcf file.");
+            return;
+        }
 
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-                const valid: ParseResult[] = [];
-                const skipped: SkippedRow[] = [];
+        // Check for empty file
+        if (file.size === 0) {
+            setUploadError("File is empty.");
+            return;
+        }
 
-                results.data.forEach((row: any, index) => {
-                    // Row index in CSV usually starts at 1, header is 1, so data starts at 2.
-                    // index here is 0-based from data array. So row number is index + 2.
-                    const rowNum = index + 2;
+        try {
+            const result = await parseFile(file);
 
-                    if (!row.name || !row.name.trim()) {
-                        skipped.push({ row: rowNum, name: "Unknown", reason: "Missing required field: name" });
-                        return;
-                    }
+            if (result.valid.length === 0 && result.skipped.length === 0) {
+                setUploadError("File appears to be empty or contains no parseable data.");
+                return;
+            }
 
-                    valid.push({
-                        name: row.name,
-                        email: row.email,
-                        phone: row.phone,
-                        description: row.description,
-                        group: row.group,
-                        category: row.category,
-                        metadata: row.metadata ? JSON.parse(JSON.stringify(row.metadata)) : undefined, // basic check
-                        lastInteractionAt: row.lastInteractionAt,
-                    });
-                });
+            if (result.valid.length > 5000) {
+                setLargeFileWarning(true);
+            }
 
-                if (valid.length > 1000) {
-                    setUploadError("Row limit exceeded. Max 1000 contacts allowed.");
-                    return;
-                }
+            if (result.valid.length > 10000) {
+                setUploadError("Row limit exceeded. Max 10,000 contacts allowed per import.");
+                return;
+            }
 
-                setParsedContacts(valid);
-                setSkippedRows(skipped);
-                setStep("PREVIEW");
-            },
-            error: (err) => {
-                console.error("CSV Parse Error:", err);
-                setUploadError("Failed to parse CSV file.");
-            },
-        });
+            setFileType(result.fileType);
+            setParsedContacts(result.valid);
+            setSkippedRows(result.skipped);
+            setStep("PREVIEW");
+        } catch (err: any) {
+            console.error("Parse error:", err);
+            setUploadError(err.message || "Failed to parse file.");
+        }
     };
 
     const handleImport = async () => {
@@ -111,7 +104,11 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                 throw new Error(data.error || "Import failed");
             }
 
-            setSummary({ imported: data.importedCount, skipped: data.skippedCount + skippedRows.length });
+            setSummary({
+                imported: data.importedCount,
+                skipped: data.skippedCount + skippedRows.length,
+                duplicates: data.duplicateCount || 0,
+            });
 
             // Merge backend skipped rows with frontend skipped rows
             if (data.skippedRows) {
@@ -122,7 +119,7 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
             onSuccess();
         } catch (err: any) {
             setUploadError(err.message);
-            setStep("PREVIEW"); // Go back to preview to retry or Cancel
+            setStep("PREVIEW");
         }
     };
 
@@ -134,8 +131,20 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
             setSkippedRows([]);
             setUploadError(null);
             setSummary(null);
+            setFileType(null);
+            setLargeFileWarning(false);
         }, 300);
     };
+
+    const fileTypeBadge = fileType ? (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${fileType === "csv"
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                : "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+            }`}>
+            {fileType === "csv" ? <FileText className="size-3" /> : <Contact className="size-3" />}
+            {fileType}
+        </span>
+    ) : null;
 
     return (
         <Dialog open={open} onOpenChange={(val) => {
@@ -145,14 +154,14 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
             <DialogTrigger asChild>
                 <Button variant="outline" className="w-full justify-start gap-2">
                     <Upload className="size-4" />
-                    Import CSV
+                    Import Contacts
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Import Contacts</DialogTitle>
                     <DialogDescription>
-                        Upload a CSV file to bulk import contacts. Required column: <code>name</code>.
+                        Upload a CSV or VCF file to bulk import contacts. Names are derived automatically from common headers.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -161,19 +170,20 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                         <div className="border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors relative cursor-pointer">
                             <input
                                 type="file"
-                                accept=".csv"
+                                accept=".csv,.vcf,.vcard"
                                 className="absolute inset-0 opacity-0 cursor-pointer"
                                 onChange={handleFileChange}
                             />
                             <FileUp className="size-10 mb-3" />
                             <p className="text-sm font-medium">Click to upload or drag and drop</p>
-                            <p className="text-xs">CSV up to 2MB</p>
+                            <p className="text-xs">CSV or VCF up to 2MB</p>
                         </div>
                     )}
 
                     {(step === "PREVIEW" || step === "UPLOADING") && (
                         <div className="space-y-4">
                             <div className="flex items-center gap-4 text-sm">
+                                {fileTypeBadge}
                                 <div className="flex items-center gap-2 text-green-600">
                                     <CheckCircle className="size-4" />
                                     <span className="font-semibold">{parsedContacts.length}</span> valid
@@ -184,6 +194,16 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                                 </div>
                             </div>
 
+                            {/* Large file warning */}
+                            {largeFileWarning && (
+                                <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/10 p-3 flex items-start gap-2">
+                                    <AlertCircle className="size-4 text-amber-600 mt-0.5 shrink-0" />
+                                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                                        <span className="font-semibold">Large file detected.</span> You are importing over 5,000 contacts. This may take a moment.
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Preview Table */}
                             <div className="border rounded-md overflow-hidden">
                                 <table className="w-full text-xs text-left">
@@ -191,6 +211,7 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                                         <tr>
                                             <th className="p-2">Name</th>
                                             <th className="p-2">Email</th>
+                                            <th className="p-2">Phone</th>
                                             <th className="p-2">Group</th>
                                         </tr>
                                     </thead>
@@ -199,6 +220,7 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                                             <tr key={i}>
                                                 <td className="p-2 font-medium">{c.name}</td>
                                                 <td className="p-2 text-muted-foreground">{c.email || "-"}</td>
+                                                <td className="p-2 text-muted-foreground">{c.phone || "-"}</td>
                                                 <td className="p-2 text-muted-foreground">{c.group || "-"}</td>
                                             </tr>
                                         ))}
@@ -237,9 +259,14 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                             <p className="text-sm text-muted-foreground">
                                 Successfully imported <span className="text-foreground font-medium">{summary.imported}</span> contacts.
                             </p>
+                            {summary.duplicates > 0 && (
+                                <p className="text-xs text-blue-600">
+                                    {summary.duplicates} duplicate{summary.duplicates !== 1 ? "s" : ""} skipped.
+                                </p>
+                            )}
                             {summary.skipped > 0 && (
                                 <p className="text-xs text-amber-600">
-                                    {summary.skipped} rows were skipped (duplicates or invalid).
+                                    {summary.skipped} row{summary.skipped !== 1 ? "s" : ""} skipped (invalid or missing name).
                                 </p>
                             )}
                             {skippedRows.length > 0 && (
@@ -274,6 +301,8 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                             setStep("IDLE");
                             setParsedContacts([]);
                             setSkippedRows([]);
+                            setLargeFileWarning(false);
+                            setFileType(null);
                         }}>
                             Cancel
                         </Button>
@@ -287,7 +316,7 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                                     Importing...
                                 </>
                             ) : (
-                                "Import Contacts"
+                                `Import ${parsedContacts.length} Contact${parsedContacts.length !== 1 ? "s" : ""}`
                             )}
                         </Button>
                     )}
