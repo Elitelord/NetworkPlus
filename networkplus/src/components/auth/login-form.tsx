@@ -1,3 +1,7 @@
+"use client"
+
+import { useState } from "react"
+import { signIn } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,12 +18,40 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { SignIn } from "@/components/auth/signin-button"
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        setError("Invalid email or password")
+      } else {
+        window.location.href = "/dashboard"
+      }
+    } catch {
+      setError("Something went wrong. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
@@ -30,34 +62,50 @@ export function LoginForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form>
+          <form onSubmit={handleSubmit}>
             <FieldGroup>
+              {error && (
+                <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                  {error}
+                </div>
+              )}
               <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input
                   id="email"
                   type="email"
                   placeholder="m@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </Field>
               <Field>
                 <div className="flex items-center">
                   <FieldLabel htmlFor="password">Password</FieldLabel>
-                  <a
-                    href="#"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                  >
-                    Forgot your password?
-                  </a>
                 </div>
-                <Input id="password" type="password" required />
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
               </Field>
               <Field>
-                <Button type="submit">Login</Button>
-                <SignIn />
+                <Button type="submit" disabled={loading} className="w-full">
+                  {loading ? "Signing in..." : "Login"}
+                </Button>
+                <Button
+                  variant="outline"
+                  type="button"
+                  className="w-full"
+                  onClick={() => signIn("google", { redirectTo: "/dashboard" })}
+                >
+                  Sign in with Google
+                </Button>
                 <FieldDescription className="text-center">
-                  Don&apos;t have an account? <a href="/signup">Sign up</a>
+                  Don&apos;t have an account? <a href="/signup" className="underline">Sign up</a>
                 </FieldDescription>
               </Field>
             </FieldGroup>

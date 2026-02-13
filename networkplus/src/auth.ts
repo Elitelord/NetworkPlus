@@ -11,18 +11,18 @@ export const { handlers, auth: nextAuthAuth, signIn, signOut } = NextAuth({
     signIn: "/signin",
   },
   callbacks: {
-  async jwt({ token, user }) {
-    if (user) {
-      token.id = user.id
-    }
-    return token
-  },
-  async session({ session, token }) {
-    if (session.user && token?.id) {
-      session.user.id = token.id as string
-    }
-    return session
-  },
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user && token?.id) {
+        session.user.id = token.id as string
+      }
+      return session
+    },
   },
 
   ...authConfig,
@@ -33,6 +33,9 @@ export const auth = async (...args: any[]) => {
   const isRequest = args[0] instanceof Request || (args[0] && typeof args[0].method === 'string');
 
   if (process.env.NODE_ENV === "development") {
+    // NOTE: This forces a session in development, meaning "Sign Out" won't appear to work 
+    // (you'll be immediately re-logged in as Dev User).
+    // To test real auth flows locally, comment out this block.
     if (isRequest) {
       // Middleware usage in dev: just continue without interfering
       // Or pass through to nextAuthAuth but realize it might fail if no token?

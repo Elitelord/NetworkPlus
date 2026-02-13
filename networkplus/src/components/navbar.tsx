@@ -1,7 +1,12 @@
+"use client"
+
 import Link from "next/link";
+import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
 export default function Navbar() {
+    const { data: session, status } = useSession();
+
     return (
         <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="container mx-auto flex h-14 max-w-screen-2xl items-center px-4 justify-between">
@@ -19,12 +24,38 @@ export default function Navbar() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Link href="/signin">
-                        <Button variant="ghost" size="sm">Sign In</Button>
-                    </Link>
-                    <Link href="/signup">
-                        <Button size="sm">Get Started</Button>
-                    </Link>
+                    {status === "loading" ? (
+                        <div className="h-8 w-20 animate-pulse rounded-md bg-muted" />
+                    ) : session?.user ? (
+                        <>
+                            <span className="text-sm text-muted-foreground hidden sm:inline-block">
+                                {session.user.name || session.user.email}
+                            </span>
+                            {session.user.image && (
+                                <img
+                                    src={session.user.image}
+                                    alt="Avatar"
+                                    className="h-7 w-7 rounded-full"
+                                />
+                            )}
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => signOut({ redirectTo: "/" })}
+                            >
+                                Sign Out
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            <Link href="/signin">
+                                <Button variant="ghost" size="sm">Sign In</Button>
+                            </Link>
+                            <Link href="/signup">
+                                <Button size="sm">Get Started</Button>
+                            </Link>
+                        </>
+                    )}
                 </div>
             </div>
         </nav>
