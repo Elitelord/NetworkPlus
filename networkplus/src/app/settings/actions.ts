@@ -110,3 +110,34 @@ export async function deleteAccount() {
         return { error: "Failed to delete account" }
     }
 }
+
+const notificationPreferencesSchema = z.object({
+    notificationsEnabled: z.boolean(),
+    notificationTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format"),
+})
+
+export async function updateNotificationPreferences(data: z.infer<typeof notificationPreferencesSchema>) {
+    const session = await auth() as Session | null
+    if (!session?.user?.id) {
+        return { error: "Not authenticated" }
+    }
+
+    const result = notificationPreferencesSchema.safeParse(data)
+    if (!result.success) {
+        return { error: "Invalid data" }
+    }
+
+    try {
+        await prisma.user.update({
+            where: { id: session.user.id },
+            data: {
+                notificationsEnabled: result.data.notificationsEnabled,
+                notificationTime: result.data.notificationTime
+            } as any,
+        })
+        revalidatePath("/settings")
+        return { success: "Preferences updated" }
+    } catch (error) {
+        return { error: "Failed to update preferences" }
+    }
+}

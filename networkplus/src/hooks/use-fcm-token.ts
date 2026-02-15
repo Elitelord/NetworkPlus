@@ -20,8 +20,14 @@ export function useFcmToken() {
                     setNotificationPermission(permission);
 
                     if (permission === "granted") {
+                        const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+                        if (!vapidKey) {
+                            console.error("Missing NEXT_PUBLIC_FIREBASE_VAPID_KEY");
+                            return;
+                        }
+
                         const currentToken = await getToken(messaging, {
-                            vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+                            vapidKey: vapidKey,
                         });
 
                         if (currentToken) {
@@ -34,8 +40,6 @@ export function useFcmToken() {
                                 },
                                 body: JSON.stringify({ token: currentToken }),
                             });
-                        } else {
-                            console.log("No registration token available. Request permission to generate one.");
                         }
                     }
                 }
@@ -55,8 +59,12 @@ export function useFcmToken() {
 
             const unsubscribe = onMessage(messaging, (payload) => {
                 console.log("Foreground message received:", payload);
-                // Optionally display a toast or UI notification here
-                // e.g. toast(payload.notification?.title)
+                if (payload.notification) {
+                    new Notification(payload.notification.title || "New Notification", {
+                        body: payload.notification.body,
+                        icon: "/icon.png",
+                    });
+                }
             });
 
             return () => unsubscribe();

@@ -24,6 +24,8 @@ model User {
   accounts      Account[]
   sessions      Session[]
   fcmToken      String?
+  notificationsEnabled Boolean @default(false)
+  notificationTime String? // Format: "HH:mm" (24h) in UTC
 }
 
 model Account {

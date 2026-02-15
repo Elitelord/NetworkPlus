@@ -6,6 +6,7 @@ import { ProfileForm } from "../../components/settings/profile-form"
 import { PasswordForm } from "../../components/settings/password-form"
 import { DeleteAccount } from "../../components/settings/delete-account"
 import { Separator } from "@/components/ui/separator"
+import { NotificationForm } from "@/components/settings/notification-form"
 
 export default async function SettingsPage() {
     const session = await auth() as Session | null
@@ -45,6 +46,17 @@ export default async function SettingsPage() {
                     <h2 className="text-lg font-medium">Security</h2>
                     <p className="text-sm text-muted-foreground mb-4">Manage your password and authentication.</p>
                     <PasswordForm hasPassword={hasPassword} />
+                </div>
+
+                <Separator />
+
+                <div>
+                    <h2 className="text-lg font-medium">Notifications</h2>
+                    <p className="text-sm text-muted-foreground mb-4">Manage your daily catch-up notifications.</p>
+                    <NotificationForm defaultValues={{
+                        notificationsEnabled: (user as any).notificationsEnabled ?? false,
+                        notificationTime: (user as any).notificationTime ?? "09:00"
+                    }} />
                 </div>
 
                 <Separator />
