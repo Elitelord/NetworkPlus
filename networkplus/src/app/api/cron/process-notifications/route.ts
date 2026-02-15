@@ -33,7 +33,8 @@ export async function GET(req: Request) {
             select: {
                 id: true,
                 fcmToken: true,
-                name: true
+                name: true,
+                email: true
             }
         });
 
