@@ -23,6 +23,7 @@ model User {
   reminders     Reminder[]
   accounts      Account[]
   sessions      Session[]
+  fcmToken      String?
 }
 
 model Account {

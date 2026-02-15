@@ -1,0 +1,11 @@
+{
+  "valid": [
+    {
+      "name": "John Doe",
+      "email": "john@example.com",
+      "group": "Acme"
+    }
+  ],
+  "skipped": [],
+  "fileType": "csv"
+}

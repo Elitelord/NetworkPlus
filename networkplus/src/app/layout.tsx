@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import FcmInitializer from "@/components/fcm-initializer";
 import Navbar from "@/components/navbar";
 import { SessionProvider } from "@/components/session-provider";
 
@@ -31,6 +32,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <SessionProvider>
+          <FcmInitializer />
           <Navbar />
           {children}
         </SessionProvider>

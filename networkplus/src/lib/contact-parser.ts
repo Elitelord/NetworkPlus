@@ -51,6 +51,10 @@ const GROUP_HEADERS = new Set([
     "category",
     "categories",
     "group membership",
+    "company",
+    "organization",
+    "org",
+    "company name",
 ]);
 
 const DESCRIPTION_HEADERS = new Set([
@@ -106,8 +110,18 @@ function findHeaderValue(
     row: Record<string, string>,
     candidates: Set<string>
 ): string | undefined {
+    // Helper to normalize strings for comparison (lowercase, remove non-alphanumeric)
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    // Create a normalized set of candidates for efficient lookup
+    const normalizedCandidates = new Set<string>();
+    for (const c of candidates) {
+        normalizedCandidates.add(normalize(c));
+    }
+
     for (const key of Object.keys(row)) {
-        if (candidates.has(key.toLowerCase().trim())) {
+        const normalizedKey = normalize(key);
+        if (normalizedCandidates.has(normalizedKey)) {
             return row[key];
         }
     }
@@ -147,10 +161,15 @@ function normalizeCSVRow(
     const description = findHeaderValue(row, DESCRIPTION_HEADERS)?.trim() || undefined;
 
     // Collect unknown headers into metadata
+    // Helper to normalize strings for comparison (lowercase, remove non-alphanumeric)
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
     const metadata: Record<string, any> = {};
+    const normalizedKnown = new Set([...KNOWN_HEADERS].map(normalize));
+
     for (const key of Object.keys(row)) {
-        const lower = key.toLowerCase().trim();
-        if (!KNOWN_HEADERS.has(lower) && row[key]?.trim()) {
+        const normalizedKey = normalize(key);
+        if (!normalizedKnown.has(normalizedKey) && row[key]?.trim()) {
             metadata[key] = row[key].trim();
         }
     }
@@ -167,32 +186,79 @@ function normalizeCSVRow(
     };
 }
 
+// All known header candidates flattened for detecting the real header row
+const ALL_KNOWN_NORMALIZED = new Set([
+    ...[...EMAIL_HEADERS, ...PHONE_HEADERS, ...GROUP_HEADERS, ...DESCRIPTION_HEADERS,
+    ...NAME_HEADERS, ...FIRST_NAME_HEADERS, ...LAST_NAME_HEADERS,
+    ].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, "")),
+    "url", "position", "connectedon", "title", "website",
+]);
+
+/**
+ * Heuristic: a line is a "real header row" if it has 2+ comma-separated
+ * fields and at least 2 of them normalize to something we recognise.
+ */
+function looksLikeHeaderRow(line: string): boolean {
+    const fields = line.split(",").map(f => f.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
+    if (fields.length < 2) return false;
+    const hits = fields.filter(f => ALL_KNOWN_NORMALIZED.has(f)).length;
+    return hits >= 2;
+}
+
 export function parseCSV(file: File): Promise<ParseResult> {
     return new Promise((resolve, reject) => {
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-                const valid: NormalizedContact[] = [];
-                const skipped: SkippedRow[] = [];
+        const reader = new FileReader();
 
-                (results.data as Record<string, string>[]).forEach((row, index) => {
-                    const rowNum = index + 2; // header is row 1
-                    const result = normalizeCSVRow(row, rowNum);
+        reader.onload = () => {
+            try {
+                let text = (reader.result as string).replace(/^\ufeff/, ""); // strip BOM
 
-                    if ("contact" in result) {
-                        valid.push(result.contact);
-                    } else {
-                        skipped.push(result.skipped);
+                // Find the real header row (skip preamble lines like LinkedIn's "Notes:" row)
+                const lines = text.split(/\r?\n/);
+                let headerIdx = 0;
+                for (let i = 0; i < Math.min(lines.length, 10); i++) {
+                    if (looksLikeHeaderRow(lines[i])) {
+                        headerIdx = i;
+                        break;
                     }
-                });
+                }
 
-                resolve({ valid, skipped, fileType: "csv" });
-            },
-            error: (err) => {
-                reject(new Error(`CSV parse error: ${err.message}`));
-            },
-        });
+                // Reconstruct CSV from the real header row onward
+                if (headerIdx > 0) {
+                    text = lines.slice(headerIdx).join("\n");
+                }
+
+                Papa.parse(text, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        const valid: NormalizedContact[] = [];
+                        const skipped: SkippedRow[] = [];
+
+                        (results.data as Record<string, string>[]).forEach((row, index) => {
+                            const rowNum = index + 2; // header is row 1
+                            const result = normalizeCSVRow(row, rowNum);
+
+                            if ("contact" in result) {
+                                valid.push(result.contact);
+                            } else {
+                                skipped.push(result.skipped);
+                            }
+                        });
+
+                        resolve({ valid, skipped, fileType: "csv" });
+                    },
+                    error: (err: any) => {
+                        reject(new Error(`CSV parse error: ${err.message}`));
+                    },
+                });
+            } catch (err) {
+                reject(err);
+            }
+        };
+
+        reader.onerror = () => reject(new Error("Failed to read CSV file"));
+        reader.readAsText(file);
     });
 }
 
