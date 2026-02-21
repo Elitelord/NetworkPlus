@@ -11,7 +11,7 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json();
-        const { contactIds, type = "OTHER", content, date, platform = "OTHER" } = body;
+        const { contactIds, type = "OTHER", content, date, platform = "OTHER", durationMinutes, messageCount } = body;
 
         // Fallback for single contactId support (if needed during transition or just for safety)
         const targets = contactIds || (body.contactId ? [body.contactId] : []);
@@ -33,15 +33,26 @@ export async function POST(req: Request) {
         }
 
         const interactionDate = date ? new Date(date) : new Date();
+        const durationSeconds = durationMinutes ? parseInt(durationMinutes, 10) * 60 : undefined;
+        const msgCount = messageCount ? parseInt(messageCount, 10) : undefined;
+        let startTime = interactionDate;
+        if (durationSeconds) {
+            startTime = new Date(interactionDate.getTime() - durationSeconds * 1000);
+        }
 
         // Transaction to ensure atomicity
         const interaction = await prisma.$transaction(async (tx) => {
-            // 1. Create interaction
+            // 1. Create interaction (Session)
             const interaction = await tx.interaction.create({
                 data: {
                     type,
                     content,
                     date: interactionDate,
+                    startTime,
+                    endTime: interactionDate,
+                    durationSeconds,
+                    messageCount: msgCount,
+                    rawMessageCount: msgCount,
                     platform,
                     contacts: {
                         connect: targets.map((id: string) => ({ id })),

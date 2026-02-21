@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/form"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { toast } from "sonner"
 import { updateNotificationPreferences } from "@/app/settings/actions"
 import { useFcmToken } from "@/hooks/use-fcm-token"
@@ -128,7 +129,87 @@ export function NotificationForm({ defaultValues }: NotificationFormProps) {
                             <FormItem>
                                 <FormLabel>Notification Time</FormLabel>
                                 <FormControl>
-                                    <Input type="time" {...field} />
+                                    <div className="flex gap-1 items-center">
+                                        <NativeSelect
+                                            value={(() => {
+                                                const timeStr = field.value || "09:00";
+                                                let h = parseInt(timeStr.split(":")[0]) || 0;
+                                                if (h === 0) h = 12;
+                                                else if (h > 12) h -= 12;
+                                                return h.toString();
+                                            })()}
+                                            onChange={(e) => {
+                                                const timeStr = field.value || "09:00";
+                                                const [, minuteStr] = timeStr.split(":");
+                                                const oldHour24 = parseInt(timeStr.split(":")[0]) || 0;
+                                                const isPm = oldHour24 >= 12;
+
+                                                const newHour12 = parseInt(e.target.value);
+                                                let newHour24 = newHour12;
+                                                if (isPm) {
+                                                    if (newHour12 === 12) newHour24 = 12;
+                                                    else newHour24 = newHour12 + 12;
+                                                } else {
+                                                    if (newHour12 === 12) newHour24 = 0;
+                                                    else newHour24 = newHour12;
+                                                }
+                                                field.onChange(`${newHour24.toString().padStart(2, '0')}:${minuteStr || "00"}`);
+                                            }}
+                                            className="w-[70px]"
+                                        >
+                                            {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                                                <NativeSelectOption key={h} value={h.toString()}>
+                                                    {h}
+                                                </NativeSelectOption>
+                                            ))}
+                                        </NativeSelect>
+
+                                        <span className="text-muted-foreground">:</span>
+
+                                        <NativeSelect
+                                            value={(() => {
+                                                const timeStr = field.value || "09:00";
+                                                return timeStr.split(":")[1] || "00";
+                                            })()}
+                                            onChange={(e) => {
+                                                const timeStr = field.value || "09:00";
+                                                const [hourStr] = timeStr.split(":");
+                                                field.onChange(`${hourStr || "09"}:${e.target.value.padStart(2, '0')}`);
+                                            }}
+                                            className="w-[70px]"
+                                        >
+                                            {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
+                                                <NativeSelectOption key={m} value={m.toString().padStart(2, '0')}>
+                                                    {m.toString().padStart(2, '0')}
+                                                </NativeSelectOption>
+                                            ))}
+                                        </NativeSelect>
+
+                                        <NativeSelect
+                                            value={(() => {
+                                                const timeStr = field.value || "09:00";
+                                                const h = parseInt(timeStr.split(":")[0]) || 0;
+                                                return h >= 12 ? "PM" : "AM";
+                                            })()}
+                                            onChange={(e) => {
+                                                const timeStr = field.value || "09:00";
+                                                const [hourStr, minuteStr] = timeStr.split(":");
+                                                let h = parseInt(hourStr) || 0;
+                                                const newAmPm = e.target.value;
+
+                                                if (newAmPm === "PM" && h < 12) {
+                                                    h += 12;
+                                                } else if (newAmPm === "AM" && h >= 12) {
+                                                    h -= 12;
+                                                }
+                                                field.onChange(`${h.toString().padStart(2, '0')}:${minuteStr || "00"}`);
+                                            }}
+                                            className="w-[70px]"
+                                        >
+                                            <NativeSelectOption value="AM">AM</NativeSelectOption>
+                                            <NativeSelectOption value="PM">PM</NativeSelectOption>
+                                        </NativeSelect>
+                                    </div>
                                 </FormControl>
                                 <FormDescription>
                                     Select the time you want to receive notifications (in your local time).

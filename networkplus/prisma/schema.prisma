@@ -3,7 +3,6 @@ generator client {
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
-
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
@@ -11,21 +10,21 @@ datasource db {
 }
 
 model User {
-  id            String     @id @default(cuid())
-  name          String
-  email         String     @unique
-  hashedPassword String?
-  image         String?
-  emailVerified DateTime?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  contacts      Contact[]  @relation("UserContacts")
-  reminders     Reminder[]
-  accounts      Account[]
-  sessions      Session[]
-  fcmToken      String?
-  notificationsEnabled Boolean @default(false)
-  notificationTime String? // Format: "HH:mm" (24h) in UTC
+  id                   String     @id @default(cuid())
+  name                 String
+  email                String     @unique
+  hashedPassword       String?
+  image                String?
+  emailVerified        DateTime?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  contacts             Contact[]  @relation("UserContacts")
+  reminders            Reminder[]
+  accounts             Account[]
+  sessions             Session[]
+  fcmToken             String?
+  notificationsEnabled Boolean    @default(false)
+  notificationTime     String? // Format: "HH:mm" (24h) in UTC
 }
 
 model Account {
@@ -64,29 +63,29 @@ model VerificationToken {
 }
 
 model Contact {
-  id                 String        @id @default(cuid())
-  ownerId            String
-  name               String
-  category           Category      @default(FRIEND)
-  phone              String?
-  email              String?
-  description        String? // Merged from Node
-  groups             String[]      @default([]) // Merged from Node
-  metadata           Json? // Merged from Node
-  relationshipId     String?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @default(now()) @updatedAt // Added default to handle existing rows if any, though usually @updatedAt handles updates. Using @default(now()) for new rows.
-  lastInteractionAt  DateTime?
-  lastPlatform       Platform?
-  commonPlatform     Platform?
-  strengthScore      Float         @default(0)
-  monthsKnown        Int           @default(0)
-  owner              User          @relation("UserContacts", fields: [ownerId], references: [id])
-  relationship       Relationship? @relation(fields: [relationshipId], references: [id])
-  interactions       Interaction[]
-  Reminder           Reminder[]
-  outgoing           Link[]        @relation("from")
-  incoming           Link[]        @relation("to")
+  id                String        @id @default(cuid())
+  ownerId           String
+  name              String
+  category          Category      @default(FRIEND)
+  phone             String?
+  email             String?
+  description       String? // Merged from Node
+  groups            String[]      @default([]) // Merged from Node
+  metadata          Json? // Merged from Node
+  relationshipId    String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @default(now()) @updatedAt // Added default to handle existing rows if any, though usually @updatedAt handles updates. Using @default(now()) for new rows.
+  lastInteractionAt DateTime?
+  lastPlatform      Platform?
+  commonPlatform    Platform?
+  strengthScore     Float         @default(0)
+  monthsKnown       Int           @default(0)
+  owner             User          @relation("UserContacts", fields: [ownerId], references: [id])
+  relationship      Relationship? @relation(fields: [relationshipId], references: [id])
+  interactions      Interaction[]
+  Reminder          Reminder[]
+  outgoing          Link[]        @relation("from")
+  incoming          Link[]        @relation("to")
 }
 
 model Relationship {
@@ -100,12 +99,20 @@ model Relationship {
 }
 
 model Interaction {
-  id       String    @id @default(cuid())
-  type     String
-  content  String?
-  platform Platform  @default(OTHER)
-  date     DateTime  @default(now())
-  contacts Contact[]
+  id               String    @id @default(cuid())
+  type             String
+  content          String?
+  platform         Platform  @default(OTHER)
+  date             DateTime  @default(now())
+  startTime        DateTime  @default(now())
+  endTime          DateTime  @default(now())
+  durationSeconds  Int?
+  messageCount     Int?
+  directionSummary String? // INBOUND, OUTBOUND, MIXED
+  rawMessageCount  Int?
+  metadata         Json?
+  threadId         String?
+  contacts         Contact[]
 }
 
 model Reminder {

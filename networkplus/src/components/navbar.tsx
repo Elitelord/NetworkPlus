@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { Settings } from "lucide-react";
 
 export default function Navbar() {
     const { data: session, status } = useSession();
@@ -38,6 +39,11 @@ export default function Navbar() {
                                     className="h-7 w-7 rounded-full"
                                 />
                             )}
+                            <Link href="/settings">
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <Settings className="h-4 w-4" />
+                                </Button>
+                            </Link>
                             <Button
                                 variant="ghost"
                                 size="sm"

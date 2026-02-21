@@ -75,6 +75,8 @@ export function LogInteractionModal({
         type: "Interaction",
         platform: "OTHER",
         date: new Date().toISOString().slice(0, 16), // datetime-local format YYYY-MM-DDTHH:mm
+        durationMinutes: "",
+        messageCount: "",
         content: "",
     });
 
@@ -129,6 +131,8 @@ export function LogInteractionModal({
                     type: formData.type,
                     platform: formData.platform,
                     content: formData.content,
+                    durationMinutes: formData.durationMinutes,
+                    messageCount: formData.messageCount,
                     date: new Date(formData.date).toISOString(),
                 }),
             });
@@ -139,7 +143,7 @@ export function LogInteractionModal({
 
             onSuccess(selectedContactIds);
             onOpenChange(false);
-            setFormData((prev) => ({ ...prev, date: new Date().toISOString().slice(0, 16), content: "" }));
+            setFormData((prev) => ({ ...prev, date: new Date().toISOString().slice(0, 16), content: "", durationMinutes: "", messageCount: "" }));
         } catch (err) {
             console.error(err);
         } finally {
@@ -416,7 +420,35 @@ export function LogInteractionModal({
                         </NativeSelect>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="content" className="text-right">
+                        <Label htmlFor="durationMinutes" className="text-right">
+                            Duration (mins)
+                        </Label>
+                        <Input
+                            id="durationMinutes"
+                            type="number"
+                            min="0"
+                            value={formData.durationMinutes}
+                            onChange={(e) => handleChange("durationMinutes", e.target.value)}
+                            className="col-span-3"
+                            placeholder="Optional"
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="messageCount" className="text-right">
+                            Total Messages
+                        </Label>
+                        <Input
+                            id="messageCount"
+                            type="number"
+                            min="1"
+                            value={formData.messageCount}
+                            onChange={(e) => handleChange("messageCount", e.target.value)}
+                            className="col-span-3"
+                            placeholder="Optional"
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-start gap-4">
+                        <Label htmlFor="content" className="text-right pt-2">
                             Notes
                         </Label>
                         <Textarea

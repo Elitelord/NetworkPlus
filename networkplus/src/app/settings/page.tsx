@@ -27,44 +27,52 @@ export default async function SettingsPage() {
     const hasPassword = !!(user as any).hashedPassword
 
     return (
-        <div className="container max-w-2xl py-10 space-y-8">
-            <div>
+        <div className="container mx-auto max-w-2xl py-10 space-y-8 flex flex-col items-center">
+            <div className="text-center">
                 <h1 className="text-3xl font-bold">Settings</h1>
                 <p className="text-muted-foreground">Manage your account settings and preferences.</p>
             </div>
 
-            <div className="space-y-6">
-                <div>
+            <div className="space-y-6 w-full max-w-md">
+                <div className="flex flex-col items-center text-center mb-6">
                     <h2 className="text-lg font-medium">Profile</h2>
                     <p className="text-sm text-muted-foreground mb-4">Update your personal information.</p>
-                    <ProfileForm user={session.user} />
+                    <div className="w-full text-left">
+                        <ProfileForm user={session.user} />
+                    </div>
                 </div>
 
                 <Separator />
 
-                <div>
+                <div className="flex flex-col items-center text-center my-6">
                     <h2 className="text-lg font-medium">Security</h2>
                     <p className="text-sm text-muted-foreground mb-4">Manage your password and authentication.</p>
-                    <PasswordForm hasPassword={hasPassword} />
+                    <div className="w-full text-left">
+                        <PasswordForm hasPassword={hasPassword} />
+                    </div>
                 </div>
 
                 <Separator />
 
-                <div>
+                <div className="flex flex-col items-center text-center my-6">
                     <h2 className="text-lg font-medium">Notifications</h2>
                     <p className="text-sm text-muted-foreground mb-4">Manage your daily catch-up notifications.</p>
-                    <NotificationForm defaultValues={{
-                        notificationsEnabled: (user as any).notificationsEnabled ?? false,
-                        notificationTime: (user as any).notificationTime ?? "09:00"
-                    }} />
+                    <div className="w-full text-left">
+                        <NotificationForm defaultValues={{
+                            notificationsEnabled: (user as any).notificationsEnabled ?? false,
+                            notificationTime: (user as any).notificationTime ?? "09:00"
+                        }} />
+                    </div>
                 </div>
 
                 <Separator />
 
-                <div>
+                <div className="flex flex-col items-center text-center mt-6">
                     <h2 className="text-lg font-medium text-destructive">Danger Zone</h2>
                     <p className="text-sm text-muted-foreground mb-4">Irreversible actions specific to your account.</p>
-                    <DeleteAccount />
+                    <div className="w-full text-left">
+                        <DeleteAccount />
+                    </div>
                 </div>
             </div>
         </div>
