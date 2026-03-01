@@ -57,6 +57,7 @@ export async function POST(req: Request) {
     try {
         const session = await auth() as Session | null;
         if (!session?.user?.id) {
+            console.error("Sync Debug [Gmail]: No Session User ID found. Session object:", JSON.stringify(session));
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
@@ -68,11 +69,13 @@ export async function POST(req: Request) {
         });
 
         if (!account) {
+            console.error(`Sync Debug [Gmail]: No Google account linked for user ID: ${userId}`);
             return new NextResponse("No Google account linked", { status: 400 });
         }
 
         const accessToken = await getValidAccessToken(account);
         if (!accessToken) {
+            console.error(`Sync Debug [Gmail]: Google token refresh failed for account ID: ${account.id}. Missing refresh_token?`);
             return new NextResponse("Google authentication expired. Please sign in again.", { status: 401 });
         }
 

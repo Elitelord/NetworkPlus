@@ -9,7 +9,7 @@
 
 import http from "http";
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://network-plus.vercel.app";
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 // INSTRUCTIONS:
 // 1. Log in to your locally running app (http://localhost:3000) using Google or Microsoft.

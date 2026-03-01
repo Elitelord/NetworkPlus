@@ -58,6 +58,7 @@ export async function POST(req: Request) {
     try {
         const session = await auth() as Session | null;
         if (!session?.user?.id) {
+            console.error("Sync Debug [Outlook]: No Session User ID found. Session object:", JSON.stringify(session));
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
@@ -69,11 +70,13 @@ export async function POST(req: Request) {
         });
 
         if (!account) {
+            console.error(`Sync Debug [Outlook]: No Microsoft account linked for user ID: ${userId}`);
             return new NextResponse("No Microsoft account linked", { status: 400 });
         }
 
         const accessToken = await getValidAccessToken(account);
         if (!accessToken) {
+            console.error(`Sync Debug [Outlook]: Microsoft token refresh failed for account ID: ${account.id}. Missing refresh_token?`);
             return new NextResponse("Microsoft authentication expired. Please sign in again.", { status: 401 });
         }
 
