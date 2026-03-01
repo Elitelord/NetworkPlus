@@ -16,15 +16,10 @@ const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://network-plus.vercel.
 // 2. Open Developer Tools -> Application -> Cookies.
 // 3. Copy the value of the `authjs.session-token` cookie (or `__Secure-authjs.session-token`).
 // 4. Paste it here:
-const SESSION_TOKEN = "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoiMjU4RDZ3TTBOdkZqNk1wb2Nfemt2LUk1UEEzSTJ1V1NFSDBRQkxtNUpUeWJXWGJZb01iWDY0WlIxdkR3aG9MRDRiaEZ4QTVPQUZYRVpmNC14VUcwSWcifQ..rNFoCcJYw-JBn5MaYd4ViA.oh8_X01Vbub4UxqEOuCrXa1tS0nUYM2rk59dSzhPI33s7YRzcs5v84btsCRXF3wqIBMQxz-b8WEg_6dWaZJD8h46G9xDsklL_VQyZutDKNPjbYSzQZb3CgoYzxP0xhL1t8iU3M6uHQW49WgtCUdYfj28Rz8NCNayKwIstBbEPgiyllrFSqZuDaFjaTcafJZh8qHy8-xth9NsLxaE1gpkLCI6gDJ9gcpI0gEVbl4ebk6OUO8Z-KTLCgP-dCEJ4UfaERSsiLkADlhf8XjPvwxDmn-XQviNbsuwWLdi1w7pqq4nW0uklwnDuAxT_mxHLiAug_dUR-QLdflvBReIJd-ADI00tmTkfcgr5JJVf_UmvpPSR9M1BrnEzqzXQgDGcqNudEaGzOtbi8lk28lybPshuA.TIbQJwbmHa8QgD5oIvFqYCC4VTVlneDAl6_-y_vqEKE";
+const SESSION_TOKEN = "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoiZUliUHFuc1ZRRWhkX0VFUDc2eWRNcjdiR3ZPem9zREN3UzRVblJwZ21tUXhaTEcyZE9oYXBocGJ4bzBjM3VOSjE2OUNSckZOeURIX01LRHpoY2lCLUEifQ..fZ2Zgi_8yRqWQcsSR4f8kQ.TpxqKPew-6Sn81pQWY8mfmQ9KHxZQ2imeQi3ShqZL7a717x6BYENlvZocbqPzZlX8cN0ju94pChGxFM3Ob3SZke1kv8pNS46I7SVwQkVpFbzkZQTbnhAzuyjr_zyP6SyAxe2p8gQBKXxwEztV8iT3KsEoe2kF-CQ29B3RcIdp7lItij4x36auyIkI6Tw5J-dx6SHFHjzywYFFrGZDdnJ_sAeM2T7QwwV28eZWAGW81lFCsqwSxWfFLT4PWMyk9uFSoqjVBA3fYtdiQ3I2nULn6k6y7Q-YdyIKAMmLEIRSvrqyNK_6Woxpd0UoHwtvang3aFobCNi8N3D5MDe_GH35Gdk8tL2goZU4zCKhdMJJIW6U7YVz_GGvByc8g4tf48W-IG_Yxkxnxgl0os-KJwWLKMdxMBjmtpNb2Y-bWQ_yZQ.JpyLklmxKPrtZVWfZ7iRT6zyBdOx8jRI1Kpp26xTnOw";
 
 async function triggerSync(provider: "gmail" | "outlook") {
     console.log(`\nTriggering ${provider} sync...`);
-
-    if (SESSION_TOKEN === "YOUR_SESSION_TOKEN_HERE") {
-        console.warn("⚠️ Warning: SESSION_TOKEN is not set. The request will likely fail with 401 Unauthorized.");
-        console.warn("Please log into http://localhost:3000 in your browser, copy the 'authjs.session-token' cookie, and update 'scripts/test-sync.ts'.\n");
-    }
 
     try {
         const response = await fetch(`${baseUrl}/api/sync/${provider}`, {
