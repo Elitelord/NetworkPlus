@@ -35,20 +35,40 @@ interface NotificationFormProps {
 
 export function NotificationForm({ defaultValues }: NotificationFormProps) {
     const [isPending, startTransition] = useTransition()
-    const { notificationPermission } = useFcmToken() // Hook handles token sync automatically
+    const { notificationPermission, retrieveToken } = useFcmToken() // Hook handles token sync automatically
+
+    // Calculate local time for initial form state
+    const initialLocalTime = (() => {
+        if (!defaultValues.notificationTime) return "09:00";
+        const [utcHours, utcMinutes] = defaultValues.notificationTime.split(":").map(Number);
+        const date = new Date();
+        date.setUTCHours(utcHours, utcMinutes, 0, 0);
+        const localHours = date.getHours().toString().padStart(2, '0');
+        const localMinutes = date.getMinutes().toString().padStart(2, '0');
+        return `${localHours}:${localMinutes}`;
+    })();
 
     const form = useForm<NotificationFormValues>({
         resolver: zodResolver(notificationFormSchema),
         defaultValues: {
             notificationsEnabled: defaultValues.notificationsEnabled ?? false,
-            notificationTime: defaultValues.notificationTime ?? "09:00",
+            notificationTime: initialLocalTime,
         },
     })
 
-    function onSubmit(data: NotificationFormValues) {
-        if (data.notificationsEnabled && notificationPermission !== "granted") {
-            toast.error("Please enable browser notifications first")
-            return
+    async function onSubmit(data: NotificationFormValues) {
+        if (data.notificationsEnabled && typeof window !== 'undefined' && 'Notification' in window) {
+            let perm = Notification.permission;
+            if (perm !== "granted") {
+                perm = await Notification.requestPermission();
+                if (perm === "granted") {
+                    await retrieveToken();
+                }
+            }
+            if (perm !== "granted") {
+                toast.error("Please enable browser notifications first");
+                return;
+            }
         }
 
         startTransition(async () => {
@@ -75,27 +95,7 @@ export function NotificationForm({ defaultValues }: NotificationFormProps) {
         })
     }
 
-    // Convert UTC time from DB back to local time for display
-    // This is handled via defaultValues passed in, assuming they are converted by the parent or we convert here if needed.
-    // Ideally, the parent component should pass the initial values. 
-    // Wait, the parent (server component) passes DB values which are UTC. 
-    // We should convert them to local time here for the Default Values if we want to be precise, 
-    // BUT server components don't know the client's timezone.
-    // So we might need to rely on the user setting it, or use a client-side effect to adjust the default value on mount.
-    // For simplicity MVP, let's trust the user sets it and we just display what's in the DB? 
-    // No, that would be confusing (saving 9am local -> 2pm UTC -> display 2pm).
-    // Implementation detail: We will assume the passed `defaultValues.notificationTime` is UTC and convert it to local on mount.
 
-    useState(() => {
-        if (defaultValues.notificationTime) {
-            const [utcHours, utcMinutes] = defaultValues.notificationTime.split(":").map(Number)
-            const date = new Date()
-            date.setUTCHours(utcHours, utcMinutes, 0, 0)
-            const localHours = date.getHours().toString().padStart(2, '0')
-            const localMinutes = date.getMinutes().toString().padStart(2, '0')
-            form.setValue("notificationTime", `${localHours}:${localMinutes}`)
-        }
-    })
 
     return (
         <Form {...form}>

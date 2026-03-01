@@ -9,46 +9,51 @@ export function useFcmToken() {
     const [notificationPermission, setNotificationPermission] =
         useState<NotificationPermission>("default");
 
-    useEffect(() => {
-        const retrieveToken = async () => {
-            try {
-                if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-                    const messaging = await messagingPromise;
-                    if (!messaging) return;
+    const retrieveToken = async () => {
+        try {
+            if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+                const messaging = await messagingPromise;
+                if (!messaging) return;
 
-                    const permission = await Notification.requestPermission();
-                    setNotificationPermission(permission);
+                const permission = await Notification.requestPermission();
+                setNotificationPermission(permission);
 
-                    if (permission === "granted") {
-                        const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
-                        if (!vapidKey) {
-                            console.error("Missing NEXT_PUBLIC_FIREBASE_VAPID_KEY");
-                            return;
-                        }
+                if (permission === "granted") {
+                    const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+                    if (!vapidKey) {
+                        console.error("Missing NEXT_PUBLIC_FIREBASE_VAPID_KEY");
+                        return;
+                    }
 
-                        const currentToken = await getToken(messaging, {
-                            vapidKey: vapidKey,
+                    const currentToken = await getToken(messaging, {
+                        vapidKey: vapidKey,
+                    });
+
+                    if (currentToken) {
+                        setToken(currentToken);
+                        // Send token to backend
+                        await fetch("/api/user/fcm-token", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({ token: currentToken }),
                         });
-
-                        if (currentToken) {
-                            setToken(currentToken);
-                            // Send token to backend
-                            await fetch("/api/user/fcm-token", {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({ token: currentToken }),
-                            });
-                        }
                     }
                 }
-            } catch (error) {
-                console.error("An error occurred while retrieving token:", error);
             }
-        };
+        } catch (error) {
+            console.error("An error occurred while retrieving token:", error);
+        }
+    };
 
-        retrieveToken();
+    useEffect(() => {
+        if (typeof window !== "undefined" && "Notification" in window) {
+            setNotificationPermission(Notification.permission);
+            if (Notification.permission === "granted") {
+                retrieveToken();
+            }
+        }
     }, []);
 
     useEffect(() => {
@@ -73,5 +78,5 @@ export function useFcmToken() {
         setupOnMessage();
     }, []);
 
-    return { token, notificationPermission };
+    return { token, notificationPermission, retrieveToken };
 }
