@@ -9,14 +9,14 @@
 
 import http from "http";
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://network-plus.vercel.app";
 
 // INSTRUCTIONS:
 // 1. Log in to your locally running app (http://localhost:3000) using Google or Microsoft.
 // 2. Open Developer Tools -> Application -> Cookies.
 // 3. Copy the value of the `authjs.session-token` cookie (or `__Secure-authjs.session-token`).
 // 4. Paste it here:
-const SESSION_TOKEN = "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoiZUliUHFuc1ZRRWhkX0VFUDc2eWRNcjdiR3ZPem9zREN3UzRVblJwZ21tUXhaTEcyZE9oYXBocGJ4bzBjM3VOSjE2OUNSckZOeURIX01LRHpoY2lCLUEifQ..d3yJhve9KIhIgPonf0uRiQ.qDYrl5SJL56uvTThphnaMUuj9Qa7OQMpUL52NjAX_WlIK-KfDAuYpVjEvZaN1MGgUR1Nn-H1oR6kngWBPrcm0qE_qP0qS19POMRrpH_088T7ewPtNfSQxiSvaC1x7gDTu7WBJYQxoCf1wXOqhJHC5DeBjMe0FKQ7IDHOMkRoqoNhfD-2n2wE-2vTyYh0oE5hI_-bApbZ65uD4UgrAAEUncyR_MAsk6oDf7tBHY7cMPGHLgnliO-KAXNPRxbkifK1squLslC1lIeq-zeiV_u2KVC2_GjKb3WbA9Hxq9hZfeEYT8n8iJA9RMPgHse6f1oZDAhZalQo7aN430ecxIwOhnfAUy8fRNw2KBoudJ74FG7DGqQV_Av9Va3vih46hL_UjeGZgu4j_X2LcN7R4Z8Q0SlXPewWqgBmA9WfY-Bg3o4.x-VwoVbD6ZDxbUyqGWke7H6D9pT85aPpiY14jQwyaOo";
+const SESSION_TOKEN = "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoiZUliUHFuc1ZRRWhkX0VFUDc2eWRNcjdiR3ZPem9zREN3UzRVblJwZ21tUXhaTEcyZE9oYXBocGJ4bzBjM3VOSjE2OUNSckZOeURIX01LRHpoY2lCLUEifQ..58spPOUoKPUlPwdQR--m-A.nMiwL-OnaRbJ5HxiBuPD34Ao9f_pPcE7djFFDvZ0vdrITYbf1gUzV5zSZQGO-BIqsENUHKKxDOC5LQIR248n7yWBcYCXJOw4-QdQypg4LDSEolGp2ScDxZIgDcDjnWNiYSx1N5guGgg8K9y5sjsObZrV7Gi3WLMxGrOlJ_CeJMAkJ_bchFEESy2a85LVSL-ycXuaJzDaee4vVlftakqq6jxlPlSaJwVl1YG-bBVWSt1xF_C8l9FO6XSDwHkWgqNd7PYINz1WrLoby8GShKsXy2_KMN7QREs1ZLFkfWfv1bR5G1R5_jTJWcINxNX2dxPpJ7jy5TjdZzFfForcciSGA2hBKO8DQjFlJ77K4MuiIJMvaqhDWemv9svI6Hb6Qqq7KtUWZYoH39Yvri3gOn_yhl09xfamtCJ3Vez8FS6_REE.3946rs5_sfOKwhYIxLt9MpqF8bEnsFI26JRHwIHBUN8";
 
 async function triggerSync(provider: "gmail" | "outlook") {
     console.log(`\nTriggering ${provider} sync...`);

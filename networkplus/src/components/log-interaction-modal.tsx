@@ -57,6 +57,7 @@ interface LogInteractionModalProps {
     onOpenChange: (open: boolean) => void;
     contactId: string;
     onSuccess: (contactIds: string[]) => void;
+    defaultDate?: string; // ISO string to pre-fill the date picker
 }
 
 interface ContactOption {
@@ -69,6 +70,7 @@ export function LogInteractionModal({
     onOpenChange,
     contactId,
     onSuccess,
+    defaultDate,
 }: LogInteractionModalProps) {
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
@@ -80,9 +82,24 @@ export function LogInteractionModal({
         content: "",
     });
 
+    // Update date when defaultDate changes (e.g. from calendar page)
+    useEffect(() => {
+        if (open && defaultDate) {
+            const d = new Date(defaultDate);
+            const offset = d.getTimezoneOffset() * 60000;
+            const localISO = new Date(d.getTime() - offset).toISOString().slice(0, 16);
+            setFormData(prev => ({ ...prev, date: localISO }));
+        }
+    }, [open, defaultDate]);
+
     const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
     const [contacts, setContacts] = useState<ContactOption[]>([]);
     const [openCombobox, setOpenCombobox] = useState(false);
+
+    // Recurring interaction state
+    const [isRecurring, setIsRecurring] = useState(false);
+    const [recurringType, setRecurringType] = useState("WEEKLY");
+    const [recurringEndDate, setRecurringEndDate] = useState("");
 
     useEffect(() => {
         if (open) {
@@ -127,7 +144,7 @@ export function LogInteractionModal({
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    contactIds: selectedContactIds, // Send array
+                    contactIds: selectedContactIds,
                     type: formData.type,
                     platform: formData.platform,
                     content: formData.content,
@@ -141,9 +158,29 @@ export function LogInteractionModal({
                 throw new Error("Failed to log interaction");
             }
 
+            // Create recurring template if enabled
+            if (isRecurring && selectedContactIds.length > 0) {
+                await fetch("/api/interactions/recurring", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contactIds: selectedContactIds,
+                        type: formData.type,
+                        platform: formData.platform,
+                        content: formData.content,
+                        recurringType,
+                        recurringEndDate: recurringEndDate || undefined,
+                        startDate: new Date(formData.date).toISOString(),
+                    }),
+                }).catch(err => console.error("Failed to create recurring template:", err));
+            }
+
             onSuccess(selectedContactIds);
             onOpenChange(false);
             setFormData((prev) => ({ ...prev, date: new Date().toISOString().slice(0, 16), content: "", durationMinutes: "", messageCount: "" }));
+            setIsRecurring(false);
+            setRecurringType("WEEKLY");
+            setRecurringEndDate("");
         } catch (err) {
             console.error(err);
         } finally {
@@ -458,6 +495,44 @@ export function LogInteractionModal({
                             className="col-span-3"
                             placeholder="Optional notes..."
                         />
+                    </div>
+
+                    {/* Recurring toggle */}
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">Recurring</Label>
+                        <div className="col-span-3 space-y-3">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={isRecurring}
+                                    onChange={(e) => setIsRecurring(e.target.checked)}
+                                    className="rounded border-input"
+                                />
+                                <span className="text-sm">Make this a recurring interaction</span>
+                            </label>
+                            {isRecurring && (
+                                <div className="space-y-2 pl-6 border-l-2 border-muted">
+                                    <NativeSelect
+                                        value={recurringType}
+                                        onChange={(e) => setRecurringType(e.target.value)}
+                                    >
+                                        <NativeSelectOption value="DAILY">Daily</NativeSelectOption>
+                                        <NativeSelectOption value="WEEKLY">Weekly</NativeSelectOption>
+                                        <NativeSelectOption value="BIWEEKLY">Every 2 Weeks</NativeSelectOption>
+                                        <NativeSelectOption value="MONTHLY">Monthly</NativeSelectOption>
+                                    </NativeSelect>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">End date (optional)</Label>
+                                        <Input
+                                            type="date"
+                                            value={recurringEndDate}
+                                            onChange={(e) => setRecurringEndDate(e.target.value)}
+                                            className="mt-1"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

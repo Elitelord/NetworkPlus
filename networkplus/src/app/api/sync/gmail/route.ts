@@ -241,6 +241,30 @@ export async function POST(req: Request) {
             }
         }
 
+        // --- Recalculate scores for all affected contacts ---
+        const { recalculateContactScore } = await import("@/lib/strength-scoring");
+        const affectedContactIds = new Set(sessions.map(s => s.contactId));
+
+        for (const cId of affectedContactIds) {
+            const latestInteraction = await prisma.interaction.findFirst({
+                where: { contacts: { some: { id: cId } } },
+                orderBy: { date: "desc" },
+                select: { date: true, platform: true },
+            });
+
+            if (latestInteraction) {
+                await prisma.contact.update({
+                    where: { id: cId },
+                    data: {
+                        lastInteractionAt: latestInteraction.date,
+                        lastPlatform: latestInteraction.platform,
+                    },
+                });
+            }
+
+            await recalculateContactScore(cId);
+        }
+
         return NextResponse.json({ message: "Gmail sync complete", importedSessions });
 
     } catch (error) {

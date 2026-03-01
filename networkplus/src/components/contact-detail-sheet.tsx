@@ -39,6 +39,8 @@ type Interaction = {
     platform: string;
     date: string;
     content?: string;
+    isRecurring?: boolean;
+    parentInteractionId?: string;
 };
 
 interface ContactDetailSheetProps {
@@ -234,17 +236,54 @@ export function ContactDetailSheet({
                                 </div>
 
                                 <div className="mb-6">
+                                    {/* Upcoming interactions */}
+                                    {(() => {
+                                        const upcoming = interactions.filter(i => new Date(i.date) > new Date());
+                                        if (upcoming.length > 0) {
+                                            return (
+                                                <>
+                                                    <h3 className="font-semibold text-sm mb-3">Upcoming</h3>
+                                                    <div className="space-y-3 mb-6">
+                                                        {upcoming.map((interaction) => (
+                                                            <div key={interaction.id} className="text-sm border-l-2 border-blue-400 pl-3 py-1 bg-blue-50/50 dark:bg-blue-950/20 rounded-r">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="font-medium">
+                                                                        {interaction.isRecurring && "🔁 "}
+                                                                        {interaction.type}
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {new Date(interaction.date).toLocaleDateString()}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground flex gap-2">
+                                                                    <span>via {interaction.platform}</span>
+                                                                </div>
+                                                                {interaction.content && (
+                                                                    <p className="mt-1 text-muted-foreground/90">{interaction.content}</p>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+
                                     <h3 className="font-semibold text-sm mb-3">Interaction History</h3>
                                     {loadingHistory ? (
                                         <p className="text-xs text-muted-foreground">Loading history...</p>
-                                    ) : interactions.length === 0 ? (
+                                    ) : interactions.filter(i => new Date(i.date) <= new Date()).length === 0 ? (
                                         <p className="text-xs text-muted-foreground">No interactions logged yet.</p>
                                     ) : (
                                         <div className="space-y-3">
-                                            {interactions.map((interaction) => (
+                                            {interactions.filter(i => new Date(i.date) <= new Date()).map((interaction) => (
                                                 <div key={interaction.id} className="text-sm border-l-2 border-muted pl-3 py-1">
                                                     <div className="flex items-center justify-between">
-                                                        <span className="font-medium">{interaction.type}</span>
+                                                        <span className="font-medium">
+                                                            {(interaction.isRecurring || interaction.parentInteractionId) && "🔁 "}
+                                                            {interaction.type}
+                                                        </span>
                                                         <span className="text-xs text-muted-foreground">
                                                             {new Date(interaction.date).toLocaleDateString()}
                                                         </span>

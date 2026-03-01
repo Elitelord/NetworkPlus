@@ -51,6 +51,8 @@ export default function Home() {
   const [selectedGroup, setSelectedGroup] = useState("");
   const [selectedNode, setSelectedNode] = useState<NodeType | null>(null);
   const [highlightNodes, setHighlightNodes] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showDueNodes, setShowDueNodes] = useState(false);
   const [dueNodeIds, setDueNodeIds] = useState<Set<string>>(new Set());
   const [dueContacts, setDueContacts] = useState<Contact[]>([]);
@@ -521,27 +523,82 @@ export default function Home() {
           <h1 className="font-bold text-xl tracking-tight">Network+</h1>
         </div>
 
+        {/* Node Search */}
+        <div className="relative">
+          <input
+            id="node-search"
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setTimeout(() => setIsSearchFocused(false), 150)}
+            placeholder="Search contacts..."
+            className="w-full p-2 pl-8 border rounded-md text-sm bg-background"
+          />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          {searchQuery.trim() !== "" && isSearchFocused && (() => {
+            const filtered = nodes.filter(n =>
+              n.name.toLowerCase().includes(searchQuery.toLowerCase())
+            ).slice(0, 8);
+            return filtered.length > 0 ? (
+              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                {filtered.map((n) => (
+                  <button
+                    key={n.id}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors border-b last:border-b-0"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      focusNode(n.id);
+                      setSearchQuery("");
+                    }}
+                  >
+                    <p className="font-medium truncate">{n.name}</p>
+                    {n.groups && n.groups.length > 0 && (
+                      <p className="text-xs text-muted-foreground truncate">{n.groups.join(", ")}</p>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg px-3 py-2 text-sm text-muted-foreground">
+                No contacts found
+              </div>
+            );
+          })()}
+        </div>
+
         <DueSoonList contacts={dueContacts} onSelect={(contact) => {
-          // Find logic to center on node
-          const targetNode = nodes.find(n => n.id === contact.id); // Direct ID match
+          const targetNode = nodes.find(n => n.id === contact.id);
           if (targetNode) {
+            // Open the detail panel
+            setSelectedNode(targetNode);
+
             const instance = graphInstanceRef.current;
             if (instance) {
-              // Find internal node for coordinates
               const internalNode = instance.graphData().nodes.find((n: any) => n.id === targetNode.id);
               if (internalNode) {
                 instance.centerAt(internalNode.x, internalNode.y, 1000);
-                instance.zoom(6, 2000); // Fairly zoomed in
+                instance.zoom(6, 2000);
               }
             }
 
-            // Highlight logic
-            // Only highlight the target node itself
             const neighborIds = new Set<string>();
             neighborIds.add(targetNode.id);
             setHighlightNodes(neighborIds);
-
-            // Clear highlight after 3 seconds
             setTimeout(() => {
               setHighlightNodes(new Set());
             }, 3000);

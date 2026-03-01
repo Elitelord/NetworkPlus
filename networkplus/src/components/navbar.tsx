@@ -22,6 +22,9 @@ export default function Navbar() {
                         <Link href="/dashboard" className="text-sm font-medium transition-colors hover:text-primary">
                             Dashboard
                         </Link>
+                        <Link href="/calendar" className="text-sm font-medium transition-colors hover:text-primary">
+                            Calendar
+                        </Link>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">

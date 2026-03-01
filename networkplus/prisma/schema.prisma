@@ -112,7 +112,17 @@ model Interaction {
   rawMessageCount  Int?
   metadata         Json?
   threadId         String?
+  calendarEventId  String?   // Google Calendar event ID for dedup
   contacts         Contact[]
+
+  // Recurring interaction fields
+  isRecurring          Boolean       @default(false)
+  recurringType        String?       // DAILY, WEEKLY, BIWEEKLY, MONTHLY
+  recurringDaysOfWeek  Int[]         @default([]) // 0=Sun, 6=Sat
+  recurringEndDate     DateTime?
+  parentInteractionId  String?
+  parentInteraction    Interaction?  @relation("RecurringInstances", fields: [parentInteractionId], references: [id])
+  recurringInstances   Interaction[] @relation("RecurringInstances")
 }
 
 model Reminder {
