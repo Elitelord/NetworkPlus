@@ -29,6 +29,38 @@ export const { handlers, auth: nextAuthAuth, signIn, signOut } = NextAuth({
       return session
     },
   },
+  events: {
+    async signIn({ account, user }) {
+      // When a user re-authenticates with an OAuth provider, update the stored
+      // tokens so that new scopes (e.g. Calendar) take effect.
+      if (account && user?.id && account.provider !== "credentials") {
+        try {
+          const existing = await prisma.account.findFirst({
+            where: {
+              userId: user.id,
+              provider: account.provider,
+            },
+          })
+
+          if (existing) {
+            await prisma.account.update({
+              where: { id: existing.id },
+              data: {
+                access_token: account.access_token,
+                refresh_token: account.refresh_token ?? existing.refresh_token,
+                expires_at: account.expires_at,
+                token_type: account.token_type,
+                scope: account.scope,
+                id_token: account.id_token,
+              },
+            })
+          }
+        } catch (err) {
+          console.error("Failed to update account tokens on signIn:", err)
+        }
+      }
+    },
+  },
 
   ...authConfig,
   providers: [
