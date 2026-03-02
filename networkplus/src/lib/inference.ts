@@ -81,6 +81,7 @@ export async function updateInferredLinks(contactId: string) {
         }
     });
 
+    const deletedLinkIds = new Set<string>();
     for (const link of existingInferred) {
         const otherId = link.fromId === contactId ? link.toId : link.fromId;
         const group = (link.metadata as any)?.group;
@@ -88,16 +89,21 @@ export async function updateInferredLinks(contactId: string) {
         if (group && !validLinks.has(`${otherId}:${group}`)) {
             // This specific link (for this group) is no longer valid
             await prisma.link.delete({ where: { id: link.id } });
+            deletedLinkIds.add(link.id);
         } else if (!group) {
             // Legacy or malformed inferred link (no group in metadata), remove it to be safe or update it?
             // Safest to remove and let it regenerate.
             await prisma.link.delete({ where: { id: link.id } });
+            deletedLinkIds.add(link.id);
         }
     }
 
     // 4. Create missing links
     for (const linkKey of Array.from(validLinks)) {
-        const [otherId, groupName] = linkKey.split(":");
+        // Split on first colon only — cuid IDs never contain colons, but group names might
+        const colonIdx = linkKey.indexOf(":");
+        const otherId = linkKey.substring(0, colonIdx);
+        const groupName = linkKey.substring(colonIdx + 1);
 
         // Check for MANUAL link first ( Manual takes precedence over ALL inferred links between these two?
         // User said: "manual links must always take precedence".
@@ -123,9 +129,9 @@ export async function updateInferredLinks(contactId: string) {
 
         if (existingManual) continue;
 
-        // Check if specific inferred link exists
-        // We look for an inferred link with this specific GROUP in metadata
+        // Check if specific inferred link exists (exclude links that were deleted in step 3)
         const existingSpecific = existingInferred.find(l =>
+            !deletedLinkIds.has(l.id) &&
             (l.fromId === otherId || l.toId === otherId) &&
             (l.metadata as any)?.group === groupName
         );

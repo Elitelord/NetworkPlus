@@ -52,12 +52,25 @@ const PLATFORMS = [
     { value: "OTHER", label: "Other" },
 ];
 
+export interface EditInteractionData {
+    id: string;
+    type: string;
+    platform: string;
+    content?: string;
+    date: string;
+    durationMinutes?: string;
+    messageCount?: string;
+    contactIds?: string[];
+}
+
 interface LogInteractionModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     contactId: string;
     onSuccess: (contactIds: string[]) => void;
     defaultDate?: string; // ISO string to pre-fill the date picker
+    editInteraction?: EditInteractionData;
+    onDelete?: () => void;
 }
 
 interface ContactOption {
@@ -71,7 +84,11 @@ export function LogInteractionModal({
     contactId,
     onSuccess,
     defaultDate,
+    editInteraction,
+    onDelete,
 }: LogInteractionModalProps) {
+    const isEditing = !!editInteraction;
+    const [deleting, setDeleting] = useState(false);
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         type: "Interaction",
@@ -82,15 +99,27 @@ export function LogInteractionModal({
         content: "",
     });
 
-    // Update date when defaultDate changes (e.g. from calendar page)
+    // Pre-fill form when editing or when defaultDate changes
     useEffect(() => {
-        if (open && defaultDate) {
+        if (open && editInteraction) {
+            const d = new Date(editInteraction.date);
+            const offset = d.getTimezoneOffset() * 60000;
+            const localISO = new Date(d.getTime() - offset).toISOString().slice(0, 16);
+            setFormData({
+                type: editInteraction.type || "Interaction",
+                platform: editInteraction.platform || "OTHER",
+                date: localISO,
+                durationMinutes: editInteraction.durationMinutes || "",
+                messageCount: editInteraction.messageCount || "",
+                content: editInteraction.content || "",
+            });
+        } else if (open && defaultDate) {
             const d = new Date(defaultDate);
             const offset = d.getTimezoneOffset() * 60000;
             const localISO = new Date(d.getTime() - offset).toISOString().slice(0, 16);
             setFormData(prev => ({ ...prev, date: localISO }));
         }
-    }, [open, defaultDate]);
+    }, [open, defaultDate, editInteraction]);
 
     const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
     const [contacts, setContacts] = useState<ContactOption[]>([]);
@@ -103,9 +132,12 @@ export function LogInteractionModal({
 
     useEffect(() => {
         if (open) {
-            // Reset selection to just the current contact when opening (or keep previous if desired?)
-            // Usually we want to start with the current contact selected.
-            setSelectedContactIds([contactId]);
+            // When editing, use the interaction's contact ids; otherwise the current contact
+            if (editInteraction?.contactIds && editInteraction.contactIds.length > 0) {
+                setSelectedContactIds(editInteraction.contactIds);
+            } else {
+                setSelectedContactIds([contactId]);
+            }
 
             // Fetch all contacts for the picker
             fetch("/api/contacts")
@@ -117,7 +149,7 @@ export function LogInteractionModal({
                 })
                 .catch((err) => console.error("Failed to fetch contacts", err));
         }
-    }, [open, contactId]);
+    }, [open, contactId, editInteraction]);
 
     const handleChange = (field: string, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -140,8 +172,13 @@ export function LogInteractionModal({
         setLoading(true);
 
         try {
-            const res = await fetch("/api/interactions", {
-                method: "POST",
+            const url = isEditing
+                ? `/api/interactions/${editInteraction!.id}`
+                : "/api/interactions";
+            const method = isEditing ? "PUT" : "POST";
+
+            const res = await fetch(url, {
+                method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     contactIds: selectedContactIds,
@@ -155,11 +192,11 @@ export function LogInteractionModal({
             });
 
             if (!res.ok) {
-                throw new Error("Failed to log interaction");
+                throw new Error(isEditing ? "Failed to update interaction" : "Failed to log interaction");
             }
 
-            // Create recurring template if enabled
-            if (isRecurring && selectedContactIds.length > 0) {
+            // Create recurring template if enabled (only for new interactions)
+            if (!isEditing && isRecurring && selectedContactIds.length > 0) {
                 await fetch("/api/interactions/recurring", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -188,13 +225,33 @@ export function LogInteractionModal({
         }
     };
 
+    const handleDelete = async () => {
+        if (!editInteraction) return;
+        setDeleting(true);
+        try {
+            const res = await fetch(`/api/interactions/${editInteraction.id}`, {
+                method: "DELETE",
+            });
+            if (!res.ok) {
+                throw new Error("Failed to delete interaction");
+            }
+            onDelete?.();
+            onSuccess(selectedContactIds);
+            onOpenChange(false);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                    <DialogTitle>Log Interaction</DialogTitle>
+                    <DialogTitle>{isEditing ? "Edit Interaction" : "Log Interaction"}</DialogTitle>
                     <DialogDescription>
-                        Record a new interaction.
+                        {isEditing ? "Update this interaction." : "Record a new interaction."}
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="grid gap-4 py-4">
@@ -497,49 +554,62 @@ export function LogInteractionModal({
                         />
                     </div>
 
-                    {/* Recurring toggle */}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label className="text-right">Recurring</Label>
-                        <div className="col-span-3 space-y-3">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={isRecurring}
-                                    onChange={(e) => setIsRecurring(e.target.checked)}
-                                    className="rounded border-input"
-                                />
-                                <span className="text-sm">Make this a recurring interaction</span>
-                            </label>
-                            {isRecurring && (
-                                <div className="space-y-2 pl-6 border-l-2 border-muted">
-                                    <NativeSelect
-                                        value={recurringType}
-                                        onChange={(e) => setRecurringType(e.target.value)}
-                                    >
-                                        <NativeSelectOption value="DAILY">Daily</NativeSelectOption>
-                                        <NativeSelectOption value="WEEKLY">Weekly</NativeSelectOption>
-                                        <NativeSelectOption value="BIWEEKLY">Every 2 Weeks</NativeSelectOption>
-                                        <NativeSelectOption value="MONTHLY">Monthly</NativeSelectOption>
-                                    </NativeSelect>
-                                    <div>
-                                        <Label className="text-xs text-muted-foreground">End date (optional)</Label>
-                                        <Input
-                                            type="date"
-                                            value={recurringEndDate}
-                                            onChange={(e) => setRecurringEndDate(e.target.value)}
-                                            className="mt-1"
-                                        />
+                    {/* Recurring toggle — only for new interactions */}
+                    {!isEditing && (
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right">Recurring</Label>
+                            <div className="col-span-3 space-y-3">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={isRecurring}
+                                        onChange={(e) => setIsRecurring(e.target.checked)}
+                                        className="rounded border-input"
+                                    />
+                                    <span className="text-sm">Make this a recurring interaction</span>
+                                </label>
+                                {isRecurring && (
+                                    <div className="space-y-2 pl-6 border-l-2 border-muted">
+                                        <NativeSelect
+                                            value={recurringType}
+                                            onChange={(e) => setRecurringType(e.target.value)}
+                                        >
+                                            <NativeSelectOption value="DAILY">Daily</NativeSelectOption>
+                                            <NativeSelectOption value="WEEKLY">Weekly</NativeSelectOption>
+                                            <NativeSelectOption value="BIWEEKLY">Every 2 Weeks</NativeSelectOption>
+                                            <NativeSelectOption value="MONTHLY">Monthly</NativeSelectOption>
+                                        </NativeSelect>
+                                        <div>
+                                            <Label className="text-xs text-muted-foreground">End date (optional)</Label>
+                                            <Input
+                                                type="date"
+                                                value={recurringEndDate}
+                                                onChange={(e) => setRecurringEndDate(e.target.value)}
+                                                className="mt-1"
+                                            />
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
                     <DialogFooter>
+                        {isEditing && (
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                onClick={handleDelete}
+                                disabled={deleting}
+                                className="mr-auto"
+                            >
+                                {deleting ? "Deleting..." : "Delete"}
+                            </Button>
+                        )}
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>
                         <Button type="submit" disabled={loading}>
-                            {loading ? "Saving..." : "Save"}
+                            {loading ? "Saving..." : isEditing ? "Update" : "Save"}
                         </Button>
                     </DialogFooter>
                 </form>

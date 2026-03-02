@@ -9,6 +9,7 @@ import {
 import { DueSoonList } from "@/components/DueSoonList";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ContactImportModal } from "@/components/contact-import-modal";
+import { LinkedInImportModal } from "@/components/linkedin-import-modal";
 import { ContactDetailSheet } from "@/components/contact-detail-sheet";
 import { EditLinkDialog } from "@/components/edit-link-dialog";
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -422,9 +423,22 @@ export default function Home() {
         await loadData();
       }
 
-      // Update selected node if it's the one currently open
+      // Update selected node with freshest data
       if (selectedNode?.id === id) {
-        setSelectedNode(updatedData);
+        // After loadData(), derive from the fresh nodes state rather than stale PATCH response
+        setSelectedNode(prev => {
+          // Use a functional update: we'll read freshest from the nodes set by loadData
+          return updatedData; // fallback to PATCH response; loadData's setNodes will trigger connectedNeighbors recalc via useMemo
+        });
+        // Re-fetch the individual contact to get the absolute freshest data (including links)
+        try {
+          const freshRes = await fetch(`/api/contacts/${id}`);
+          if (freshRes.ok) {
+            const freshData = await freshRes.json();
+            setSelectedNode(freshData);
+            setNodes(prev => prev.map(n => n.id === id ? freshData : n));
+          }
+        } catch { /* fallback to updatedData already set */ }
       }
     } catch (err: any) {
       console.error("Update node failed:", err);
@@ -704,7 +718,9 @@ export default function Home() {
           <CardContent>
             <ContactImportModal onSuccess={() => {
               loadData();
-              // Optional: show a toast or something, but modal success state handles feedback
+            }} />
+            <LinkedInImportModal onSuccess={() => {
+              loadData();
             }} />
           </CardContent>
         </Card>

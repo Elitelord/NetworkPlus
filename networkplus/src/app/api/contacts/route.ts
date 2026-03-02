@@ -10,13 +10,21 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
+        const url = new URL(req.url);
+        const includeLinkedIn = url.searchParams.get("includeLinkedIn") === "true";
+
         const contacts = await prisma.contact.findMany({
             where: {
                 ownerId: session.user.id
             },
-            include: {
-                // Include interactions if needed?
-            }
+            include: includeLinkedIn ? {
+                interactions: {
+                    where: { platform: "LINKEDIN" },
+                    select: { date: true, platform: true },
+                    orderBy: { date: "desc" },
+                    take: 20,
+                }
+            } : undefined,
         });
 
         return NextResponse.json(contacts);

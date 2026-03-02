@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { LogInteractionModal } from "@/components/log-interaction-modal";
+import { LogInteractionModal, EditInteractionData } from "@/components/log-interaction-modal";
 import { ScheduleEventModal } from "@/components/schedule-event-modal";
 
 /* ── Types ───────────────────────────────────────────── */
@@ -29,6 +29,8 @@ type Interaction = {
     calendarEventId?: string;
     isRecurring?: boolean;
     contacts?: { id: string; name: string }[];
+    durationSeconds?: number;
+    messageCount?: number;
 };
 
 type Contact = {
@@ -79,13 +81,14 @@ export default function CalendarPage() {
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
     const [contacts, setContacts] = useState<Contact[]>([]);
-    const [syncing, setSyncing] = useState(false);
+    const [syncing, setSyncing] = useState<string | null>(null); // 'google' | 'outlook' | null
     const [syncResult, setSyncResult] = useState<string | null>(null);
     const [loadingInteractions, setLoadingInteractions] = useState(false);
     const [loadingEvents, setLoadingEvents] = useState(false);
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
     const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
     const [logModalDate, setLogModalDate] = useState<string | undefined>(undefined);
+    const [editingInteraction, setEditingInteraction] = useState<EditInteractionData | undefined>(undefined);
 
     /* ── Data fetching ──────────────────────────────── */
 
@@ -153,28 +156,31 @@ export default function CalendarPage() {
 
     /* ── Sync handler ───────────────────────────────── */
 
-    async function handleSync() {
-        setSyncing(true);
+    async function handleSync(provider: "google" | "outlook") {
+        setSyncing(provider);
         setSyncResult(null);
+        const endpoint = provider === "google"
+            ? "/api/sync/google-calendar"
+            : "/api/sync/outlook-calendar";
+        const label = provider === "google" ? "Google" : "Outlook";
         try {
-            const res = await fetch("/api/sync/google-calendar", {
+            const res = await fetch(endpoint, {
                 method: "POST",
                 credentials: "include",
             });
             if (res.ok) {
                 const data = await res.json();
-                setSyncResult(`Synced ${data.synced} new events from ${data.eventsProcessed} total`);
-                // Refresh data
+                setSyncResult(`${label}: Synced ${data.synced} new events from ${data.eventsProcessed} total`);
                 fetchInteractions();
                 fetchCalendarEvents();
             } else {
                 const data = await res.json().catch(() => null);
-                setSyncResult(`Sync failed: ${data?.error || res.statusText}`);
+                setSyncResult(`${label} sync failed: ${data?.error || res.statusText}`);
             }
         } catch (err) {
-            setSyncResult("Sync failed: network error");
+            setSyncResult(`${label} sync failed: network error`);
         } finally {
-            setSyncing(false);
+            setSyncing(null);
         }
     }
 
@@ -283,12 +289,12 @@ export default function CalendarPage() {
                             Schedule Event
                         </Button>
                         <Button
-                            variant="default"
+                            variant="outline"
                             size="sm"
-                            onClick={handleSync}
-                            disabled={syncing}
+                            onClick={() => handleSync("outlook")}
+                            disabled={syncing !== null}
                         >
-                            {syncing ? (
+                            {syncing === "outlook" ? (
                                 <>
                                     <svg className="animate-spin mr-1.5 h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -299,7 +305,28 @@ export default function CalendarPage() {
                             ) : (
                                 <>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><polyline points="1 4 1 10 7 10" /><polyline points="23 20 23 14 17 14" /><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" /></svg>
-                                    Sync Google Calendar
+                                    Sync Outlook
+                                </>
+                            )}
+                        </Button>
+                        <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleSync("google")}
+                            disabled={syncing !== null}
+                        >
+                            {syncing === "google" ? (
+                                <>
+                                    <svg className="animate-spin mr-1.5 h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    Syncing…
+                                </>
+                            ) : (
+                                <>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><polyline points="1 4 1 10 7 10" /><polyline points="23 20 23 14 17 14" /><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" /></svg>
+                                    Sync Google
                                 </>
                             )}
                         </Button>
@@ -521,12 +548,34 @@ export default function CalendarPage() {
                                                             </div>
                                                         )}
                                                     </div>
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className={`text-[10px] shrink-0 ml-2 ${PLATFORM_COLORS[interaction.platform] || ""}`}
-                                                    >
-                                                        {interaction.platform}
-                                                    </Badge>
+                                                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                                                        <button
+                                                            type="button"
+                                                            className="p-1 rounded hover:bg-accent transition-colors"
+                                                            title="Edit interaction"
+                                                            onClick={() => {
+                                                                setEditingInteraction({
+                                                                    id: interaction.id,
+                                                                    type: interaction.type,
+                                                                    platform: interaction.platform,
+                                                                    content: interaction.content,
+                                                                    date: interaction.date,
+                                                                    durationMinutes: interaction.durationSeconds ? String(Math.round(interaction.durationSeconds / 60)) : undefined,
+                                                                    messageCount: interaction.messageCount ? String(interaction.messageCount) : undefined,
+                                                                    contactIds: interaction.contacts?.map(c => c.id),
+                                                                });
+                                                                setIsLogModalOpen(true);
+                                                            }}
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                                        </button>
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className={`text-[10px] ${PLATFORM_COLORS[interaction.platform] || ""}`}
+                                                        >
+                                                            {interaction.platform}
+                                                        </Badge>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -591,9 +640,14 @@ export default function CalendarPage() {
             {contacts.length > 0 && (
                 <LogInteractionModal
                     open={isLogModalOpen}
-                    onOpenChange={setIsLogModalOpen}
+                    onOpenChange={(open) => {
+                        setIsLogModalOpen(open);
+                        if (!open) setEditingInteraction(undefined);
+                    }}
                     contactId={contacts[0]?.id || ""}
                     defaultDate={logModalDate}
+                    editInteraction={editingInteraction}
+                    onDelete={() => fetchInteractions()}
                     onSuccess={() => {
                         fetchInteractions();
                     }}

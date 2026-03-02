@@ -23,7 +23,7 @@ export default {
             allowDangerousEmailAccountLinking: true,
             authorization: {
                 params: {
-                    scope: "openid profile email offline_access Mail.Read",
+                    scope: "openid profile email offline_access Mail.Read Calendars.Read Calendars.ReadWrite",
                 },
             },
         }),

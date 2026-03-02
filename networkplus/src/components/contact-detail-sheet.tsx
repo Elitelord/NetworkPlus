@@ -10,7 +10,7 @@ import {
     SheetDescription,
 } from "@/components/ui/sheet";
 import { EditNodeDialog, EditContactData } from "@/components/edit-node-dialog";
-import { LogInteractionModal } from "@/components/log-interaction-modal";
+import { LogInteractionModal, EditInteractionData } from "@/components/log-interaction-modal";
 // import { ScrollArea } from "@/components/ui/scroll-area";
 
 // We need to redefine or import types used in the Sheet. 
@@ -41,6 +41,8 @@ type Interaction = {
     content?: string;
     isRecurring?: boolean;
     parentInteractionId?: string;
+    durationSeconds?: number;
+    messageCount?: number;
 };
 
 interface ContactDetailSheetProps {
@@ -100,6 +102,7 @@ export function ContactDetailSheet({
     const [isLogInteractionOpen, setIsLogInteractionOpen] = useState(false);
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const [editingInteraction, setEditingInteraction] = useState<EditInteractionData | undefined>(undefined);
 
     useEffect(() => {
         if (node?.id && open) {
@@ -185,9 +188,14 @@ export function ContactDetailSheet({
 
                             <LogInteractionModal
                                 open={isLogInteractionOpen}
-                                onOpenChange={setIsLogInteractionOpen}
+                                onOpenChange={(open) => {
+                                    setIsLogInteractionOpen(open);
+                                    if (!open) setEditingInteraction(undefined);
+                                }}
                                 contactId={node.id}
                                 onSuccess={refreshHistory}
+                                editInteraction={editingInteraction}
+                                onDelete={() => refreshHistory([node.id])}
                             />
 
                             <div className="mt-2">
@@ -251,9 +259,31 @@ export function ContactDetailSheet({
                                                                         {interaction.isRecurring && "🔁 "}
                                                                         {interaction.type}
                                                                     </span>
-                                                                    <span className="text-xs text-muted-foreground">
-                                                                        {new Date(interaction.date).toLocaleDateString()}
-                                                                    </span>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <button
+                                                                            type="button"
+                                                                            className="p-0.5 rounded hover:bg-accent transition-colors"
+                                                                            title="Edit interaction"
+                                                                            onClick={() => {
+                                                                                setEditingInteraction({
+                                                                                    id: interaction.id,
+                                                                                    type: interaction.type,
+                                                                                    platform: interaction.platform,
+                                                                                    content: interaction.content,
+                                                                                    date: interaction.date,
+                                                                                    durationMinutes: interaction.durationSeconds ? String(Math.round(interaction.durationSeconds / 60)) : undefined,
+                                                                                    messageCount: interaction.messageCount ? String(interaction.messageCount) : undefined,
+                                                                                    contactIds: [node.id],
+                                                                                });
+                                                                                setIsLogInteractionOpen(true);
+                                                                            }}
+                                                                        >
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                                                        </button>
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            {new Date(interaction.date).toLocaleDateString()}
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
                                                                 <div className="text-xs text-muted-foreground flex gap-2">
                                                                     <span>via {interaction.platform}</span>
@@ -284,9 +314,31 @@ export function ContactDetailSheet({
                                                             {(interaction.isRecurring || interaction.parentInteractionId) && "🔁 "}
                                                             {interaction.type}
                                                         </span>
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {new Date(interaction.date).toLocaleDateString()}
-                                                        </span>
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                className="p-0.5 rounded hover:bg-accent transition-colors"
+                                                                title="Edit interaction"
+                                                                onClick={() => {
+                                                                    setEditingInteraction({
+                                                                        id: interaction.id,
+                                                                        type: interaction.type,
+                                                                        platform: interaction.platform,
+                                                                        content: interaction.content,
+                                                                        date: interaction.date,
+                                                                        durationMinutes: interaction.durationSeconds ? String(Math.round(interaction.durationSeconds / 60)) : undefined,
+                                                                        messageCount: interaction.messageCount ? String(interaction.messageCount) : undefined,
+                                                                        contactIds: [node.id],
+                                                                    });
+                                                                    setIsLogInteractionOpen(true);
+                                                                }}
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                                            </button>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {new Date(interaction.date).toLocaleDateString()}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                     <div className="text-xs text-muted-foreground flex gap-2">
                                                         <span>via {interaction.platform}</span>
