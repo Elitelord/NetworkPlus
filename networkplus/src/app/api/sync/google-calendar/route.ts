@@ -62,8 +62,18 @@ export async function POST(req: Request) {
 
         if (!calRes.ok) {
             const err = await calRes.text();
-            console.error("Google Calendar API error:", err);
-            return new NextResponse("Failed to fetch calendar events", { status: 500 });
+            console.error("Google Calendar API error:", calRes.status, err);
+
+            if (calRes.status === 403 || calRes.status === 401) {
+                return NextResponse.json(
+                    { error: "Calendar permissions not granted. Please sign out and sign back in to grant Calendar access." },
+                    { status: 403 }
+                );
+            }
+            return NextResponse.json(
+                { error: `Google Calendar API error: ${calRes.status}` },
+                { status: 500 }
+            );
         }
 
         const calData = await calRes.json();

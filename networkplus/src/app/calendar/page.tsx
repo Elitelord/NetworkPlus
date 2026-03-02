@@ -168,8 +168,8 @@ export default function CalendarPage() {
                 fetchInteractions();
                 fetchCalendarEvents();
             } else {
-                const text = await res.text();
-                setSyncResult(`Sync failed: ${text}`);
+                const data = await res.json().catch(() => null);
+                setSyncResult(`Sync failed: ${data?.error || res.statusText}`);
             }
         } catch (err) {
             setSyncResult("Sync failed: network error");
