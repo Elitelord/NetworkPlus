@@ -5,6 +5,7 @@ import "./globals.css";
 import FcmInitializer from "@/components/fcm-initializer";
 import Navbar from "@/components/navbar";
 import { SessionProvider } from "@/components/session-provider";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,16 +28,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <SessionProvider>
-          <FcmInitializer />
-          <Navbar />
-          {children}
-        </SessionProvider>
-        <Analytics />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <SessionProvider>
+            <FcmInitializer />
+            <Navbar />
+            {children}
+          </SessionProvider>
+          <Analytics />
+        </ThemeProvider>
       </body>
     </html>
   );

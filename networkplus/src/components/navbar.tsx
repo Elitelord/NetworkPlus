@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Navbar() {
     const { data: session, status } = useSession();
@@ -47,6 +48,7 @@ export default function Navbar() {
                                     <Settings className="h-4 w-4" />
                                 </Button>
                             </Link>
+                            <ThemeToggle />
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -57,6 +59,7 @@ export default function Navbar() {
                         </>
                     ) : (
                         <>
+                            <ThemeToggle />
                             <Link href="/signin">
                                 <Button variant="ghost" size="sm">Sign In</Button>
                             </Link>

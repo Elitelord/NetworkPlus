@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useMemo, type FormEvent } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 
 import {
@@ -10,9 +10,12 @@ import { DueSoonList } from "@/components/DueSoonList";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ContactImportModal } from "@/components/contact-import-modal";
 import { LinkedInImportModal } from "@/components/linkedin-import-modal";
+import { BulkEditModal } from "@/components/bulk-edit-modal";
 import { ContactDetailSheet } from "@/components/contact-detail-sheet";
 import { EditLinkDialog } from "@/components/edit-link-dialog";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { GraphZoomControls } from "@/components/graph-zoom-controls";
+import { useTheme } from "next-themes";
 
 type NodeMetadata = { groups?: string[];[key: string]: any };
 
@@ -38,6 +41,7 @@ type NodeType = Contact; // Alias for graph compatibility if needed, or just use
 type LinkType = { id: string; fromId: string; toId: string; label?: string; metadata?: any };
 
 export default function Home() {
+  const { resolvedTheme } = useTheme();
   const graphRef = useRef<HTMLDivElement | null>(null);
   const graphInstanceRef = useRef<any>(null);
   const [nodes, setNodes] = useState<NodeType[]>([]);
@@ -60,6 +64,10 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedLink, setSelectedLink] = useState<{ id: string; label?: string; fromName?: string; toName?: string } | null>(null);
+
+  // Zoom Controls
+  const [currentZoom, setCurrentZoom] = useState(1);
+  const DEFAULT_ZOOM = 1;
 
   async function loadData() {
     setError(null);
@@ -206,6 +214,7 @@ export default function Home() {
     import("force-graph").then(({ default: ForceGraph }) => {
       myGraph = new ForceGraph(el)
         .nodeAutoColorBy("group")
+        .linkColor(() => resolvedTheme === "dark" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.2)")
         .linkLineDash((link: any) => link.metadata?.source === "inferred" ? [4, 4] : [])
         .linkCurvature((link: any) => getCurvature(link))
         // Physics size
@@ -245,7 +254,7 @@ export default function Home() {
           const label = node.name;
           const fontSize = 3.5;
           ctx.font = `${fontSize}px Sans-Serif`;
-          ctx.fillStyle = isHighlighted ? "#000" : "#666";
+          ctx.fillStyle = isHighlighted ? (resolvedTheme === "dark" ? "#fff" : "#000") : (resolvedTheme === "dark" ? "#aaa" : "#666");
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(label, node.x, node.y + size + fontSize);
@@ -259,6 +268,12 @@ export default function Home() {
         })
         .enablePanInteraction(true)
         .enableZoomInteraction(true)
+        .onZoom((zoomParams: { k: number, x: number, y: number }) => {
+          setCurrentZoom(zoomParams.k);
+        })
+        .onZoomEnd((zoomParams: { k: number, x: number, y: number }) => {
+          setCurrentZoom(zoomParams.k);
+        })
         .onNodeClick((node: any) => {
           myGraph.centerAt(node.x, node.y, 1000);
           myGraph.zoom(8, 2000);
@@ -283,7 +298,7 @@ export default function Home() {
         // ignore
       }
     };
-  }, [nodes, links, selectedGroup, highlightNodes, showDueNodes, dueNodeIds]);
+  }, [nodes, links, selectedGroup, highlightNodes, showDueNodes, dueNodeIds, resolvedTheme]);
 
   // if groups change and current selection no longer exists, reset to all
   useEffect(() => {
@@ -519,19 +534,48 @@ export default function Home() {
   const isSelfLink = fromId !== "" && toId !== "" && fromId === toId;
   const isDuplicateLink = useMemo(() => {
     if (fromId === "" || toId === "") return false;
-    // Basic check for duplicate MANUAL link?
-    // User might want to create multiple links now manually?
-    // But usually one link per pair manually.
-    // Let's keep duplicate check for Manual creation to avoid accidental double clicks.
     return links.some(l => l.fromId === fromId && l.toId === toId);
   }, [fromId, toId, links]);
 
   const isLinkInvalid = fromId === "" || toId === "" || isSelfLink || isDuplicateLink;
 
+  // Zoom handlers
+  const handleZoomIn = useCallback(() => {
+    if (!graphInstanceRef.current) return;
+    const newZoom = currentZoom * 1.5;
+    graphInstanceRef.current.zoom(newZoom, 400); // 400ms transition
+    setCurrentZoom(newZoom);
+  }, [currentZoom]);
+
+  const handleZoomOut = useCallback(() => {
+    if (!graphInstanceRef.current) return;
+    const newZoom = currentZoom / 1.5;
+    graphInstanceRef.current.zoom(newZoom, 400);
+    setCurrentZoom(newZoom);
+  }, [currentZoom]);
+
+  const handleResetZoom = useCallback(() => {
+    if (!graphInstanceRef.current) return;
+    graphInstanceRef.current.zoomToFit(400);
+    // After zooming to fit, let's optionally reset to a specific zoom and center
+    setTimeout(() => {
+      // If no nodes, just zoom out
+      if (nodes.length === 0) {
+        graphInstanceRef.current.zoom(DEFAULT_ZOOM, 400);
+      }
+    }, 450);
+  }, [nodes.length]);
+
+  const handleSetZoom = useCallback((zoomLevel: number) => {
+    if (!graphInstanceRef.current) return;
+    graphInstanceRef.current.zoom(zoomLevel, 400);
+    setCurrentZoom(zoomLevel);
+  }, []);
+
   return (
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-black font-sans">
+    <div className="flex h-[calc(100vh-57px)] overflow-hidden bg-zinc-50 dark:bg-black font-sans">
       {/* Left Sidebar */}
-      <aside className="w-80 border-r bg-background p-6 flex flex-col gap-6 shrink-0 h-screen sticky top-0 overflow-y-auto">
+      <aside className="w-80 border-r bg-background p-6 flex flex-col gap-6 shrink-0 overflow-y-auto">
         <div className="flex items-center gap-2">
           <div className="size-8 bg-primary rounded-lg"></div>
           <h1 className="font-bold text-xl tracking-tight">Network+</h1>
@@ -642,6 +686,13 @@ export default function Home() {
       {/* Main Content - Graph */}
       < main className="flex-1 relative overflow-hidden flex flex-col" >
         <div id="graph" ref={graphRef} className="flex-1 w-full h-full bg-zinc-100 dark:bg-zinc-900/50"></div>
+        <GraphZoomControls
+          currentZoom={currentZoom}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onResetZoom={handleResetZoom}
+          onSetZoom={handleSetZoom}
+        />
         {
           error && (
             <div className="absolute top-4 left-4 right-4 bg-destructive/10 text-destructive p-3 rounded-md border border-destructive/20 text-sm">
@@ -652,7 +703,7 @@ export default function Home() {
       </main >
 
       {/* Right Sidebar - Tools */}
-      < aside className="w-80 border-l bg-background p-6 flex flex-col gap-6 shrink-0 h-screen sticky top-0 overflow-y-auto" >
+      < aside className="w-80 border-l bg-background p-6 flex flex-col gap-6 shrink-0 h-[calc(100vh-57px)] sticky top-0 overflow-y-auto" >
         <h2 className="font-semibold text-lg">Tools</h2>
 
         <Card>
@@ -715,13 +766,21 @@ export default function Home() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Data</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-2">
             <ContactImportModal onSuccess={() => {
               loadData();
             }} />
             <LinkedInImportModal onSuccess={() => {
               loadData();
             }} />
+            <BulkEditModal
+              contacts={nodes}
+              allGroups={groups}
+              initialGroupFilter={selectedGroup ? [selectedGroup] : []}
+              onSuccess={() => {
+                loadData();
+              }}
+            />
           </CardContent>
         </Card>
 

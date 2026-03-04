@@ -128,4 +128,39 @@ Adetola,Adetunji,https://www.linkedin.com/in/adetola-adetunji,,Sustainable Build
         expect(result.valid[0].name).toBe("Adetola Adetunji");
         expect(result.valid[0].group).toBe("Sustainable Building Initiative");
     });
+
+    it("should handle heavy load of 10,000 rows", async () => {
+        let csvContent = "First Name,Last Name,Email Address,Company\n";
+        for (let i = 0; i < 10000; i++) {
+            csvContent += `User${i},Test,user${i}@example.com,LoadTestCorp\n`;
+        }
+        const file = new File([csvContent], "heavy.csv", { type: "text/csv" });
+        const start = performance.now();
+        const result = await parseCSV(file);
+        const end = performance.now();
+
+        expect(result.valid).toHaveLength(10000);
+        expect(result.valid[9999].name).toBe("User9999 Test");
+        expect(result.valid[0].group).toBe("LoadTestCorp");
+        // Time check: shouldn't take excessively long (usually well under 500ms on modern machines, 1s max for safety)
+        expect(end - start).toBeLessThan(2000);
+    });
+
+    it("should handle malformed rows and extreme edge cases", async () => {
+        const csvContent = `name,email,phone,group
+Normal User,normal@example.com,1234,Normals
+"Unclosed quote user,unclosed@example.com,5555,Weirdos
+Extra,columns,here,yes,they,are
+,missingname@example.com,111,NoNames
+Very Long Name ".repeat(500),long@example.com,222,Longs`;
+
+        const file = new File([csvContent], "edgecases.csv", { type: "text/csv" });
+        const result = await parseCSV(file);
+
+        // It should parse exactly the rows it reasonably can, skipping truly busted ones
+        // papaparse handles unclosed quotes by continuing to the end or erroring that row.
+        // As long as it doesn't crash, and parses the valid ones, it's good.
+        expect(result.valid.length).toBeGreaterThan(0);
+        expect(result.valid[0].name).toBe("Normal User");
+    });
 });

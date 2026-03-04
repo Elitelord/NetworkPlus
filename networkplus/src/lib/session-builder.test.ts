@@ -106,4 +106,71 @@ describe("Session Builder", () => {
         expect(sessions[0].platform).toBe("SMS");
         expect(sessions[1].platform).toBe("CALL");
     });
+
+    it("handles heavy load: 10,000 interactions efficiently", () => {
+        const messages: RawMessage[] = [];
+        const baseDate = new Date("2026-01-01T00:00:00Z").getTime();
+
+        for (let i = 0; i < 10000; i++) {
+            // Space messages by 10 minutes usually, but force a 1 hour gap every 10 messages
+            const gap = (i % 10 === 0) ? 3600000 : 600000;
+            messages.push({
+                id: `msg-${i}`,
+                platform: "SMS",
+                date: new Date(baseDate + (i * gap)),
+                contactId: "contact-1",
+                direction: i % 2 === 0 ? "INBOUND" : "OUTBOUND"
+            });
+        }
+
+        const start = performance.now();
+        const sessions = buildSessions(messages);
+        const end = performance.now();
+
+        // 10000 messages chunked into sessions. Since every 10th message has a 1hr gap,
+        // we should roughly see 1000 sessions.
+        expect(sessions.length).toBeGreaterThan(0);
+        expect(end - start).toBeLessThan(1000); // Should be very fast
+    });
+
+    it("verifies precise behavior exactly on the 30-minute gap boundary", () => {
+        const messages: RawMessage[] = [
+            {
+                id: "1",
+                platform: "SMS",
+                date: new Date("2026-02-21T10:00:00.000Z"),
+                contactId: "contact-1",
+                direction: "INBOUND"
+            },
+            {
+                id: "2",
+                platform: "SMS",
+                date: new Date("2026-02-21T10:30:00.000Z"), // EXACTLY 30 minutes gap
+                contactId: "contact-1",
+                direction: "OUTBOUND"
+            },
+            {
+                id: "3",
+                platform: "SMS",
+                date: new Date("2026-02-21T11:00:00.001Z"), // 30 minutes and 1 millisecond gap
+                contactId: "contact-1",
+                direction: "INBOUND"
+            }
+        ];
+
+        const sessions = buildSessions(messages);
+
+        // The session builder uses strictly greater than (Gap > 30 mins) to split,
+        // so EXACTLY 30 mins should be in the same session, 
+        // > 30 mins should be in a new session.
+        expect(sessions.length).toBe(2);
+
+        // Session 1 should have msg 1 and 2
+        expect(sessions[0].messageCount).toBe(2);
+        expect(sessions[0].durationSeconds).toBe(30 * 60);
+
+        // Session 2 should have msg 3
+        expect(sessions[1].messageCount).toBe(1);
+    });
 });
+

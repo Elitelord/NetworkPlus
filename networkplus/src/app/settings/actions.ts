@@ -96,17 +96,52 @@ export async function updatePassword(prevState: any, formData: FormData) {
 
 export async function deleteAccount() {
     const session = await auth() as Session | null
-    if (!session?.user?.id) {
+    const userId = session?.user?.id;
+    if (!userId) {
         return { error: "Not authenticated" }
     }
 
     try {
-        await prisma.user.delete({
-            where: { id: session.user.id },
-        })
+        await prisma.$transaction(async (tx) => {
+            // Find all contacts owned by the user
+            const userContacts = await tx.contact.findMany({
+                where: { ownerId: userId },
+                select: { id: true },
+            });
+            const contactIds = userContacts.map(c => c.id);
+
+            // 1. Delete links where the user's contacts are either 'from' or 'to'
+            if (contactIds.length > 0) {
+                await tx.link.deleteMany({
+                    where: {
+                        OR: [
+                            { fromId: { in: contactIds } },
+                            { toId: { in: contactIds } },
+                        ],
+                    },
+                });
+            }
+
+            // 2. Delete reminders belonging to the user
+            await tx.reminder.deleteMany({
+                where: { userId: userId },
+            });
+
+            // 3. Delete contacts belonging to the user
+            await tx.contact.deleteMany({
+                where: { ownerId: userId },
+            });
+
+            // 4. Finally, delete the user
+            await tx.user.delete({
+                where: { id: userId },
+            });
+        });
+
         await signOut({ redirectTo: "/" })
         return { success: true }
     } catch (error) {
+        console.error("Delete account error:", error);
         return { error: "Failed to delete account" }
     }
 }

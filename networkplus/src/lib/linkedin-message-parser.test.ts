@@ -29,4 +29,46 @@ describe("parseLinkedInMessages", () => {
         // Ensure Sponsored is skipped
         expect(result.skipped[0].reason).toBe("Sponsored or automated message");
     });
+
+    it("should handle heavy load of 50,000 rows quickly", () => {
+        let csvContent = "CONVERSATION ID,CONVERSATION TITLE,FROM,SENDER PROFILE URL,TO,RECIPIENT PROFILE URLS,DATE,SUBJECT,CONTENT,FOLDER,ATTACHMENTS\n";
+
+        // Generate 50,000 rows. Note that Papaparse is fast, but generating the string locally takes memory.
+        for (let i = 0; i < 50000; i++) {
+            const date = new Date(Date.now() - i * 10000).toISOString().replace("T", " ").replace("Z", " UTC");
+            csvContent += `conv-${i % 100},Title,User ${i % 500},url,Sameer Agarwal,url,${date},Subject,Test message content ${i},INBOX,\n`;
+        }
+
+        const start = performance.now();
+        const result = parseLinkedInMessages(csvContent, "Sameer Agarwal");
+        const end = performance.now();
+
+        // Should return valid parsed conversations spanning the 500 users
+        expect(result.conversations.length).toBeGreaterThan(0);
+        // Should parse 50,000 messages total (some may be skipped if invalid, but in this synthetic data they are valid)
+        const totalMessages = result.conversations.reduce((acc, conv) => acc + conv.messageCount, 0);
+        expect(totalMessages).toBe(50000);
+        // Time check: shouldn't take excessively long (should be well under a few seconds)
+        expect(end - start).toBeLessThan(3000);
+    });
+
+    it("should handle edge cases including multiline content and missing fields", () => {
+        const edgeCaseCsv = `CONVERSATION ID,CONVERSATION TITLE,FROM,SENDER PROFILE URL,TO,RECIPIENT PROFILE URLS,DATE,SUBJECT,CONTENT,FOLDER,ATTACHMENTS
+1-MISSING-DATE,,Jane Doe,url,Sameer Agarwal,url,,,"Message missing date",INBOX,
+2-WEIRD-DATE,,John Smith,url,Sameer Agarwal,url,Not A real date,,"Message with weird date",INBOX,
+3-MULTILINE,,Alice Jones,url,Sameer Agarwal,url,2026-02-14 22:48:14 UTC,,"This message
+has multiple
+lines and ""quotes"" inside it.",INBOX,
+,,Sameer Agarwal,,Sameer Agarwal,,2026-02-14 22:48:14,,,INBOX,
+`;
+
+        const result = parseLinkedInMessages(edgeCaseCsv, "Sameer Agarwal");
+
+        // Missing dates/weird dates should either be skipped or parsed as Invalid Date depending on implementation.
+        // The multiline message should be parsed correctly.
+        const aliceConv = result.conversations.find(c => c.contactName === "Alice Jones");
+        expect(aliceConv).toBeDefined();
+        // Since we didn't specify the exact internal data structure here, we just verify it extracted Alice.
+        expect(aliceConv?.messageCount).toBe(1);
+    });
 });

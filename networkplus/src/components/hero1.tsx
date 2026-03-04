@@ -43,7 +43,7 @@ const Hero1 = ({
   },
 }: Hero1Props) => {
   return (
-    <section className="py-24 md:py-32">
+    <section className="py-12 md:py-20">
       <div className="container mx-auto px-4 md:px-6">
         <div className="flex flex-col items-center text-center gap-8">
           <div className="max-w-3xl flex flex-col items-center">
@@ -52,10 +52,10 @@ const Hero1 = ({
                 {badge}
               </Badge>
             )}
-            <h1 className="my-6 text-4xl font-extrabold tracking-tight lg:text-6xl text-pretty">
+            <h1 className="my-3 text-4xl font-extrabold tracking-tight lg:text-6xl text-pretty">
               {heading}
             </h1>
-            <p className="text-muted-foreground mb-8 max-w-2xl text-lg md:text-xl px-4">
+            <p className="text-muted-foreground mb-6 max-w-2xl text-lg md:text-xl px-4">
               {description}
             </p>
             <div className="flex w-full flex-col justify-center gap-4 sm:flex-row">
@@ -74,7 +74,7 @@ const Hero1 = ({
               )}
             </div>
           </div>
-          <div className="mt-8 w-full max-w-5xl">
+          <div className="mt-4 w-full max-w-5xl">
             <img
               src={image.src}
               alt={image.alt}
