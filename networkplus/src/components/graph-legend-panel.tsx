@@ -1,10 +1,17 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+    classifyGroupType,
+    GROUP_TYPE_LABELS,
+    GROUP_TYPE_COLORS,
+    groupsByType,
+    type GroupType,
+} from "@/lib/group-type-classifier";
 
 interface NodeType {
     id: string;
@@ -20,6 +27,8 @@ interface GraphLegendPanelProps {
     onFocusNode: (nodeId: string) => void;
 }
 
+type TabId = "individual" | "groups" | "types";
+
 export function GraphLegendPanel({
     nodes,
     groups,
@@ -28,7 +37,7 @@ export function GraphLegendPanel({
     onFocusNode,
 }: GraphLegendPanelProps) {
     const [isOpen, setIsOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<"individual" | "groups">("individual");
+    const [activeTab, setActiveTab] = useState<TabId>("individual");
     const [individualSearch, setIndividualSearch] = useState("");
     const [groupSearch, setGroupSearch] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
@@ -49,6 +58,38 @@ export function GraphLegendPanel({
         )
         : groups;
 
+    // Group type classification
+    const typeMap = useMemo(() => groupsByType(groups), [groups]);
+
+    // All group types present in the data + their groups
+    const presentTypes = useMemo(() => {
+        const types: { type: GroupType; label: string; color: string; groups: string[] }[] = [];
+        const order: GroupType[] = ["school", "employment", "social", "family", "community", "other"];
+        for (const t of order) {
+            const gs = typeMap.get(t);
+            if (gs && gs.length > 0) {
+                types.push({
+                    type: t,
+                    label: GROUP_TYPE_LABELS[t],
+                    color: GROUP_TYPE_COLORS[t],
+                    groups: gs,
+                });
+            }
+        }
+        return types;
+    }, [typeMap]);
+
+    // Determine which types are "selected" (all groups of that type are in the filter)
+    const selectedTypes = useMemo(() => {
+        const selected = new Set<GroupType>();
+        for (const pt of presentTypes) {
+            if (pt.groups.length > 0 && pt.groups.every(g => selectedGroupFilters.includes(g))) {
+                selected.add(pt.type);
+            }
+        }
+        return selected;
+    }, [presentTypes, selectedGroupFilters]);
+
     const toggleGroupFilter = useCallback(
         (group: string) => {
             if (selectedGroupFilters.includes(group)) {
@@ -58,6 +99,26 @@ export function GraphLegendPanel({
             }
         },
         [selectedGroupFilters, onGroupFiltersChange]
+    );
+
+    const toggleTypeFilter = useCallback(
+        (type: GroupType) => {
+            const typeEntry = presentTypes.find(pt => pt.type === type);
+            if (!typeEntry) return;
+
+            if (selectedTypes.has(type)) {
+                // Deselect: remove all groups of this type
+                onGroupFiltersChange(
+                    selectedGroupFilters.filter(g => !typeEntry.groups.includes(g))
+                );
+            } else {
+                // Select: add all groups of this type (dedup)
+                const newFilters = new Set(selectedGroupFilters);
+                typeEntry.groups.forEach(g => newFilters.add(g));
+                onGroupFiltersChange(Array.from(newFilters));
+            }
+        },
+        [presentTypes, selectedTypes, selectedGroupFilters, onGroupFiltersChange]
     );
 
     const clearAllFilters = useCallback(() => {
@@ -95,45 +156,36 @@ export function GraphLegendPanel({
             >
                 {/* Tab Switcher */}
                 <div className="flex border-b">
-                    <button
-                        className={cn(
-                            "flex-1 py-2.5 text-sm font-medium transition-colors relative",
-                            activeTab === "individual"
-                                ? "text-foreground"
-                                : "text-muted-foreground hover:text-foreground/70"
-                        )}
-                        onClick={() => {
-                            setActiveTab("individual");
-                            setTimeout(() => inputRef.current?.focus(), 50);
-                        }}
-                    >
-                        Individual
-                        {activeTab === "individual" && (
-                            <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full" />
-                        )}
-                    </button>
-                    <button
-                        className={cn(
-                            "flex-1 py-2.5 text-sm font-medium transition-colors relative",
-                            activeTab === "groups"
-                                ? "text-foreground"
-                                : "text-muted-foreground hover:text-foreground/70"
-                        )}
-                        onClick={() => setActiveTab("groups")}
-                    >
-                        Groups
-                        {selectedGroupFilters.length > 0 && (
-                            <Badge
-                                variant="secondary"
-                                className="ml-1.5 h-5 min-w-5 px-1.5 text-[10px] font-semibold"
-                            >
-                                {selectedGroupFilters.length}
-                            </Badge>
-                        )}
-                        {activeTab === "groups" && (
-                            <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full" />
-                        )}
-                    </button>
+                    {(["individual", "groups", "types"] as TabId[]).map((tab) => (
+                        <button
+                            key={tab}
+                            className={cn(
+                                "flex-1 py-2.5 text-sm font-medium transition-colors relative",
+                                activeTab === tab
+                                    ? "text-foreground"
+                                    : "text-muted-foreground hover:text-foreground/70"
+                            )}
+                            onClick={() => {
+                                setActiveTab(tab);
+                                if (tab === "individual") {
+                                    setTimeout(() => inputRef.current?.focus(), 50);
+                                }
+                            }}
+                        >
+                            {tab === "individual" ? "Individual" : tab === "groups" ? "Groups" : "Types"}
+                            {tab === "groups" && selectedGroupFilters.length > 0 && (
+                                <Badge
+                                    variant="secondary"
+                                    className="ml-1.5 h-5 min-w-5 px-1.5 text-[10px] font-semibold"
+                                >
+                                    {selectedGroupFilters.length}
+                                </Badge>
+                            )}
+                            {activeTab === tab && (
+                                <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full" />
+                            )}
+                        </button>
+                    ))}
                 </div>
 
                 {/* Tab Content */}
@@ -186,7 +238,7 @@ export function GraphLegendPanel({
                                 </div>
                             )}
                         </div>
-                    ) : (
+                    ) : activeTab === "groups" ? (
                         /* Groups Filter Tab */
                         <div>
                             <div className="relative">
@@ -270,6 +322,101 @@ export function GraphLegendPanel({
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    ) : (
+                        /* Types Filter Tab */
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-2.5">
+                                Auto-classified by group name keywords
+                            </p>
+
+                            {/* Selected type badges */}
+                            {selectedGroupFilters.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                                    {Array.from(selectedTypes).map((t) => (
+                                        <Badge
+                                            key={t}
+                                            variant="secondary"
+                                            className="cursor-pointer hover:bg-destructive/20 hover:text-destructive transition-colors text-xs"
+                                            style={{ borderLeft: `3px solid ${GROUP_TYPE_COLORS[t]}` }}
+                                            onClick={() => toggleTypeFilter(t)}
+                                        >
+                                            {GROUP_TYPE_LABELS[t]}
+                                            <X className="ml-1 h-3 w-3" />
+                                        </Badge>
+                                    ))}
+                                    {selectedGroupFilters.length > 0 && (
+                                        <button
+                                            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 px-1"
+                                            onClick={clearAllFilters}
+                                        >
+                                            Clear all
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Type list */}
+                            <div className="max-h-64 overflow-y-auto rounded-lg border bg-background/60">
+                                {presentTypes.length > 0 ? (
+                                    presentTypes.map((pt) => (
+                                        <button
+                                            key={pt.type}
+                                            className={cn(
+                                                "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-accent transition-colors border-b last:border-b-0",
+                                                selectedTypes.has(pt.type) && "bg-accent/50"
+                                            )}
+                                            onClick={() => toggleTypeFilter(pt.type)}
+                                        >
+                                            <div
+                                                className={cn(
+                                                    "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                                                    selectedTypes.has(pt.type)
+                                                        ? "border-transparent"
+                                                        : "border-muted-foreground/40"
+                                                )}
+                                                style={selectedTypes.has(pt.type) ? { backgroundColor: pt.color, borderColor: pt.color } : undefined}
+                                            >
+                                                {selectedTypes.has(pt.type) && (
+                                                    <Check className="w-3 h-3 text-white" />
+                                                )}
+                                            </div>
+                                            <div
+                                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                                style={{ backgroundColor: pt.color }}
+                                            />
+                                            <div className="flex-1 text-left">
+                                                <span className="truncate">{pt.label}</span>
+                                            </div>
+                                            <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                                                {pt.groups.length} {pt.groups.length === 1 ? "group" : "groups"}
+                                            </span>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="px-3 py-3 text-sm text-muted-foreground text-center">
+                                        No groups to classify
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Show which groups belong to each selected type */}
+                            {selectedTypes.size > 0 && (
+                                <div className="mt-2 space-y-1.5">
+                                    {Array.from(selectedTypes).map((t) => {
+                                        const pt = presentTypes.find(p => p.type === t);
+                                        if (!pt) return null;
+                                        return (
+                                            <div key={t} className="text-xs text-muted-foreground">
+                                                <span className="font-medium" style={{ color: pt.color }}>
+                                                    {pt.label}:
+                                                </span>{" "}
+                                                {pt.groups.join(", ")}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

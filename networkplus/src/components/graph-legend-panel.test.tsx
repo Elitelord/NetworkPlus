@@ -5,14 +5,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import '@testing-library/dom';
 
 const mockNodes = [
-    { id: '1', name: 'Alice Smith', groups: ['Friends', 'Work'] },
-    { id: '2', name: 'Bob Jones', groups: ['Work'] },
+    { id: '1', name: 'Alice Smith', groups: ['Stanford University', 'Google Inc'] },
+    { id: '2', name: 'Bob Jones', groups: ['Google Inc'] },
     { id: '3', name: 'Charlie Brown', groups: ['Family'] },
-    { id: '4', name: 'Diana Prince', groups: ['Friends', 'Family'] },
+    { id: '4', name: 'Diana Prince', groups: ['Stanford University', 'Family'] },
     { id: '5', name: 'Eve Adams', groups: [] },
 ];
 
-const mockGroups = ['Family', 'Friends', 'Work'];
+const mockGroups = ['Family', 'Google Inc', 'Stanford University'];
 
 function renderPanel(overrides: Partial<Parameters<typeof GraphLegendPanel>[0]> = {}) {
     const onGroupFiltersChange = vi.fn();
@@ -46,10 +46,10 @@ describe('GraphLegendPanel', () => {
 
     it('panel is hidden by default', () => {
         renderPanel();
-        // Both tab labels should exist but panel should have pointer-events-none
-        // (it's still in the DOM, just visually hidden via CSS)
+        // Tab labels should exist but panel should have pointer-events-none
         expect(screen.getByText('Individual')).toBeTruthy();
         expect(screen.getByText('Groups')).toBeTruthy();
+        expect(screen.getByText('Types')).toBeTruthy();
     });
 
     it('opens when the FAB is clicked', () => {
@@ -65,13 +65,11 @@ describe('GraphLegendPanel', () => {
     describe('Individual tab', () => {
         it('shows filtered contacts when searching', () => {
             renderPanel();
-            // Open panel
             fireEvent.click(document.getElementById('legend-toggle-button')!);
             const input = document.getElementById('legend-individual-search') as HTMLInputElement;
             fireEvent.change(input, { target: { value: 'alice' } });
 
             expect(screen.getByText('Alice Smith')).toBeTruthy();
-            // Bob should not be shown
             expect(screen.queryByText('Bob Jones')).toBeNull();
         });
 
@@ -103,7 +101,6 @@ describe('GraphLegendPanel', () => {
             fireEvent.change(input, { target: { value: 'diana' } });
             fireEvent.click(screen.getByText('Diana Prince').closest('button')!);
 
-            // The input should be cleared
             expect(input.value).toBe('');
         });
 
@@ -113,7 +110,7 @@ describe('GraphLegendPanel', () => {
             const input = document.getElementById('legend-individual-search') as HTMLInputElement;
             fireEvent.change(input, { target: { value: 'alice' } });
 
-            expect(screen.getByText('Friends, Work')).toBeTruthy();
+            expect(screen.getByText('Stanford University, Google Inc')).toBeTruthy();
         });
 
         it('limits results to 8 contacts', () => {
@@ -139,10 +136,9 @@ describe('GraphLegendPanel', () => {
             fireEvent.click(document.getElementById('legend-toggle-button')!);
             fireEvent.click(screen.getByText('Groups'));
 
-            // All 3 groups should be shown
             expect(screen.getByText('Family')).toBeTruthy();
-            expect(screen.getByText('Friends')).toBeTruthy();
-            expect(screen.getByText('Work')).toBeTruthy();
+            expect(screen.getByText('Google Inc')).toBeTruthy();
+            expect(screen.getByText('Stanford University')).toBeTruthy();
         });
 
         it('shows contact counts for each group', () => {
@@ -150,7 +146,7 @@ describe('GraphLegendPanel', () => {
             fireEvent.click(document.getElementById('legend-toggle-button')!);
             fireEvent.click(screen.getByText('Groups'));
 
-            // Family has 2 contacts (Charlie, Diana), Friends has 2 (Alice, Diana), Work has 2 (Alice, Bob)
+            // Family has 2, Google Inc has 2, Stanford has 2
             const countElements = screen.getAllByText('2');
             expect(countElements.length).toBeGreaterThanOrEqual(3);
         });
@@ -160,35 +156,34 @@ describe('GraphLegendPanel', () => {
             fireEvent.click(document.getElementById('legend-toggle-button')!);
             fireEvent.click(screen.getByText('Groups'));
 
-            // Click "Friends" group row
-            const friendsRow = screen.getByText('Friends').closest('button')!;
-            fireEvent.click(friendsRow);
+            const googleRow = screen.getByText('Google Inc').closest('button')!;
+            fireEvent.click(googleRow);
 
-            expect(onGroupFiltersChange).toHaveBeenCalledWith(['Friends']);
+            expect(onGroupFiltersChange).toHaveBeenCalledWith(['Google Inc']);
         });
 
         it('supports deselecting a selected group', () => {
-            const { onGroupFiltersChange } = renderPanel({ selectedGroupFilters: ['Work'] });
+            const { onGroupFiltersChange } = renderPanel({ selectedGroupFilters: ['Google Inc'] });
             fireEvent.click(document.getElementById('legend-toggle-button')!);
             fireEvent.click(screen.getByText('Groups'));
 
-            // 'Work' appears as both a badge and in the group list; get the list row (last match)
-            const workElements = screen.getAllByText('Work');
-            const workRow = workElements[workElements.length - 1].closest('button')!;
-            fireEvent.click(workRow);
+            // 'Google Inc' appears as both a badge and in the group list
+            const elements = screen.getAllByText('Google Inc');
+            const row = elements[elements.length - 1].closest('button')!;
+            fireEvent.click(row);
 
             expect(onGroupFiltersChange).toHaveBeenCalledWith([]);
         });
 
         it('calls onGroupFiltersChange to add a second group filter', () => {
-            const { onGroupFiltersChange } = renderPanel({ selectedGroupFilters: ['Friends'] });
+            const { onGroupFiltersChange } = renderPanel({ selectedGroupFilters: ['Stanford University'] });
             fireEvent.click(document.getElementById('legend-toggle-button')!);
             fireEvent.click(screen.getByText('Groups'));
 
             const familyRow = screen.getByText('Family').closest('button')!;
             fireEvent.click(familyRow);
 
-            expect(onGroupFiltersChange).toHaveBeenCalledWith(['Friends', 'Family']);
+            expect(onGroupFiltersChange).toHaveBeenCalledWith(['Stanford University', 'Family']);
         });
 
         it('filters groups when searching', () => {
@@ -200,13 +195,12 @@ describe('GraphLegendPanel', () => {
             fireEvent.change(groupInput, { target: { value: 'fam' } });
 
             expect(screen.getByText('Family')).toBeTruthy();
-            // "Friends" and "Work" should not be in the list
-            expect(screen.queryByText('Friends')).toBeNull();
-            expect(screen.queryByText('Work')).toBeNull();
+            expect(screen.queryByText('Google Inc')).toBeNull();
+            expect(screen.queryByText('Stanford University')).toBeNull();
         });
 
         it('shows selected group badges and "Clear all" button', () => {
-            renderPanel({ selectedGroupFilters: ['Friends', 'Work'] });
+            renderPanel({ selectedGroupFilters: ['Stanford University', 'Google Inc'] });
             fireEvent.click(document.getElementById('legend-toggle-button')!);
             fireEvent.click(screen.getByText('Groups'));
 
@@ -214,7 +208,7 @@ describe('GraphLegendPanel', () => {
         });
 
         it('calls onGroupFiltersChange with empty array when "Clear all" is clicked', () => {
-            const { onGroupFiltersChange } = renderPanel({ selectedGroupFilters: ['Friends', 'Work'] });
+            const { onGroupFiltersChange } = renderPanel({ selectedGroupFilters: ['Stanford University', 'Google Inc'] });
             fireEvent.click(document.getElementById('legend-toggle-button')!);
             fireEvent.click(screen.getByText('Groups'));
 
@@ -224,8 +218,7 @@ describe('GraphLegendPanel', () => {
         });
 
         it('shows badge count on Groups tab when filters are active', () => {
-            renderPanel({ selectedGroupFilters: ['Friends', 'Work'] });
-            // The badge should show "2"
+            renderPanel({ selectedGroupFilters: ['Stanford University', 'Google Inc'] });
             expect(screen.getByText('2')).toBeTruthy();
         });
 
@@ -246,6 +239,91 @@ describe('GraphLegendPanel', () => {
             fireEvent.change(groupInput, { target: { value: 'xyznonexistent' } });
 
             expect(screen.getByText('No groups match your search')).toBeTruthy();
+        });
+    });
+
+    // --- Types Tab ---
+    describe('Types tab', () => {
+        it('switches to types tab and shows classified types', () => {
+            renderPanel();
+            fireEvent.click(document.getElementById('legend-toggle-button')!);
+            fireEvent.click(screen.getByText('Types'));
+
+            // "Stanford University" → school, "Google Inc" → employment, "Family" → family
+            expect(screen.getByText('School / Education')).toBeTruthy();
+            expect(screen.getByText('Employment')).toBeTruthy();
+            expect(screen.getByText('Family')).toBeTruthy();
+        });
+
+        it('shows group count per type', () => {
+            renderPanel();
+            fireEvent.click(document.getElementById('legend-toggle-button')!);
+            fireEvent.click(screen.getByText('Types'));
+
+            // Each type has 1 group
+            const oneGroupLabels = screen.getAllByText('1 group');
+            expect(oneGroupLabels.length).toBeGreaterThanOrEqual(3);
+        });
+
+        it('selects all groups of a type when type is clicked', () => {
+            const { onGroupFiltersChange } = renderPanel();
+            fireEvent.click(document.getElementById('legend-toggle-button')!);
+            fireEvent.click(screen.getByText('Types'));
+
+            // Click the "Employment" type row
+            const empRow = screen.getByText('Employment').closest('button')!;
+            fireEvent.click(empRow);
+
+            expect(onGroupFiltersChange).toHaveBeenCalledWith(['Google Inc']);
+        });
+
+        it('deselects all groups of a type when type is clicked again', () => {
+            const { onGroupFiltersChange } = renderPanel({
+                selectedGroupFilters: ['Google Inc'],
+            });
+            fireEvent.click(document.getElementById('legend-toggle-button')!);
+            fireEvent.click(screen.getByText('Types'));
+
+            // "Employment" appears as badge + list row, use getAllByText
+            const empElements = screen.getAllByText('Employment');
+            const empRow = empElements[empElements.length - 1].closest('button')!;
+            fireEvent.click(empRow);
+
+            // Should remove "Google Inc"
+            expect(onGroupFiltersChange).toHaveBeenCalledWith([]);
+        });
+
+        it('shows description text', () => {
+            renderPanel();
+            fireEvent.click(document.getElementById('legend-toggle-button')!);
+            fireEvent.click(screen.getByText('Types'));
+
+            expect(screen.getByText('Auto-classified by group name keywords')).toBeTruthy();
+        });
+
+        it('shows "No groups to classify" when no groups exist', () => {
+            renderPanel({ groups: [] });
+            fireEvent.click(document.getElementById('legend-toggle-button')!);
+            fireEvent.click(screen.getByText('Types'));
+
+            expect(screen.getByText('No groups to classify')).toBeTruthy();
+        });
+
+        it('can combine type filter with existing group filters', () => {
+            const { onGroupFiltersChange } = renderPanel({
+                selectedGroupFilters: ['Family'],
+            });
+            fireEvent.click(document.getElementById('legend-toggle-button')!);
+            fireEvent.click(screen.getByText('Types'));
+
+            // Click Employment to add its groups
+            const empRow = screen.getByText('Employment').closest('button')!;
+            fireEvent.click(empRow);
+
+            // Should add Google Inc to existing ['Family']
+            expect(onGroupFiltersChange).toHaveBeenCalledWith(
+                expect.arrayContaining(['Family', 'Google Inc'])
+            );
         });
     });
 
@@ -283,9 +361,9 @@ describe('GraphLegendPanel', () => {
             fireEvent.click(screen.getByText('Groups'));
 
             const groupInput = document.getElementById('legend-group-search') as HTMLInputElement;
-            fireEvent.change(groupInput, { target: { value: 'WORK' } });
+            fireEvent.change(groupInput, { target: { value: 'GOOGLE' } });
 
-            expect(screen.getByText('Work')).toBeTruthy();
+            expect(screen.getByText('Google Inc')).toBeTruthy();
         });
     });
 });

@@ -13,6 +13,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { GraphZoomControls } from "@/components/graph-zoom-controls";
 import { GraphLegendPanel } from "@/components/graph-legend-panel";
 import { useTheme } from "next-themes";
+import { classifyGroupType, GROUP_TYPE_COLORS, type GroupType } from "@/lib/group-type-classifier";
 
 type NodeMetadata = { groups?: string[];[key: string]: any };
 
@@ -64,6 +65,34 @@ export default function Home() {
   const [currentZoom, setCurrentZoom] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const DEFAULT_ZOOM = 1;
+
+  // Cluster mode — uses hysteresis + debounce to prevent rubber-banding.
+  // Enter cluster mode when zoom falls below ENTER threshold,
+  // exit only when zoom rises above EXIT threshold.
+  const CLUSTER_ENTER_ZOOM = 2.5;  // collapse groups when zoomed out to here
+  const CLUSTER_EXIT_ZOOM = 3.5;   // expand groups only when zoomed in to here
+  const CLUSTER_MIN_SIZE = 3;      // min group members to form a cluster
+  const CLUSTER_DEBOUNCE_MS = 400;
+
+  const [isClusterMode, setIsClusterMode] = useState(false);
+  const clusterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced cluster mode transition
+  useEffect(() => {
+    if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
+
+    clusterTimerRef.current = setTimeout(() => {
+      setIsClusterMode((prev) => {
+        if (!prev && currentZoom < CLUSTER_ENTER_ZOOM) return true;
+        if (prev && currentZoom > CLUSTER_EXIT_ZOOM) return false;
+        return prev; // in dead-zone → keep current state
+      });
+    }, CLUSTER_DEBOUNCE_MS);
+
+    return () => {
+      if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
+    };
+  }, [currentZoom]);
 
   async function loadData() {
     setError(null);
@@ -144,34 +173,146 @@ export default function Home() {
     return Array.from(s).sort();
   }, [nodes]);
 
+  // ── Compute visible nodes/links ─────────────────────────────────────
+  const { visibleNodes, nodeLinks } = useMemo(() => {
+    const vis = nodes.filter((n) => {
+      if (selectedGroupFilters.length === 0) return true;
+      const gs = n.groups ?? n.metadata?.groups ?? [];
+      return selectedGroupFilters.some(g => gs.includes(g));
+    });
+    const visIds = new Set(vis.map((n) => n.id));
+
+    const nl = links.filter((l) => {
+      if (!visIds.has(l.fromId) || !visIds.has(l.toId)) return false;
+      if (selectedGroupFilters.length === 0) return true;
+      if (l.metadata?.source !== "inferred") return true;
+      const linkGroup = l.metadata?.group;
+      if (!linkGroup) return true;
+      return !selectedGroupFilters.includes(linkGroup);
+    });
+
+    return { visibleNodes: vis, nodeLinks: nl };
+  }, [nodes, links, selectedGroupFilters]);
+
+  // ── Build graph data (cluster or normal) ───────────────────────────
+  const graphData = useMemo(() => {
+    // Build group membership
+    const groupMembers = new Map<string, Set<string>>();
+    visibleNodes.forEach(n => {
+      const gs = n.groups ?? n.metadata?.groups ?? [];
+      gs.forEach((g: string) => {
+        if (!groupMembers.has(g)) groupMembers.set(g, new Set());
+        groupMembers.get(g)!.add(n.id);
+      });
+    });
+
+    const clusterGroups = new Map<string, Set<string>>();
+    groupMembers.forEach((members, g) => {
+      if (members.size >= CLUSTER_MIN_SIZE) clusterGroups.set(g, members);
+    });
+
+    const nodeToCluster = new Map<string, string>();
+    if (isClusterMode) {
+      visibleNodes.forEach(n => {
+        const gs = n.groups ?? n.metadata?.groups ?? [];
+        for (const g of gs) {
+          if (clusterGroups.has(g)) {
+            nodeToCluster.set(n.id, g);
+            break;
+          }
+        }
+      });
+    }
+
+    if (isClusterMode && clusterGroups.size > 0) {
+      const clusterNodesArr: any[] = [];
+      const soloNodesArr: any[] = [];
+
+      clusterGroups.forEach((members, g) => {
+        const clusterId = `cluster:${g}`;
+        const gType = classifyGroupType(g);
+        clusterNodesArr.push({
+          id: clusterId,
+          name: g,
+          group: g,
+          isCluster: true,
+          clusterSize: members.size,
+          clusterType: gType,
+          strengthScore: 50,
+        });
+      });
+
+      visibleNodes.forEach(n => {
+        if (!nodeToCluster.has(n.id)) {
+          soloNodesArr.push({
+            id: n.id,
+            name: n.name,
+            groups: n.groups ?? n.metadata?.groups ?? [],
+            group: (n.groups && n.groups.length > 0) ? n.groups[0] : "default",
+            strengthScore: n.strengthScore || 0,
+            isCluster: false,
+          });
+        }
+      });
+
+      const interLinkSet = new Set<string>();
+      const clusterLinksArr: any[] = [];
+
+      nodeLinks.forEach(l => {
+        const fromCluster = nodeToCluster.get(l.fromId);
+        const toCluster = nodeToCluster.get(l.toId);
+        const srcId = fromCluster ? `cluster:${fromCluster}` : l.fromId;
+        const tgtId = toCluster ? `cluster:${toCluster}` : l.toId;
+
+        if (srcId === tgtId) return;
+
+        const [a, b] = [srcId, tgtId].sort();
+        const key = `${a}|${b}`;
+        if (interLinkSet.has(key)) return;
+        interLinkSet.add(key);
+
+        clusterLinksArr.push({
+          source: srcId,
+          target: tgtId,
+          id: `cl-${key}`,
+          label: undefined,
+          metadata: undefined,
+        });
+      });
+
+      return {
+        nodes: [...clusterNodesArr, ...soloNodesArr],
+        links: clusterLinksArr,
+      };
+    }
+
+    return {
+      nodes: visibleNodes.map((n) => ({
+        id: n.id,
+        name: n.name,
+        groups: n.groups ?? n.metadata?.groups ?? [],
+        group: (n.groups && n.groups.length > 0) ? n.groups[0] : "default",
+        strengthScore: n.strengthScore || 0,
+        isCluster: false,
+      })),
+      links: nodeLinks.map((l) => ({
+        source: l.fromId,
+        target: l.toId,
+        label: l.label,
+        metadata: l.metadata,
+        id: l.id,
+      })),
+    };
+  }, [visibleNodes, nodeLinks, isClusterMode]);
+
+  // ── Create / rebuild ForceGraph when core deps change ──────────────
+  // (NOT triggered by isClusterMode — that uses data-swap below)
   useEffect(() => {
     const el = graphRef.current;
     if (!el) return;
 
-    // compute visible nodes/links based on selectedGroupFilters (multi-group)
-    const visibleNodes = nodes.filter((n) => {
-      if (selectedGroupFilters.length === 0) return true; // show all
-      const gs = n.groups ?? n.metadata?.groups ?? [];
-      return selectedGroupFilters.some(g => gs.includes(g));
-    });
-    const visibleIds = new Set(visibleNodes.map((n) => n.id));
-
-    // Calculate Curvature for multi-links
-    // Map of "A:B" -> [linkId, linkId...]
+    // Curvature helper for multi-links
     const pairMap = new Map<string, string[]>();
-    const nodeLinks = links
-      .filter((l) => {
-        if (!visibleIds.has(l.fromId) || !visibleIds.has(l.toId)) return false;
-        // When filtering by groups, hide only inferred links whose specific
-        // group matches one of the active filters. Manual links and inferred
-        // links from OTHER groups stay visible.
-        if (selectedGroupFilters.length === 0) return true;
-        if (l.metadata?.source !== "inferred") return true;
-        const linkGroup = l.metadata?.group;
-        if (!linkGroup) return true;
-        return !selectedGroupFilters.includes(linkGroup);
-      });
-
     nodeLinks.forEach(l => {
       const [a, b] = [l.fromId, l.toId].sort();
       const key = `${a}:${b}`;
@@ -180,8 +321,6 @@ export default function Home() {
     });
 
     const getCurvature = (link: any) => {
-      const [a, b] = [link.source, link.target].sort(); // source/target might be objects or ids
-      // ForceGraph might pass objects for source/target if they exist.
       const sId = typeof link.source === 'object' ? link.source.id : link.source;
       const tId = typeof link.target === 'object' ? link.target.id : link.target;
       const [id1, id2] = [sId, tId].sort();
@@ -189,31 +328,8 @@ export default function Home() {
       const siblings = pairMap.get(key) || [];
       const index = siblings.indexOf(link.id);
       const count = siblings.length;
-
       if (count <= 1) return 0;
-
-      // Spread curvature: 0, 0.2, -0.2, 0.4, -0.4 ...
-      // Or simpler: (index - (count - 1) / 2) * scale
       return (index - (count - 1) / 2) * 0.2;
-    };
-
-    const graphData = {
-      nodes: visibleNodes.map((n) => ({
-        id: n.id,
-        name: n.name, // was title
-        groups: n.groups ?? n.metadata?.groups ?? [],
-        // Use first group for color or "default"
-        group: (n.groups && n.groups.length > 0) ? n.groups[0] : "default",
-        strengthScore: n.strengthScore || 0, // Pass strengthScore to graph
-      })),
-
-      links: nodeLinks.map((l) => ({
-        source: l.fromId,
-        target: l.toId,
-        label: l.label,
-        metadata: l.metadata,
-        id: l.id // Ensure ID is passed
-      })),
     };
 
     let myGraph: any;
@@ -223,25 +339,65 @@ export default function Home() {
         .linkColor(() => resolvedTheme === "dark" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.2)")
         .linkLineDash((link: any) => link.metadata?.source === "inferred" ? [4, 4] : [])
         .linkCurvature((link: any) => getCurvature(link))
-        // Physics size
-        .nodeVal((node: any) => Math.max(3, Math.min((node.strengthScore || 0) / 4, 15)))
+        .nodeVal((node: any) => {
+          if (node.isCluster) return Math.max(15, Math.min(node.clusterSize * 3, 50));
+          return Math.max(3, Math.min((node.strengthScore || 0) / 4, 15));
+        })
         .nodeCanvasObject((node: any, ctx) => {
-          // Visual size: range 3 to 15 based on score 0-100? 
-          // 0 -> 3, 100 -> 15. Linear: 3 + (score/100)*12
+          if (node.isCluster) {
+            const memberCount = node.clusterSize || 3;
+            const baseRadius = 8 + memberCount * 1.5;
+            const radius = Math.min(baseRadius, 40);
+            const typeColor = GROUP_TYPE_COLORS[node.clusterType as GroupType] || "#71717a";
+
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+            ctx.strokeStyle = typeColor;
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            ctx.fillStyle = typeColor + "22";
+            ctx.fill();
+
+            const dotCount = Math.min(memberCount, 12);
+            const dotRadius = 2;
+            for (let i = 0; i < dotCount; i++) {
+              const angle = (2 * Math.PI * i) / dotCount - Math.PI / 2;
+              const dx = node.x + (radius - 5) * Math.cos(angle);
+              const dy = node.y + (radius - 5) * Math.sin(angle);
+              ctx.beginPath();
+              ctx.arc(dx, dy, dotRadius, 0, 2 * Math.PI, false);
+              ctx.fillStyle = typeColor;
+              ctx.fill();
+            }
+
+            const fontSize = Math.max(4, Math.min(radius / 3, 8));
+            ctx.font = `bold ${fontSize}px Sans-Serif`;
+            ctx.fillStyle = resolvedTheme === "dark" ? "#fff" : "#111";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(node.name, node.x, node.y);
+
+            const countFontSize = fontSize * 0.7;
+            ctx.font = `${countFontSize}px Sans-Serif`;
+            ctx.fillStyle = resolvedTheme === "dark" ? "#aaa" : "#666";
+            ctx.fillText(`${memberCount} contacts`, node.x, node.y + fontSize + 2);
+            return;
+          }
+
           const score = node.strengthScore || 0;
-          const size = 3 + (score / 100) * 12; // Smoother scaling
+          const size = 3 + (score / 100) * 12;
           const isHighlighted = highlightNodes.has(node.id);
 
           ctx.beginPath();
           ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
-          ctx.fillStyle = node.color || "#ccc"; // autoColorBy adds .color
+          ctx.fillStyle = node.color || "#ccc";
           ctx.fill();
 
           if (isHighlighted) {
             ctx.beginPath();
             ctx.arc(node.x, node.y, size + 2, 0, 2 * Math.PI, false);
-            ctx.strokeStyle = "#facc15"; // Yellow highlight
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#facc15";
             ctx.lineWidth = 2;
             ctx.stroke();
           }
@@ -249,14 +405,13 @@ export default function Home() {
           if (showDueNodes && dueNodeIds.has(node.id)) {
             ctx.beginPath();
             ctx.arc(node.x, node.y, size + 4, 0, 2 * Math.PI, false);
-            ctx.strokeStyle = "#ff4444"; // Red alarm
+            ctx.strokeStyle = "#ff4444";
             ctx.lineWidth = 2;
-            ctx.setLineDash([2, 1]); // Dotted line
+            ctx.setLineDash([2, 1]);
             ctx.stroke();
-            ctx.setLineDash([]); // Reset
+            ctx.setLineDash([]);
           }
 
-          // Node Label
           const label = node.name;
           const fontSize = 3.5;
           ctx.font = `${fontSize}px Sans-Serif`;
@@ -267,9 +422,6 @@ export default function Home() {
         })
         .linkCanvasObjectMode(() => "after")
         .linkCanvasObject((link: any, ctx) => {
-          // No labels drawn anymore, just the interaction
-          // Use a wider transparent line for easier clicking if needed, but default interaction usually works.
-          // The request said "just a line". So we remove the text drawing code.
           return;
         })
         .enablePanInteraction(true)
@@ -281,13 +433,18 @@ export default function Home() {
           setCurrentZoom(zoomParams.k);
         })
         .onNodeClick((node: any) => {
+          if (node.isCluster) {
+            myGraph.centerAt(node.x, node.y, 1000);
+            myGraph.zoom(CLUSTER_EXIT_ZOOM + 0.5, 1500);
+            return;
+          }
           myGraph.centerAt(node.x, node.y, 1000);
           myGraph.zoom(8, 2000);
           const originalNode = nodes.find((n) => n.id === node.id);
           setSelectedNode(originalNode || null);
         })
         .onLinkClick((link: any) => {
-          // link.source and link.target are objects in force-graph
+          if (link.id?.startsWith('cl-')) return;
           const fromName = link.source.name || link.source.id;
           const toName = link.target.name || link.target.id;
           setSelectedLink({ id: link.id, label: link.label, fromName, toName });
@@ -305,6 +462,14 @@ export default function Home() {
       }
     };
   }, [nodes, links, selectedGroupFilters, highlightNodes, showDueNodes, dueNodeIds, resolvedTheme]);
+
+  // ── Swap graph data in-place when cluster mode changes ─────────────
+  // This avoids destroying/rebuilding the ForceGraph (which resets zoom).
+  useEffect(() => {
+    const instance = graphInstanceRef.current;
+    if (!instance) return;
+    instance.graphData(graphData as any);
+  }, [isClusterMode, graphData]);
 
   // if groups change and any active filter no longer exists, clean up
   useEffect(() => {
