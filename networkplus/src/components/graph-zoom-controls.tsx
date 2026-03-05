@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Minus, RotateCcw, Map } from "lucide-react";
+import { Plus, Minus, RotateCcw, Maximize, Minimize } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -10,6 +10,8 @@ interface GraphZoomControlsProps {
     onZoomOut: () => void;
     onResetZoom: () => void;
     onSetZoom: (zoom: number) => void;
+    isFullscreen?: boolean;
+    onToggleFullscreen?: () => void;
 }
 
 export function GraphZoomControls({
@@ -17,7 +19,9 @@ export function GraphZoomControls({
     onZoomIn,
     onZoomOut,
     onResetZoom,
-    onSetZoom
+    onSetZoom,
+    isFullscreen,
+    onToggleFullscreen,
 }: GraphZoomControlsProps) {
     const [isOpen, setIsOpen] = useState(false);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,7 +50,7 @@ export function GraphZoomControls({
         >
             <div
                 className={cn(
-                    "bg-background/80 backdrop-blur-md border shadow-lg rounded-xl overflow-hidden transition-all duration-300 origin-bottom-right flex flex-col items-center",
+                    "bg-background/60 backdrop-blur-lg border shadow-lg rounded-xl overflow-hidden transition-all duration-300 origin-bottom-right flex flex-col items-center",
                     isOpen ? "opacity-100 scale-100 mb-2 translate-y-0" : "opacity-0 scale-95 translate-y-4 pointer-events-none absolute bottom-12"
                 )}
             >
@@ -109,6 +113,24 @@ export function GraphZoomControls({
                     >
                         <RotateCcw className="w-4 h-4" />
                     </Button>
+
+                    {onToggleFullscreen && (
+                        <>
+                            <div className="w-8 h-px bg-border mx-auto my-0.5" />
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className={cn(
+                                    "w-10 h-10 rounded-lg hover:bg-accent",
+                                    isFullscreen ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                                )}
+                                onClick={onToggleFullscreen}
+                                title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                            >
+                                {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -121,7 +143,7 @@ export function GraphZoomControls({
                 )}
                 onClick={() => setIsOpen(!isOpen)}
             >
-                <Map className="w-5 h-5" />
+                <Maximize className="w-5 h-5" />
             </Button>
         </div>
     );

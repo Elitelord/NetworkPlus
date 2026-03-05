@@ -2,10 +2,6 @@
 import { useEffect, useRef, useState, useMemo, useCallback, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select"
 import { DueSoonList } from "@/components/DueSoonList";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ContactImportModal } from "@/components/contact-import-modal";
@@ -15,6 +11,7 @@ import { ContactDetailSheet } from "@/components/contact-detail-sheet";
 import { EditLinkDialog } from "@/components/edit-link-dialog";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { GraphZoomControls } from "@/components/graph-zoom-controls";
+import { GraphLegendPanel } from "@/components/graph-legend-panel";
 import { useTheme } from "next-themes";
 
 type NodeMetadata = { groups?: string[];[key: string]: any };
@@ -53,11 +50,9 @@ export default function Home() {
   const [fromId, setFromId] = useState("");
   const [toId, setToId] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
-  const [selectedGroup, setSelectedGroup] = useState("");
+  const [selectedGroupFilters, setSelectedGroupFilters] = useState<string[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodeType | null>(null);
   const [highlightNodes, setHighlightNodes] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showDueNodes, setShowDueNodes] = useState(false);
   const [dueNodeIds, setDueNodeIds] = useState<Set<string>>(new Set());
   const [dueContacts, setDueContacts] = useState<Contact[]>([]);
@@ -67,6 +62,7 @@ export default function Home() {
 
   // Zoom Controls
   const [currentZoom, setCurrentZoom] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const DEFAULT_ZOOM = 1;
 
   async function loadData() {
@@ -152,11 +148,11 @@ export default function Home() {
     const el = graphRef.current;
     if (!el) return;
 
-    // compute visible nodes/links based on selectedGroup
+    // compute visible nodes/links based on selectedGroupFilters (multi-group)
     const visibleNodes = nodes.filter((n) => {
-      if (!selectedGroup) return true; // show all
+      if (selectedGroupFilters.length === 0) return true; // show all
       const gs = n.groups ?? n.metadata?.groups ?? [];
-      return gs.includes(selectedGroup);
+      return selectedGroupFilters.some(g => gs.includes(g));
     });
     const visibleIds = new Set(visibleNodes.map((n) => n.id));
 
@@ -164,7 +160,17 @@ export default function Home() {
     // Map of "A:B" -> [linkId, linkId...]
     const pairMap = new Map<string, string[]>();
     const nodeLinks = links
-      .filter((l) => visibleIds.has(l.fromId) && visibleIds.has(l.toId));
+      .filter((l) => {
+        if (!visibleIds.has(l.fromId) || !visibleIds.has(l.toId)) return false;
+        // When filtering by groups, hide only inferred links whose specific
+        // group matches one of the active filters. Manual links and inferred
+        // links from OTHER groups stay visible.
+        if (selectedGroupFilters.length === 0) return true;
+        if (l.metadata?.source !== "inferred") return true;
+        const linkGroup = l.metadata?.group;
+        if (!linkGroup) return true;
+        return !selectedGroupFilters.includes(linkGroup);
+      });
 
     nodeLinks.forEach(l => {
       const [a, b] = [l.fromId, l.toId].sort();
@@ -298,14 +304,15 @@ export default function Home() {
         // ignore
       }
     };
-  }, [nodes, links, selectedGroup, highlightNodes, showDueNodes, dueNodeIds, resolvedTheme]);
+  }, [nodes, links, selectedGroupFilters, highlightNodes, showDueNodes, dueNodeIds, resolvedTheme]);
 
-  // if groups change and current selection no longer exists, reset to all
+  // if groups change and any active filter no longer exists, clean up
   useEffect(() => {
-    if (selectedGroup && !groups.includes(selectedGroup)) {
-      setSelectedGroup("");
+    const valid = selectedGroupFilters.filter(g => groups.includes(g));
+    if (valid.length !== selectedGroupFilters.length) {
+      setSelectedGroupFilters(valid);
     }
-  }, [groups, selectedGroup]);
+  }, [groups, selectedGroupFilters]);
 
   async function createNode(e?: FormEvent) {
     e?.preventDefault();
@@ -575,113 +582,39 @@ export default function Home() {
   return (
     <div className="flex h-[calc(100vh-57px)] overflow-hidden bg-zinc-50 dark:bg-black font-sans">
       {/* Left Sidebar */}
-      <aside className="w-80 border-r bg-background p-6 flex flex-col gap-6 shrink-0 overflow-y-auto">
-        <div className="flex items-center gap-2">
-          <div className="size-8 bg-primary rounded-lg"></div>
-          <h1 className="font-bold text-xl tracking-tight">Network+</h1>
-        </div>
+      {!isFullscreen && (
+        <aside className="w-80 border-r bg-background p-6 flex flex-col gap-6 shrink-0 overflow-y-auto">
+          <div className="flex items-center gap-2">
+            <div className="size-8 bg-primary rounded-lg"></div>
+            <h1 className="font-bold text-xl tracking-tight">Network+</h1>
+          </div>
 
-        {/* Node Search */}
-        <div className="relative">
-          <input
-            id="node-search"
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => setIsSearchFocused(true)}
-            onBlur={() => setTimeout(() => setIsSearchFocused(false), 150)}
-            placeholder="Search contacts..."
-            className="w-full p-2 pl-8 border rounded-md text-sm bg-background"
-          />
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          {searchQuery.trim() !== "" && isSearchFocused && (() => {
-            const filtered = nodes.filter(n =>
-              n.name.toLowerCase().includes(searchQuery.toLowerCase())
-            ).slice(0, 8);
-            return filtered.length > 0 ? (
-              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                {filtered.map((n) => (
-                  <button
-                    key={n.id}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors border-b last:border-b-0"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      focusNode(n.id);
-                      setSearchQuery("");
-                    }}
-                  >
-                    <p className="font-medium truncate">{n.name}</p>
-                    {n.groups && n.groups.length > 0 && (
-                      <p className="text-xs text-muted-foreground truncate">{n.groups.join(", ")}</p>
-                    )}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="absolute z-50 mt-1 w-full bg-background border rounded-md shadow-lg px-3 py-2 text-sm text-muted-foreground">
-                No contacts found
-              </div>
-            );
-          })()}
-        </div>
+          <DueSoonList contacts={dueContacts} onSelect={(contact) => {
+            const targetNode = nodes.find(n => n.id === contact.id);
+            if (targetNode) {
+              setSelectedNode(targetNode);
 
-        <DueSoonList contacts={dueContacts} onSelect={(contact) => {
-          const targetNode = nodes.find(n => n.id === contact.id);
-          if (targetNode) {
-            // Open the detail panel
-            setSelectedNode(targetNode);
-
-            const instance = graphInstanceRef.current;
-            if (instance) {
-              const internalNode = instance.graphData().nodes.find((n: any) => n.id === targetNode.id);
-              if (internalNode) {
-                instance.centerAt(internalNode.x, internalNode.y, 1000);
-                instance.zoom(6, 2000);
+              const instance = graphInstanceRef.current;
+              if (instance) {
+                const internalNode = instance.graphData().nodes.find((n: any) => n.id === targetNode.id);
+                if (internalNode) {
+                  instance.centerAt(internalNode.x, internalNode.y, 1000);
+                  instance.zoom(6, 2000);
+                }
               }
+
+              const neighborIds = new Set<string>();
+              neighborIds.add(targetNode.id);
+              setHighlightNodes(neighborIds);
+              setTimeout(() => {
+                setHighlightNodes(new Set());
+              }, 3000);
+            } else {
+              console.warn("No matching node found for contact:", contact.name);
             }
-
-            const neighborIds = new Set<string>();
-            neighborIds.add(targetNode.id);
-            setHighlightNodes(neighborIds);
-            setTimeout(() => {
-              setHighlightNodes(new Set());
-            }, 3000);
-          } else {
-            console.warn("No matching node found for contact:", contact.name);
-          }
-        }} />
-
-        {/* Existing Navigation or Filters could go here */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Filters</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <label className="block text-xs font-medium text-muted-foreground mb-2">Filter by group</label>
-            <NativeSelect value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
-              <NativeSelectOption value="">All groups</NativeSelectOption>
-              {groups.length === 0 && <NativeSelectOption value="" disabled>No groups found</NativeSelectOption>}
-              {groups.map((g) => (
-                <NativeSelectOption key={g} value={g}>{g}</NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </CardContent>
-        </Card>
-      </aside >
+          }} />
+        </aside >
+      )}
 
       {/* Main Content - Graph */}
       < main className="flex-1 relative overflow-hidden flex flex-col" >
@@ -692,6 +625,15 @@ export default function Home() {
           onZoomOut={handleZoomOut}
           onResetZoom={handleResetZoom}
           onSetZoom={handleSetZoom}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={() => setIsFullscreen(f => !f)}
+        />
+        <GraphLegendPanel
+          nodes={nodes}
+          groups={groups}
+          selectedGroupFilters={selectedGroupFilters}
+          onGroupFiltersChange={setSelectedGroupFilters}
+          onFocusNode={focusNode}
         />
         {
           error && (
@@ -703,100 +645,102 @@ export default function Home() {
       </main >
 
       {/* Right Sidebar - Tools */}
-      < aside className="w-80 border-l bg-background p-6 flex flex-col gap-6 shrink-0 h-[calc(100vh-57px)] sticky top-0 overflow-y-auto" >
-        <h2 className="font-semibold text-lg">Tools</h2>
+      {!isFullscreen && (
+        < aside className="w-80 border-l bg-background p-6 flex flex-col gap-6 shrink-0 h-[calc(100vh-57px)] sticky top-0 overflow-y-auto" >
+          <h2 className="font-semibold text-lg">Tools</h2>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Add Contact</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={createNode} className="flex flex-col gap-3">
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Name" className="w-full p-2 border rounded-md text-sm bg-background" />
-              <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full p-2 border rounded-md text-sm bg-background" />
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Add Contact</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={createNode} className="flex flex-col gap-3">
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Name" className="w-full p-2 border rounded-md text-sm bg-background" />
+                <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full p-2 border rounded-md text-sm bg-background" />
 
-              <div className="relative">
-                <MultiSelect
-                  options={groups}
-                  selected={selectedGroups}
-                  onChange={setSelectedGroups}
-                  placeholder="Select groups..."
-                />
-              </div>
+                <div className="relative">
+                  <MultiSelect
+                    options={groups}
+                    selected={selectedGroups}
+                    onChange={setSelectedGroups}
+                    placeholder="Select groups..."
+                  />
+                </div>
 
-              <Button type="submit" className="w-full" disabled={isNodeNameEmpty}>
-                Create Contact
-              </Button>
-              {isNodeNameEmpty && title !== "" && (
-                <p className="text-xs text-destructive">Name is required.</p>
-              )}
-            </form>
-          </CardContent>
-        </Card>
+                <Button type="submit" className="w-full" disabled={isNodeNameEmpty}>
+                  Create Contact
+                </Button>
+                {isNodeNameEmpty && title !== "" && (
+                  <p className="text-xs text-destructive">Name is required.</p>
+                )}
+              </form>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Add Link</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={createLink} className="flex flex-col gap-3">
-              <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="w-full p-2 border rounded-md text-sm bg-background">
-                <option value="">Select source</option>
-                {nodes.map((n) => (
-                  <option key={n.id} value={n.id}>{n.name}</option>
-                ))}
-              </select>
-              <select value={toId} onChange={(e) => setToId(e.target.value)} className="w-full p-2 border rounded-md text-sm bg-background">
-                <option value="">Select target</option>
-                {nodes.map((n) => (
-                  <option key={n.id} value={n.id}>{n.name}</option>
-                ))}
-              </select>
-              <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Label (optional)" className="w-full p-2 border rounded-md text-sm bg-background" />
-              <Button type="submit" className="w-full" disabled={isLinkInvalid}>
-                Create Link
-              </Button>
-              {isSelfLink && <p className="text-xs text-destructive">Cannot link a contact to itself.</p>}
-              {isDuplicateLink && <p className="text-xs text-destructive">Link already exists.</p>}
-            </form>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Add Link</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={createLink} className="flex flex-col gap-3">
+                <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="w-full p-2 border rounded-md text-sm bg-background">
+                  <option value="">Select source</option>
+                  {nodes.map((n) => (
+                    <option key={n.id} value={n.id}>{n.name}</option>
+                  ))}
+                </select>
+                <select value={toId} onChange={(e) => setToId(e.target.value)} className="w-full p-2 border rounded-md text-sm bg-background">
+                  <option value="">Select target</option>
+                  {nodes.map((n) => (
+                    <option key={n.id} value={n.id}>{n.name}</option>
+                  ))}
+                </select>
+                <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Label (optional)" className="w-full p-2 border rounded-md text-sm bg-background" />
+                <Button type="submit" className="w-full" disabled={isLinkInvalid}>
+                  Create Link
+                </Button>
+                {isSelfLink && <p className="text-xs text-destructive">Cannot link a contact to itself.</p>}
+                {isDuplicateLink && <p className="text-xs text-destructive">Link already exists.</p>}
+              </form>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Data</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            <ContactImportModal onSuccess={() => {
-              loadData();
-            }} />
-            <LinkedInImportModal onSuccess={() => {
-              loadData();
-            }} />
-            <BulkEditModal
-              contacts={nodes}
-              allGroups={groups}
-              initialGroupFilter={selectedGroup ? [selectedGroup] : []}
-              onSuccess={() => {
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Data</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <ContactImportModal onSuccess={() => {
                 loadData();
-              }}
-            />
-          </CardContent>
-        </Card>
+              }} />
+              <LinkedInImportModal onSuccess={() => {
+                loadData();
+              }} />
+              <BulkEditModal
+                contacts={nodes}
+                allGroups={groups}
+                initialGroupFilter={selectedGroupFilters}
+                onSuccess={() => {
+                  loadData();
+                }}
+              />
+            </CardContent>
+          </Card>
 
-        <div className="py-4">
-          <h3 className="font-semibold text-sm mb-2">Recent Contacts</h3>
-          <ul className="space-y-1">
-            {nodes.slice(-5).reverse().map((n) => (
-              <li key={n.id} className="text-xs text-muted-foreground truncate hover:text-foreground cursor-pointer" onClick={() => {
-                focusNode(n.id);
-              }}>
-                {n.name}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </aside >
+          <div className="py-4">
+            <h3 className="font-semibold text-sm mb-2">Recent Contacts</h3>
+            <ul className="space-y-1">
+              {nodes.slice(-5).reverse().map((n) => (
+                <li key={n.id} className="text-xs text-muted-foreground truncate hover:text-foreground cursor-pointer" onClick={() => {
+                  focusNode(n.id);
+                }}>
+                  {n.name}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside >
+      )}
 
 
       <ContactDetailSheet
