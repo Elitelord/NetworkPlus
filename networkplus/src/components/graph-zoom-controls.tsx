@@ -44,6 +44,7 @@ export function GraphZoomControls({
 
     return (
         <div
+            id="tour-zoom-controls"
             className="absolute bottom-6 right-6 z-10 flex flex-col items-end gap-2"
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}

@@ -28,4 +28,27 @@ export default {
             },
         }),
     ],
+    pages: {
+        signIn: "/signin",
+    },
+    callbacks: {
+        authorized({ auth, request: { nextUrl } }) {
+            const isLoggedIn = !!auth?.user;
+            const isApiAuthRoute = nextUrl.pathname.startsWith("/api/auth");
+            const isPublicRoute = ["/", "/signin", "/signup"].includes(nextUrl.pathname);
+
+            if (isApiAuthRoute) {
+                return true;
+            }
+
+            if (isPublicRoute) {
+                if (isLoggedIn && (nextUrl.pathname === "/signin" || nextUrl.pathname === "/signup")) {
+                    return Response.redirect(new URL("/dashboard", nextUrl));
+                }
+                return true;
+            }
+
+            return isLoggedIn;
+        },
+    },
 } satisfies NextAuthConfig

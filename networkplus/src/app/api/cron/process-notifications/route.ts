@@ -3,10 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { initAdmin } from "@/lib/firebase-admin";
 import { getDueSoonContacts } from "@/lib/contacts";
 
-// This route should be secured, e.g., with a secret token header
-// For now, we'll leave it open or check for a CRON_SECRET if you implement one.
 export async function GET(req: Request) {
     try {
+        // Verify cron secret
+        const authHeader = req.headers.get("authorization");
+        if (
+            !process.env.CRON_SECRET ||
+            authHeader !== `Bearer ${process.env.CRON_SECRET}`
+        ) {
+            return new NextResponse("Unauthorized", { status: 401 });
+        }
+
         // 1. Get current time in UTC (HH:mm)
         const now = new Date();
         const hours = now.getUTCHours().toString().padStart(2, '0');

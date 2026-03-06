@@ -7,6 +7,7 @@ import { PasswordForm } from "../../components/settings/password-form"
 import { DeleteAccount } from "../../components/settings/delete-account"
 import { Separator } from "@/components/ui/separator"
 import { NotificationForm } from "@/components/settings/notification-form"
+import { GraphSettingsForm } from "@/components/settings/graph-settings-form"
 
 export default async function SettingsPage() {
     const session = await auth() as Session | null
@@ -62,6 +63,16 @@ export default async function SettingsPage() {
                             notificationsEnabled: (user as any).notificationsEnabled ?? false,
                             notificationTime: (user as any).notificationTime ?? "09:00"
                         }} />
+                    </div>
+                </div>
+
+                <Separator />
+
+                <div className="flex flex-col items-center text-center my-6">
+                    <h2 className="text-lg font-medium">Graph Preferences</h2>
+                    <p className="text-sm text-muted-foreground mb-4">Customize how the network graph behaves.</p>
+                    <div className="w-full text-left">
+                        <GraphSettingsForm />
                     </div>
                 </div>
 

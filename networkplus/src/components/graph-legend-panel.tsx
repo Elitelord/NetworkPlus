@@ -143,7 +143,7 @@ export function GraphLegendPanel({
     }, {});
 
     return (
-        <div className="absolute bottom-6 left-6 z-10 flex flex-col items-start gap-2">
+        <div id="tour-legend" className="absolute bottom-6 left-6 z-10 flex flex-col items-start gap-2">
             {/* Expanded Panel */}
             <div
                 className={cn(

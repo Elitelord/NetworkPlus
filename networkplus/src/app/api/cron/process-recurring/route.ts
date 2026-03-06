@@ -7,9 +7,12 @@ import prisma from "@/lib/prisma";
  */
 export async function POST(req: Request) {
     try {
-        // Verify cron secret for production
+        // Verify cron secret
         const authHeader = req.headers.get("authorization");
-        if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+        if (
+            !process.env.CRON_SECRET ||
+            authHeader !== `Bearer ${process.env.CRON_SECRET}`
+        ) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 

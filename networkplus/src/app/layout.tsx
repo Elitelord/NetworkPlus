@@ -6,6 +6,7 @@ import FcmInitializer from "@/components/fcm-initializer";
 import Navbar from "@/components/navbar";
 import { SessionProvider } from "@/components/session-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { OnboardingTour } from "@/components/onboarding-tour";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,6 +42,7 @@ export default function RootLayout({
           <SessionProvider>
             <FcmInitializer />
             <Navbar />
+            <OnboardingTour />
             {children}
           </SessionProvider>
           <Analytics />

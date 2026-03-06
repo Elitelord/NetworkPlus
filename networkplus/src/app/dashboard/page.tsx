@@ -14,6 +14,7 @@ import { GraphZoomControls } from "@/components/graph-zoom-controls";
 import { GraphLegendPanel } from "@/components/graph-legend-panel";
 import { useTheme } from "next-themes";
 import { classifyGroupType, GROUP_TYPE_COLORS, type GroupType } from "@/lib/group-type-classifier";
+import { useGraphSettings } from "@/hooks/use-graph-settings";
 
 type NodeMetadata = { groups?: string[];[key: string]: any };
 
@@ -66,11 +67,10 @@ export default function Home() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const DEFAULT_ZOOM = 1;
 
-  // Cluster mode — uses hysteresis + debounce to prevent rubber-banding.
-  // Enter cluster mode when zoom falls below ENTER threshold,
-  // exit only when zoom rises above EXIT threshold.
-  const CLUSTER_ENTER_ZOOM = 2.5;  // collapse groups when zoomed out to here
-  const CLUSTER_EXIT_ZOOM = 3.5;   // expand groups only when zoomed in to here
+  // Graph Settings
+  const { settings } = useGraphSettings();
+  const CLUSTER_ENTER_ZOOM = settings.clusterThreshold;  // collapse groups when zoomed out to here
+  const CLUSTER_EXIT_ZOOM = settings.clusterThreshold + 1.0;   // expand groups only when zoomed in to here (added hysteresis gap)
   const CLUSTER_MIN_SIZE = 3;      // min group members to form a cluster
   const CLUSTER_DEBOUNCE_MS = 400;
 
@@ -83,6 +83,11 @@ export default function Home() {
 
     clusterTimerRef.current = setTimeout(() => {
       setIsClusterMode((prev) => {
+        // Special case overrides
+        if (settings.clusterThreshold >= 5.0) return true;
+        if (settings.clusterThreshold <= 0.0) return false;
+
+        // Normal zoom-based hysteresis
         if (!prev && currentZoom < CLUSTER_ENTER_ZOOM) return true;
         if (prev && currentZoom > CLUSTER_EXIT_ZOOM) return false;
         return prev; // in dead-zone → keep current state
@@ -92,7 +97,7 @@ export default function Home() {
     return () => {
       if (clusterTimerRef.current) clearTimeout(clusterTimerRef.current);
     };
-  }, [currentZoom]);
+  }, [currentZoom, settings.clusterThreshold, CLUSTER_ENTER_ZOOM, CLUSTER_EXIT_ZOOM]);
 
   async function loadData() {
     setError(null);
@@ -748,7 +753,7 @@ export default function Home() {
     <div className="flex h-[calc(100vh-57px)] overflow-hidden bg-zinc-50 dark:bg-black font-sans">
       {/* Left Sidebar */}
       {!isFullscreen && (
-        <aside className="w-80 border-r bg-background p-6 flex flex-col gap-6 shrink-0 overflow-y-auto">
+        <aside id="tour-sidebar" className="w-80 border-r bg-background p-6 flex flex-col gap-6 shrink-0 overflow-y-auto">
           <div className="flex items-center gap-2">
             <div className="size-8 bg-primary rounded-lg"></div>
             <h1 className="font-bold text-xl tracking-tight">Network+</h1>
@@ -814,7 +819,7 @@ export default function Home() {
         < aside className="w-80 border-l bg-background p-6 flex flex-col gap-6 shrink-0 h-[calc(100vh-57px)] sticky top-0 overflow-y-auto" >
           <h2 className="font-semibold text-lg">Tools</h2>
 
-          <Card>
+          <Card id="tour-add-contact">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Add Contact</CardTitle>
             </CardHeader>
@@ -875,12 +880,16 @@ export default function Home() {
               <CardTitle className="text-base">Data</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
-              <ContactImportModal onSuccess={() => {
-                loadData();
-              }} />
-              <LinkedInImportModal onSuccess={() => {
-                loadData();
-              }} />
+              <div id="tour-import-contacts">
+                <ContactImportModal onSuccess={() => {
+                  loadData();
+                }} />
+              </div>
+              <div id="tour-import-messages">
+                <LinkedInImportModal onSuccess={() => {
+                  loadData();
+                }} />
+              </div>
               <BulkEditModal
                 contacts={nodes}
                 allGroups={groups}

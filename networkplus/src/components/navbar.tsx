@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Settings } from "lucide-react";
+import { Settings, HelpCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Navbar() {
@@ -43,6 +43,16 @@ export default function Navbar() {
                                     className="h-7 w-7 rounded-full"
                                 />
                             )}
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => window.dispatchEvent(new Event('start-tour'))}
+                                id="tour-navbar-help"
+                                title="Replay Tour"
+                            >
+                                <HelpCircle className="h-4 w-4" />
+                            </Button>
                             <Link href="/settings">
                                 <Button variant="ghost" size="icon" className="h-8 w-8">
                                     <Settings className="h-4 w-4" />
