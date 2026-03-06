@@ -46,7 +46,8 @@ export async function POST(req: Request) {
             type = "Recurring Meeting",
             platform = "OTHER",
             content,
-            recurringType, // DAILY, WEEKLY, BIWEEKLY, MONTHLY
+            recurringType, // DAILY, WEEKLY, BIWEEKLY, MONTHLY, CUSTOM
+            recurringInterval = 1,
             recurringDaysOfWeek = [],
             recurringEndDate,
             startDate,
@@ -81,6 +82,7 @@ export async function POST(req: Request) {
                 content,
                 isRecurring: true,
                 recurringType,
+                recurringInterval,
                 recurringDaysOfWeek,
                 recurringEndDate: recurringEndDate ? new Date(recurringEndDate) : null,
                 contacts: {

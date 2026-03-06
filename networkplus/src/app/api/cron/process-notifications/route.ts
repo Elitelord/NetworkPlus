@@ -32,7 +32,6 @@ export async function GET(req: Request) {
         const users = await prisma.user.findMany({
             where: {
                 notificationsEnabled: true,
-                notificationTime: currentTime,
                 fcmToken: {
                     not: null
                 }
@@ -41,7 +40,13 @@ export async function GET(req: Request) {
                 id: true,
                 fcmToken: true,
                 name: true,
-                email: true
+                email: true,
+                notificationTime: true,
+                catchUpDays: true,
+                catchUpGroups: true,
+                catchUpCategories: true,
+                catchUpContactIds: true,
+                lastCatchUpSentAt: true,
             }
         });
 
@@ -59,8 +64,27 @@ export async function GET(req: Request) {
         // 3. Process each user
         for (const user of users) {
             try {
+                const timeStr = user.notificationTime || "09:00";
+                if (currentTime < timeStr) {
+                    continue; // Not time yet
+                }
+                const currentDay = now.getUTCDay(); // 0 is Sunday
+                if (user.catchUpDays && user.catchUpDays.length > 0 && !user.catchUpDays.includes(currentDay)) {
+                    continue; // Not scheduled for today
+                }
+
+                const startOfToday = new Date(now);
+                startOfToday.setUTCHours(0, 0, 0, 0);
+                if (user.lastCatchUpSentAt && user.lastCatchUpSentAt >= startOfToday) {
+                    continue; // Already sent today
+                }
+
                 // Get contacts to catch up with
-                const contacts = await getDueSoonContacts(user.id);
+                const contacts = await getDueSoonContacts(user.id, {
+                    groups: user.catchUpGroups,
+                    categories: user.catchUpCategories,
+                    contactIds: user.catchUpContactIds
+                });
 
                 if (contacts.length === 0) {
                     console.log(`[Cron] User ${user.email} (ID: ${user.id}) has no due contacts. Skipping.`);
@@ -92,6 +116,12 @@ export async function GET(req: Request) {
                 };
 
                 await messaging.send(message);
+
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { lastCatchUpSentAt: now }
+                });
+
                 successCount++;
                 console.log(`[Cron] Notification sent to user ${user.id}`);
 

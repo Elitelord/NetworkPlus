@@ -92,19 +92,31 @@ export async function POST(req: Request) {
             return new NextResponse("Google authentication expired", { status: 401 });
         }
 
+        // The startTime and endTime from the frontend are in the user's local timezone (e.g. "2026-03-06T13:00")
+        // but they are sent as ISO strings without offsets. When `new Date()` parses them on the server,
+        // it assumes they are UTC if they have a 'Z', or local server time if they don't.
+        // The safest way to handle this is to have the client send the exact ISO string with offset,
+        // but since the client sends "YYYY-MM-DDTHH:mm", we can treat it as a floating time.
+        // Google Calendar accepts `dateTime` as an RFC3339 timestamp.
+
+        // If we just pass the strings as they are to Google, it will treat them as the server's local time,
+        // which might be UTC. To fix this, we should ensure the client is sending the full timezone offset,
+        // OR we can just pass the raw datetime string and the client's timezone if they provide it.
+        // Let's assume the frontend will start sending the proper full ISO string.
+        const startDateTime = new Date(startTime).toISOString();
+        const endDateTime = endTime
+            ? new Date(endTime).toISOString()
+            : new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString();
+
         // Build Google Calendar event
         const eventBody: any = {
             summary: title,
             description: description || "",
             start: {
-                dateTime: new Date(startTime).toISOString(),
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                dateTime: startDateTime,
             },
             end: {
-                dateTime: endTime
-                    ? new Date(endTime).toISOString()
-                    : new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(), // default 1hr
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                dateTime: endDateTime,
             },
         };
 

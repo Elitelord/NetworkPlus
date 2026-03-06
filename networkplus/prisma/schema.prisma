@@ -25,7 +25,11 @@ model User {
   fcmToken             String?
   notificationsEnabled Boolean    @default(false)
   notificationTime     String? // Format: "HH:mm" (24h) in UTC
-  hasCompletedOnboarding Boolean  @default(false)
+  catchUpDays          Int[]      @default([]) // 0=Sun, 6=Sat
+  catchUpGroups        String[]   @default([])
+  catchUpCategories    String[]   @default([])
+  catchUpContactIds    String[]   @default([])
+  lastCatchUpSentAt    DateTime?
 }
 
 model Account {
@@ -118,7 +122,8 @@ model Interaction {
 
   // Recurring interaction fields
   isRecurring          Boolean       @default(false)
-  recurringType        String?       // DAILY, WEEKLY, BIWEEKLY, MONTHLY
+  recurringType        String?       // DAILY, WEEKLY, BIWEEKLY, MONTHLY, CUSTOM
+  recurringInterval    Int?          @default(1)
   recurringDaysOfWeek  Int[]         @default([]) // 0=Sun, 6=Sat
   recurringEndDate     DateTime?
   parentInteractionId  String?

@@ -16,7 +16,6 @@ export default async function SettingsPage() {
         redirect("/signin")
     }
 
-    // Fetch fresh user data to check if they have a password set
     const user = await prisma.user.findUnique({
         where: { id: session.user.id },
     })
@@ -24,6 +23,15 @@ export default async function SettingsPage() {
     if (!user) {
         redirect("/signin") // Should not happen if session is valid but safe guard
     }
+
+    const contacts = await prisma.contact.findMany({
+        where: { ownerId: session.user.id },
+        select: { id: true, name: true, category: true, groups: true }
+    })
+
+    const allGroups = Array.from(new Set(contacts.flatMap(c => c.groups))).sort()
+    const allCategories = Array.from(new Set(contacts.map(c => c.category))).sort()
+    const contactOptions = contacts.map(c => ({ id: c.id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name))
 
     const hasPassword = !!(user as any).hashedPassword
 
@@ -55,14 +63,23 @@ export default async function SettingsPage() {
 
                 <Separator />
 
-                <div className="flex flex-col items-center text-center my-6">
+                <div id="notifications" className="flex flex-col items-center text-center my-6 scroll-mt-[100px]">
                     <h2 className="text-lg font-medium">Notifications</h2>
                     <p className="text-sm text-muted-foreground mb-4">Manage your daily catch-up notifications.</p>
                     <div className="w-full text-left">
-                        <NotificationForm defaultValues={{
-                            notificationsEnabled: (user as any).notificationsEnabled ?? false,
-                            notificationTime: (user as any).notificationTime ?? "09:00"
-                        }} />
+                        <NotificationForm
+                            defaultValues={{
+                                notificationsEnabled: (user as any).notificationsEnabled ?? false,
+                                notificationTime: (user as any).notificationTime ?? "09:00",
+                                catchUpDays: (user as any).catchUpDays ?? [],
+                                catchUpGroups: (user as any).catchUpGroups ?? [],
+                                catchUpCategories: (user as any).catchUpCategories ?? [],
+                                catchUpContactIds: (user as any).catchUpContactIds ?? [],
+                            }}
+                            availableGroups={allGroups}
+                            availableCategories={allCategories}
+                            availableContacts={contactOptions}
+                        />
                     </div>
                 </div>
 

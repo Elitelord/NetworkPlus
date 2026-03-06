@@ -5,9 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LogInteractionModal, EditInteractionData } from "@/components/log-interaction-modal";
-import { ScheduleEventModal } from "@/components/schedule-event-modal";
-
-/* ── Types ───────────────────────────────────────────── */
 
 type CalendarEvent = {
     id: string;
@@ -81,7 +78,7 @@ export default function CalendarPage() {
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
     const [contacts, setContacts] = useState<Contact[]>([]);
-    const [syncing, setSyncing] = useState<string | null>(null); // 'google' | 'outlook' | null
+    const [syncing, setSyncing] = useState<string | null>(null); // 'google' | null
     const [syncResult, setSyncResult] = useState<string | null>(null);
     const [loadingInteractions, setLoadingInteractions] = useState(false);
     const [loadingEvents, setLoadingEvents] = useState(false);
@@ -156,13 +153,11 @@ export default function CalendarPage() {
 
     /* ── Sync handler ───────────────────────────────── */
 
-    async function handleSync(provider: "google" | "outlook") {
+    async function handleSync(provider: "google") {
         setSyncing(provider);
         setSyncResult(null);
-        const endpoint = provider === "google"
-            ? "/api/sync/google-calendar"
-            : "/api/sync/outlook-calendar";
-        const label = provider === "google" ? "Google" : "Outlook";
+        const endpoint = "/api/sync/google-calendar";
+        const label = "Google";
         try {
             const res = await fetch(endpoint, {
                 method: "POST",
@@ -280,35 +275,6 @@ export default function CalendarPage() {
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setIsScheduleModalOpen(true)}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="12" y1="14" x2="12" y2="18" /><line x1="10" y1="16" x2="14" y2="16" /></svg>
-                            Schedule Event
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleSync("outlook")}
-                            disabled={syncing !== null}
-                        >
-                            {syncing === "outlook" ? (
-                                <>
-                                    <svg className="animate-spin mr-1.5 h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                    </svg>
-                                    Syncing…
-                                </>
-                            ) : (
-                                <>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><polyline points="1 4 1 10 7 10" /><polyline points="23 20 23 14 17 14" /><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" /></svg>
-                                    Sync Outlook
-                                </>
-                            )}
-                        </Button>
                         <Button
                             variant="default"
                             size="sm"
@@ -650,20 +616,10 @@ export default function CalendarPage() {
                     onDelete={() => fetchInteractions()}
                     onSuccess={() => {
                         fetchInteractions();
+                        fetchCalendarEvents();
                     }}
                 />
             )}
-
-            <ScheduleEventModal
-                open={isScheduleModalOpen}
-                onOpenChange={setIsScheduleModalOpen}
-                contacts={contacts}
-                defaultDate={selectedDate.toISOString().slice(0, 16)}
-                onSuccess={() => {
-                    fetchCalendarEvents();
-                    fetchInteractions();
-                }}
-            />
         </div>
     );
 }

@@ -127,8 +127,26 @@ export function LogInteractionModal({
 
     // Recurring interaction state
     const [isRecurring, setIsRecurring] = useState(false);
-    const [recurringType, setRecurringType] = useState("WEEKLY");
+    const [recurringType, setRecurringType] = useState<"DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "CUSTOM">("WEEKLY");
+    const [customPeriod, setCustomPeriod] = useState<"DAILY" | "WEEKLY" | "MONTHLY">("WEEKLY");
+    const [recurringInterval, setRecurringInterval] = useState("1");
+    const [recurringDaysOfWeek, setRecurringDaysOfWeek] = useState<number[]>([]);
     const [recurringEndDate, setRecurringEndDate] = useState("");
+
+    // Calendar Sync State
+    const [syncToCalendar, setSyncToCalendar] = useState(false);
+    const [endTime, setEndTime] = useState<string>("");
+
+    // Initialize end time when syncing to calendar is toggled
+    useEffect(() => {
+        if (syncToCalendar && !endTime) {
+            const d = new Date(formData.date);
+            d.setHours(d.getHours() + 1);
+            const offset = d.getTimezoneOffset() * 60000;
+            const localISO = new Date(d.getTime() - offset).toISOString().slice(0, 16);
+            setEndTime(localISO);
+        }
+    }, [syncToCalendar, formData.date, endTime]);
 
     useEffect(() => {
         if (open) {
@@ -172,27 +190,58 @@ export function LogInteractionModal({
         setLoading(true);
 
         try {
-            const url = isEditing
-                ? `/api/interactions/${editInteraction!.id}`
-                : "/api/interactions";
-            const method = isEditing ? "PUT" : "POST";
+            // Determine if we should sync to Google Calendar instead of standard interaction log
+            // Only new interactions can be synced to calendar directly
+            if (!isEditing && syncToCalendar) {
+                // Get emails of selected contacts for calendar invites
+                const attendeeEmails = selectedContactIds
+                    .map(id => contacts.find(c => c.id === id)?.name) // Ideally email, but we only have name in this pickers context, we can fetch email or just map it if we load emails
+                    .filter(Boolean) as string[];
 
-            const res = await fetch(url, {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contactIds: selectedContactIds,
-                    type: formData.type,
-                    platform: formData.platform,
-                    content: formData.content,
-                    durationMinutes: formData.durationMinutes,
-                    messageCount: formData.messageCount,
-                    date: new Date(formData.date).toISOString(),
-                }),
-            });
+                const startD = new Date(formData.date);
+                const endD = endTime ? new Date(endTime) : undefined;
 
-            if (!res.ok) {
-                throw new Error(isEditing ? "Failed to update interaction" : "Failed to log interaction");
+                const res = await fetch("/api/calendar/events", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        title: formData.content || formData.type,
+                        description: formData.content,
+                        startTime: startD.toISOString(),
+                        endTime: endD ? endD.toISOString() : undefined,
+                        contactIds: selectedContactIds,
+                        attendeeEmails,
+                    }),
+                });
+
+                if (!res.ok) {
+                    const data = await res.json().catch(() => null);
+                    throw new Error(data?.error || "Failed to create Google Calendar Event");
+                }
+            } else {
+                // Standard log interaction
+                const url = isEditing
+                    ? `/api/interactions/${editInteraction!.id}`
+                    : "/api/interactions";
+                const method = isEditing ? "PUT" : "POST";
+
+                const res = await fetch(url, {
+                    method,
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contactIds: selectedContactIds,
+                        type: formData.type,
+                        platform: formData.platform,
+                        content: formData.content,
+                        durationMinutes: formData.durationMinutes,
+                        messageCount: formData.messageCount,
+                        date: new Date(formData.date).toISOString(),
+                    }),
+                });
+
+                if (!res.ok) {
+                    throw new Error(isEditing ? "Failed to update interaction" : "Failed to log interaction");
+                }
             }
 
             // Create recurring template if enabled (only for new interactions)
@@ -205,7 +254,9 @@ export function LogInteractionModal({
                         type: formData.type,
                         platform: formData.platform,
                         content: formData.content,
-                        recurringType,
+                        recurringType: recurringType === "CUSTOM" ? customPeriod : recurringType,
+                        recurringInterval: parseInt(recurringInterval, 10) || 1,
+                        recurringDaysOfWeek,
                         recurringEndDate: recurringEndDate || undefined,
                         startDate: new Date(formData.date).toISOString(),
                     }),
@@ -217,7 +268,12 @@ export function LogInteractionModal({
             setFormData((prev) => ({ ...prev, date: new Date().toISOString().slice(0, 16), content: "", durationMinutes: "", messageCount: "" }));
             setIsRecurring(false);
             setRecurringType("WEEKLY");
+            setCustomPeriod("WEEKLY");
+            setRecurringInterval("1");
+            setRecurringDaysOfWeek([]);
             setRecurringEndDate("");
+            setSyncToCalendar(false);
+            setEndTime("");
         } catch (err) {
             console.error(err);
         } finally {
@@ -247,7 +303,7 @@ export function LogInteractionModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{isEditing ? "Edit Interaction" : "Log Interaction"}</DialogTitle>
                     <DialogDescription>
@@ -375,11 +431,23 @@ export function LogInteractionModal({
                                     />
                                 </PopoverContent>
                             </Popover>
+
+                            {!isEditing && (
+                                <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={syncToCalendar}
+                                        onChange={(e) => setSyncToCalendar(e.target.checked)}
+                                        className="rounded border-input"
+                                    />
+                                    <span className="text-sm text-muted-foreground">Add to Google Calendar</span>
+                                </label>
+                            )}
                         </div>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label className="text-right">
-                            Time
+                            {syncToCalendar ? "Start Time" : "Time"}
                         </Label>
                         <div className="col-span-3 flex gap-1 items-center">
                             {/* Hour */}
@@ -484,6 +552,105 @@ export function LogInteractionModal({
                             </NativeSelect>
                         </div>
                     </div>
+
+                    {syncToCalendar && (
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right">
+                                End Time
+                            </Label>
+                            <div className="col-span-3 flex gap-1 items-center">
+                                {/* Hour */}
+                                <NativeSelect
+                                    value={(() => {
+                                        if (!endTime) return "12";
+                                        const date = new Date(endTime);
+                                        let h = date.getHours();
+                                        if (h === 0) h = 12;
+                                        else if (h > 12) h -= 12;
+                                        return h.toString();
+                                    })()}
+                                    onChange={(e) => {
+                                        const newHour12 = parseInt(e.target.value);
+                                        const date = endTime ? new Date(endTime) : new Date(formData.date);
+                                        let h = date.getHours();
+                                        const isPm = h >= 12;
+
+                                        let newHour24 = newHour12;
+                                        if (isPm) {
+                                            if (newHour12 === 12) newHour24 = 12;
+                                            else newHour24 = newHour12 + 12;
+                                        } else {
+                                            if (newHour12 === 12) newHour24 = 0;
+                                            else newHour24 = newHour12;
+                                        }
+
+                                        date.setHours(newHour24);
+                                        const offset = date.getTimezoneOffset() * 60000;
+                                        setEndTime((new Date(date.getTime() - offset)).toISOString().slice(0, 16));
+                                    }}
+                                    className="w-[70px]"
+                                >
+                                    {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                                        <NativeSelectOption key={h} value={h}>
+                                            {h}
+                                        </NativeSelectOption>
+                                    ))}
+                                </NativeSelect>
+
+                                <span className="text-muted-foreground">:</span>
+
+                                {/* Minute */}
+                                <NativeSelect
+                                    value={(() => {
+                                        if (!endTime) return "00";
+                                        const m = new Date(endTime).getMinutes();
+                                        return m.toString().padStart(2, '0');
+                                    })()}
+                                    onChange={(e) => {
+                                        const newMin = parseInt(e.target.value);
+                                        const date = endTime ? new Date(endTime) : new Date(formData.date);
+                                        date.setMinutes(newMin);
+                                        const offset = date.getTimezoneOffset() * 60000;
+                                        setEndTime((new Date(date.getTime() - offset)).toISOString().slice(0, 16));
+                                    }}
+                                    className="w-[70px]"
+                                >
+                                    {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
+                                        <NativeSelectOption key={m} value={m.toString().padStart(2, '0')}>
+                                            {m.toString().padStart(2, '0')}
+                                        </NativeSelectOption>
+                                    ))}
+                                </NativeSelect>
+
+                                {/* AM/PM */}
+                                <NativeSelect
+                                    value={(() => {
+                                        if (!endTime) return "AM";
+                                        return new Date(endTime).getHours() >= 12 ? "PM" : "AM";
+                                    })()}
+                                    onChange={(e) => {
+                                        const newAmPm = e.target.value;
+                                        const date = endTime ? new Date(endTime) : new Date(formData.date);
+                                        let h = date.getHours();
+
+                                        if (newAmPm === "PM" && h < 12) {
+                                            h += 12;
+                                        } else if (newAmPm === "AM" && h >= 12) {
+                                            h -= 12;
+                                        }
+
+                                        date.setHours(h);
+                                        const offset = date.getTimezoneOffset() * 60000;
+                                        setEndTime((new Date(date.getTime() - offset)).toISOString().slice(0, 16));
+                                    }}
+                                    className="w-[70px]"
+                                >
+                                    <NativeSelectOption value="AM">AM</NativeSelectOption>
+                                    <NativeSelectOption value="PM">PM</NativeSelectOption>
+                                </NativeSelect>
+                            </div>
+                        </div>
+                    )}
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="type" className="text-right">
                             Type
@@ -569,24 +736,121 @@ export function LogInteractionModal({
                                     <span className="text-sm">Make this a recurring interaction</span>
                                 </label>
                                 {isRecurring && (
-                                    <div className="space-y-2 pl-6 border-l-2 border-muted">
+                                    <div className="space-y-4 pl-6 border-l-2 border-muted">
                                         <NativeSelect
                                             value={recurringType}
-                                            onChange={(e) => setRecurringType(e.target.value)}
+                                            onChange={(e) => {
+                                                const val = e.target.value as "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "CUSTOM";
+                                                setRecurringType(val);
+                                                if (val !== "CUSTOM") {
+                                                    setRecurringInterval("1");
+                                                    setRecurringDaysOfWeek([]);
+                                                } else {
+                                                    setCustomPeriod("WEEKLY"); // default back to Custom Weekly type
+                                                }
+                                            }}
                                         >
                                             <NativeSelectOption value="DAILY">Daily</NativeSelectOption>
                                             <NativeSelectOption value="WEEKLY">Weekly</NativeSelectOption>
                                             <NativeSelectOption value="BIWEEKLY">Every 2 Weeks</NativeSelectOption>
                                             <NativeSelectOption value="MONTHLY">Monthly</NativeSelectOption>
+                                            <NativeSelectOption value="CUSTOM">Custom...</NativeSelectOption>
                                         </NativeSelect>
-                                        <div>
-                                            <Label className="text-xs text-muted-foreground">End date (optional)</Label>
-                                            <Input
-                                                type="date"
-                                                value={recurringEndDate}
-                                                onChange={(e) => setRecurringEndDate(e.target.value)}
-                                                className="mt-1"
-                                            />
+
+                                        {recurringType === "CUSTOM" && (
+                                            <div className="space-y-4 pt-2 pb-2 bg-muted/30 p-3 rounded-md border border-border/50">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm">Repeat every</span>
+                                                    <Input
+                                                        type="number"
+                                                        min="1"
+                                                        className="w-20"
+                                                        value={recurringInterval}
+                                                        onChange={(e) => setRecurringInterval(e.target.value)}
+                                                    />
+                                                    <NativeSelect
+                                                        value={customPeriod}
+                                                        onChange={(e) => setCustomPeriod(e.target.value as "DAILY" | "WEEKLY" | "MONTHLY")}
+                                                        className="w-32"
+                                                    >
+                                                        <NativeSelectOption value="DAILY">day(s)</NativeSelectOption>
+                                                        <NativeSelectOption value="WEEKLY">week(s)</NativeSelectOption>
+                                                        <NativeSelectOption value="MONTHLY">month(s)</NativeSelectOption>
+                                                    </NativeSelect>
+                                                </div>
+
+                                                {/* Day of week selector if Weekly is chosen */}
+                                                {customPeriod === "WEEKLY" && (
+                                                    <div className="space-y-2">
+                                                        <span className="text-sm block">Repeat on</span>
+                                                        <div className="flex gap-2 flex-wrap">
+                                                            {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
+                                                                <button
+                                                                    key={i}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setRecurringDaysOfWeek(prev =>
+                                                                            prev.includes(i)
+                                                                                ? prev.filter(d => d !== i)
+                                                                                : [...prev, i]
+                                                                        );
+                                                                    }}
+                                                                    className={cn(
+                                                                        "w-8 h-8 rounded-full text-xs font-medium border flex items-center justify-center transition-colors",
+                                                                        recurringDaysOfWeek.includes(i)
+                                                                            ? "bg-primary text-primary-foreground border-primary"
+                                                                            : "bg-background text-muted-foreground hover:bg-muted"
+                                                                    )}
+                                                                >
+                                                                    {day}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <div className="flex flex-col mt-2">
+                                            <Label className="text-xs text-muted-foreground mb-1">End date (optional)</Label>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant={"outline"}
+                                                        className={cn(
+                                                            "w-[240px] pl-3 text-left font-normal",
+                                                            !recurringEndDate && "text-muted-foreground"
+                                                        )}
+                                                    >
+                                                        {recurringEndDate ? (
+                                                            format(new Date(recurringEndDate + "T12:00:00"), "PPP")
+                                                        ) : (
+                                                            <span>Pick a date</span>
+                                                        )}
+                                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0" align="start">
+                                                    <Calendar
+                                                        mode="single"
+                                                        selected={recurringEndDate ? new Date(recurringEndDate + "T12:00:00") : undefined}
+                                                        onSelect={(date) => {
+                                                            if (date) {
+                                                                const year = date.getFullYear();
+                                                                const month = String(date.getMonth() + 1).padStart(2, '0');
+                                                                const day = String(date.getDate()).padStart(2, '0');
+                                                                setRecurringEndDate(`${year}-${month}-${day}`);
+                                                            } else {
+                                                                setRecurringEndDate("");
+                                                            }
+                                                        }}
+                                                        disabled={(date) =>
+                                                            date < new Date(new Date(formData.date).setHours(0, 0, 0, 0))
+                                                        }
+                                                        initialFocus
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
                                         </div>
                                     </div>
                                 )}

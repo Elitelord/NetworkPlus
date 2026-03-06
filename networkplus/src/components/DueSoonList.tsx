@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Bell } from "lucide-react";
+import Link from "next/link";
 
 export type Contact = {
     id: string;
@@ -33,8 +35,13 @@ export function DueSoonList({ className, onSelect, contacts, isLoading = false }
                     onClick={() => setIsExpanded(!isExpanded)}
                 >
                     <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle>Catch Up</CardTitle>
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                                <CardTitle>Catch Up</CardTitle>
+                                <Link href="/settings#notifications" onClick={(e) => e.stopPropagation()}>
+                                    <Bell className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+                                </Link>
+                            </div>
                             <CardDescription>Consider catching up with these contacts.</CardDescription>
                         </div>
                         <svg
@@ -69,8 +76,13 @@ export function DueSoonList({ className, onSelect, contacts, isLoading = false }
                 onClick={() => setIsExpanded(!isExpanded)}
             >
                 <div className="flex items-center justify-between">
-                    <div>
-                        <CardTitle>Catch Up</CardTitle>
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                            <CardTitle>Catch Up</CardTitle>
+                            <Link href="/settings#notifications" onClick={(e) => e.stopPropagation()}>
+                                <Bell className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+                            </Link>
+                        </div>
                         <CardDescription>Consider catching up with these contacts.</CardDescription>
                     </div>
                     <div className="flex items-center gap-2">

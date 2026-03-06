@@ -44,20 +44,20 @@ export async function POST(req: Request) {
             const lastInstance = template.recurringInstances[0];
             const lastDate = lastInstance?.date || template.date;
             let nextDate: Date | null = null;
+            const interval = template.recurringInterval || 1;
 
             switch (template.recurringType) {
                 case "DAILY":
-                    nextDate = new Date(lastDate.getTime() + 24 * 60 * 60 * 1000);
+                    nextDate = new Date(lastDate.getTime() + interval * 24 * 60 * 60 * 1000);
                     break;
                 case "WEEKLY":
-                    nextDate = new Date(lastDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-                    break;
-                case "BIWEEKLY":
-                    nextDate = new Date(lastDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+                case "BIWEEKLY": // Support legacy biweekly as weekly with interval 2
+                    const weeks = template.recurringType === "BIWEEKLY" ? 2 : interval;
+                    nextDate = new Date(lastDate.getTime() + weeks * 7 * 24 * 60 * 60 * 1000);
                     break;
                 case "MONTHLY":
                     nextDate = new Date(lastDate);
-                    nextDate.setMonth(nextDate.getMonth() + 1);
+                    nextDate.setMonth(nextDate.getMonth() + interval);
                     break;
                 default:
                     continue;

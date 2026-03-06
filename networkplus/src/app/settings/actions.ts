@@ -149,6 +149,10 @@ export async function deleteAccount() {
 const notificationPreferencesSchema = z.object({
     notificationsEnabled: z.boolean(),
     notificationTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format"),
+    catchUpDays: z.array(z.number().min(0).max(6)).optional(),
+    catchUpGroups: z.array(z.string()).optional(),
+    catchUpCategories: z.array(z.string()).optional(),
+    catchUpContactIds: z.array(z.string()).optional(),
 })
 
 export async function updateNotificationPreferences(data: z.infer<typeof notificationPreferencesSchema>) {
@@ -167,7 +171,11 @@ export async function updateNotificationPreferences(data: z.infer<typeof notific
             where: { id: session.user.id },
             data: {
                 notificationsEnabled: result.data.notificationsEnabled,
-                notificationTime: result.data.notificationTime
+                notificationTime: result.data.notificationTime,
+                catchUpDays: result.data.catchUpDays ?? [],
+                catchUpGroups: result.data.catchUpGroups ?? [],
+                catchUpCategories: result.data.catchUpCategories ?? [],
+                catchUpContactIds: result.data.catchUpContactIds ?? [],
             } as any,
         })
         revalidatePath("/settings")
