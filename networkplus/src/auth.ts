@@ -9,10 +9,9 @@ import authConfig from "./auth.config"
 export const { handlers, auth: nextAuthAuth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma as any),
   session: { strategy: "jwt" },
-  pages: {
-    signIn: "/signin",
-  },
+  ...authConfig,
   callbacks: {
+    ...authConfig.callbacks,
     async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id
@@ -62,7 +61,6 @@ export const { handlers, auth: nextAuthAuth, signIn, signOut } = NextAuth({
     },
   },
 
-  ...authConfig,
   providers: [
     ...authConfig.providers,
     Credentials({
