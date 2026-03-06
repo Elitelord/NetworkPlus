@@ -21,6 +21,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "NetworkPlus",
   description: "Manage and visualize your personal network",
+  verification: {
+    google: "en2ijfi_fxmYixn9I5hWErnKCrRyTGqAhbyMIse26eY",
+  },
 };
 
 export default function RootLayout({

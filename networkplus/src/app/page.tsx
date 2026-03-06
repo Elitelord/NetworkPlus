@@ -192,10 +192,11 @@ export default function Home() {
             <p className="text-sm text-muted-foreground text-center md:text-left">
               © {new Date().getFullYear()} NetworkPlus. All rights reserved.
             </p>
-            <div className="flex gap-4 justify-center md:justify-end">
-              <Link href="#" className="text-sm text-muted-foreground hover:text-primary">Twitter</Link>
-              <Link href="#" className="text-sm text-muted-foreground hover:text-primary">LinkedIn</Link>
-              <Link href="#" className="text-sm text-muted-foreground hover:text-primary">GitHub</Link>
+            <div className="flex flex-wrap gap-4 justify-center md:justify-end">
+              <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary">Privacy Policy</Link>
+              <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary">Terms of Service</Link>
+              <Link href="https://www.linkedin.com/in/sameera07/" className="text-sm text-muted-foreground hover:text-primary">LinkedIn</Link>
+              <Link href="https://github.com/Elitelord" className="text-sm text-muted-foreground hover:text-primary">GitHub</Link>
             </div>
           </div>
         </footer>
