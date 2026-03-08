@@ -140,7 +140,7 @@ export function LogInteractionModal({
     // Initialize end time when syncing to calendar is toggled
     useEffect(() => {
         if (syncToCalendar && !endTime) {
-            const d = new Date(formData.date);
+            const d = parseLocalISO(formData.date);
             d.setHours(d.getHours() + 1);
             const offset = d.getTimezoneOffset() * 60000;
             const localISO = new Date(d.getTime() - offset).toISOString().slice(0, 16);
@@ -185,6 +185,16 @@ export function LogInteractionModal({
         setSelectedContactIds((prev) => prev.filter((i) => i !== id));
     };
 
+    // Robustly parse "YYYY-MM-DDTHH:mm" strings as local time
+    const parseLocalISO = (isoStr: string) => {
+        if (!isoStr) return new Date();
+        const [datePart, timePart] = isoStr.split('T');
+        if (!datePart || !timePart) return new Date(isoStr);
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hour, min] = timePart.split(':').map(Number);
+        return new Date(year, month - 1, day, hour, min);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -198,8 +208,8 @@ export function LogInteractionModal({
                     .map(id => contacts.find(c => c.id === id)?.name) // Ideally email, but we only have name in this pickers context, we can fetch email or just map it if we load emails
                     .filter(Boolean) as string[];
 
-                const startD = new Date(formData.date);
-                const endD = endTime ? new Date(endTime) : undefined;
+                const startD = parseLocalISO(formData.date);
+                const endD = endTime ? parseLocalISO(endTime) : undefined;
 
                 const res = await fetch("/api/calendar/events", {
                     method: "POST",
@@ -235,7 +245,7 @@ export function LogInteractionModal({
                         content: formData.content,
                         durationMinutes: formData.durationMinutes,
                         messageCount: formData.messageCount,
-                        date: new Date(formData.date).toISOString(),
+                        date: parseLocalISO(formData.date).toISOString(),
                     }),
                 });
 
@@ -258,7 +268,7 @@ export function LogInteractionModal({
                         recurringInterval: parseInt(recurringInterval, 10) || 1,
                         recurringDaysOfWeek,
                         recurringEndDate: recurringEndDate || undefined,
-                        startDate: new Date(formData.date).toISOString(),
+                        startDate: parseLocalISO(formData.date).toISOString(),
                     }),
                 }).catch(err => console.error("Failed to create recurring template:", err));
             }
@@ -412,7 +422,7 @@ export function LogInteractionModal({
                                         onSelect={(date) => {
                                             if (date) {
                                                 // Preserve time
-                                                const current = new Date(formData.date);
+                                                const current = parseLocalISO(formData.date);
                                                 date.setHours(current.getHours());
                                                 date.setMinutes(current.getMinutes());
 
@@ -454,7 +464,7 @@ export function LogInteractionModal({
                             <NativeSelect
                                 value={(() => {
                                     if (!formData.date) return "12";
-                                    const date = new Date(formData.date);
+                                    const date = parseLocalISO(formData.date);
                                     let h = date.getHours();
                                     if (h === 0) h = 12;
                                     else if (h > 12) h -= 12;
@@ -462,7 +472,7 @@ export function LogInteractionModal({
                                 })()}
                                 onChange={(e) => {
                                     const newHour12 = parseInt(e.target.value);
-                                    const date = new Date(formData.date);
+                                    const date = parseLocalISO(formData.date);
                                     let h = date.getHours();
                                     const isPm = h >= 12;
 
@@ -503,12 +513,12 @@ export function LogInteractionModal({
                             <NativeSelect
                                 value={(() => {
                                     if (!formData.date) return "00";
-                                    const m = new Date(formData.date).getMinutes();
+                                    const m = parseLocalISO(formData.date).getMinutes();
                                     return m.toString().padStart(2, '0');
                                 })()}
                                 onChange={(e) => {
                                     const newMin = parseInt(e.target.value);
-                                    const date = new Date(formData.date);
+                                    const date = parseLocalISO(formData.date);
                                     date.setMinutes(newMin);
                                     const offset = date.getTimezoneOffset() * 60000;
                                     const localISOTime = (new Date(date.getTime() - offset)).toISOString().slice(0, 16);
@@ -527,11 +537,11 @@ export function LogInteractionModal({
                             <NativeSelect
                                 value={(() => {
                                     if (!formData.date) return "AM";
-                                    return new Date(formData.date).getHours() >= 12 ? "PM" : "AM";
+                                    return parseLocalISO(formData.date).getHours() >= 12 ? "PM" : "AM";
                                 })()}
                                 onChange={(e) => {
                                     const newAmPm = e.target.value; // "AM" or "PM"
-                                    const date = new Date(formData.date);
+                                    const date = parseLocalISO(formData.date);
                                     let h = date.getHours();
 
                                     if (newAmPm === "PM" && h < 12) {
@@ -563,7 +573,7 @@ export function LogInteractionModal({
                                 <NativeSelect
                                     value={(() => {
                                         if (!endTime) return "12";
-                                        const date = new Date(endTime);
+                                        const date = parseLocalISO(endTime);
                                         let h = date.getHours();
                                         if (h === 0) h = 12;
                                         else if (h > 12) h -= 12;
@@ -571,7 +581,7 @@ export function LogInteractionModal({
                                     })()}
                                     onChange={(e) => {
                                         const newHour12 = parseInt(e.target.value);
-                                        const date = endTime ? new Date(endTime) : new Date(formData.date);
+                                        const date = endTime ? parseLocalISO(endTime) : parseLocalISO(formData.date);
                                         let h = date.getHours();
                                         const isPm = h >= 12;
 
@@ -603,12 +613,12 @@ export function LogInteractionModal({
                                 <NativeSelect
                                     value={(() => {
                                         if (!endTime) return "00";
-                                        const m = new Date(endTime).getMinutes();
+                                        const m = parseLocalISO(endTime).getMinutes();
                                         return m.toString().padStart(2, '0');
                                     })()}
                                     onChange={(e) => {
                                         const newMin = parseInt(e.target.value);
-                                        const date = endTime ? new Date(endTime) : new Date(formData.date);
+                                        const date = endTime ? parseLocalISO(endTime) : parseLocalISO(formData.date);
                                         date.setMinutes(newMin);
                                         const offset = date.getTimezoneOffset() * 60000;
                                         setEndTime((new Date(date.getTime() - offset)).toISOString().slice(0, 16));
@@ -626,11 +636,11 @@ export function LogInteractionModal({
                                 <NativeSelect
                                     value={(() => {
                                         if (!endTime) return "AM";
-                                        return new Date(endTime).getHours() >= 12 ? "PM" : "AM";
+                                        return parseLocalISO(endTime).getHours() >= 12 ? "PM" : "AM";
                                     })()}
                                     onChange={(e) => {
                                         const newAmPm = e.target.value;
-                                        const date = endTime ? new Date(endTime) : new Date(formData.date);
+                                        const date = endTime ? parseLocalISO(endTime) : parseLocalISO(formData.date);
                                         let h = date.getHours();
 
                                         if (newAmPm === "PM" && h < 12) {
