@@ -89,6 +89,32 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
         }
     };
 
+    const loadDemoCsv = async () => {
+        setUploadError(null);
+        setLargeFileWarning(false);
+        try {
+            const res = await fetch("/demo-contacts.csv");
+            if (!res.ok) throw new Error("Failed to load demo CSV");
+            const text = await res.text();
+            const file = new File([text], "demo-contacts.csv", { type: "text/csv" });
+            
+            const result = await parseFile(file);
+            
+            if (result.valid.length === 0 && result.skipped.length === 0) {
+                setUploadError("Demo file appears to be empty.");
+                return;
+            }
+            
+            setFileType(result.fileType);
+            setParsedContacts(result.valid);
+            setSkippedRows(result.skipped);
+            setStep("PREVIEW");
+        } catch (err: any) {
+            console.error("Demo load error:", err);
+            setUploadError(err.message || "Failed to load demo file.");
+        }
+    };
+
     const handleImport = async () => {
         setStep("UPLOADING");
         try {
@@ -167,16 +193,28 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
 
                 <div className="py-4 space-y-4 flex-1 overflow-y-auto min-h-0">
                     {step === "IDLE" && (
-                        <div className="border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors relative cursor-pointer">
-                            <input
-                                type="file"
-                                accept=".csv,.vcf,.vcard"
-                                className="absolute inset-0 opacity-0 cursor-pointer"
-                                onChange={handleFileChange}
-                            />
-                            <FileUp className="size-10 mb-3" />
-                            <p className="text-sm font-medium">Click to upload or drag and drop</p>
-                            <p className="text-xs">CSV or VCF up to 2MB</p>
+                        <div className="space-y-4">
+                            <div className="border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors relative cursor-pointer">
+                                <input
+                                    type="file"
+                                    accept=".csv,.vcf,.vcard"
+                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                    onChange={handleFileChange}
+                                />
+                                <FileUp className="size-10 mb-3" />
+                                <p className="text-sm font-medium">Click to upload or drag and drop</p>
+                                <p className="text-xs">CSV or VCF up to 2MB</p>
+                            </div>
+                            <div className="flex flex-col items-center gap-3 pt-4 border-t">
+                                <p className="text-sm text-muted-foreground font-medium">Don't have a file ready?</p>
+                                <Button variant="outline" size="sm" onClick={loadDemoCsv} className="gap-2">
+                                    <FileText className="size-4" />
+                                    Load Demo CSV
+                                </Button>
+                                <p className="text-xs text-muted-foreground text-center max-w-[250px]">
+                                    Try importing with a sample file containing 50 contacts, complete with groups and social links.
+                                </p>
+                            </div>
                         </div>
                     )}
 

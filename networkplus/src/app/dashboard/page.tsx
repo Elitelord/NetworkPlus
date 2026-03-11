@@ -755,7 +755,7 @@ export default function Home() {
       {!isFullscreen && (
         <aside id="tour-sidebar" className="w-80 border-r bg-background p-6 flex flex-col gap-6 shrink-0 overflow-y-auto">
           <div className="flex items-center gap-2">
-            <div className="size-8 bg-primary rounded-lg"></div>
+            <img src="/logo.png" alt="Network+" className="size-8 rounded-lg" />
             <h1 className="font-bold text-xl tracking-tight">Network+</h1>
           </div>
 

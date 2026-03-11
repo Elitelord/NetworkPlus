@@ -38,7 +38,7 @@ async function main() {
     });
 
     console.log(`✅ Deleted ${result.count} Google account link(s).`);
-    console.log("\nNow sign in again on https://network-plus.vercel.app with Google.");
+    console.log("\nNow sign in again on https://networkplus.me with Google.");
     console.log("Google will ask you to grant the gmail.readonly scope and will issue a fresh refresh_token.");
 }
 

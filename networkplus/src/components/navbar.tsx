@@ -14,6 +14,7 @@ export default function Navbar() {
             <div className="container mx-auto flex h-14 max-w-screen-2xl items-center px-4 justify-between">
                 <div className="flex items-center gap-6">
                     <Link href="/" className="mr-6 flex items-center space-x-2">
+                        <img src="/logo.png" alt="NetworkPlus" className="h-7 w-7 rounded-md" />
                         <span className="font-bold sm:inline-block">NetworkPlus</span>
                     </Link>
                     <div className="hidden md:flex gap-6">

@@ -56,12 +56,26 @@ export function NotificationForm({ defaultValues, availableGroups, availableCate
         return `${localHours}:${localMinutes}`;
     })();
 
+    const initialCatchUpDays = (() => {
+        if (!defaultValues.notificationTime || !defaultValues.catchUpDays) return defaultValues.catchUpDays ?? [];
+        const [utcHours, utcMinutes] = defaultValues.notificationTime.split(":").map(Number);
+        const date = new Date();
+        date.setUTCHours(utcHours, utcMinutes, 0, 0);
+        const localDay = date.getDay();
+        const utcDay = date.getUTCDay();
+        let dayShift = utcDay - localDay;
+        if (dayShift < -1) dayShift += 7;
+        if (dayShift > 1) dayShift -= 7;
+        
+        return defaultValues.catchUpDays.map(day => (day - dayShift + 7) % 7);
+    })();
+
     const form = useForm<NotificationFormValues>({
         resolver: zodResolver(notificationFormSchema),
         defaultValues: {
             notificationsEnabled: defaultValues.notificationsEnabled ?? false,
             notificationTime: initialLocalTime,
-            catchUpDays: defaultValues.catchUpDays ?? [],
+            catchUpDays: initialCatchUpDays,
             catchUpGroups: defaultValues.catchUpGroups ?? [],
             catchUpCategories: defaultValues.catchUpCategories ?? [],
             catchUpContactIds: defaultValues.catchUpContactIds ?? [],
@@ -94,9 +108,20 @@ export function NotificationForm({ defaultValues, availableGroups, availableCate
             const utcMinutes = date.getUTCMinutes().toString().padStart(2, '0')
             const utcTime = `${utcHours}:${utcMinutes}`
 
+            const localDay = date.getDay()
+            const utcDay = date.getUTCDay()
+            let dayShift = utcDay - localDay
+            if (dayShift < -1) dayShift += 7
+            if (dayShift > 1) dayShift -= 7
+
+            const shiftedCatchUpDays = data.catchUpDays?.map(day => {
+                return (day + dayShift + 7) % 7
+            }) || []
+
             const result = await updateNotificationPreferences({
                 ...data,
-                notificationTime: utcTime
+                notificationTime: utcTime,
+                catchUpDays: shiftedCatchUpDays
             })
 
             if (result.error) {
