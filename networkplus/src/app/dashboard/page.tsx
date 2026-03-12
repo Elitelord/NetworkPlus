@@ -9,6 +9,9 @@ import { LinkedInImportModal } from "@/components/linkedin-import-modal";
 import { BulkEditModal } from "@/components/bulk-edit-modal";
 import { ContactDetailSheet } from "@/components/contact-detail-sheet";
 import { EditLinkDialog } from "@/components/edit-link-dialog";
+import { AddContactModal } from "@/components/add-contact-modal";
+import { AddLinkModal } from "@/components/add-link-modal";
+import { ReachOutModal } from "@/components/reach-out-modal";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { GraphZoomControls } from "@/components/graph-zoom-controls";
 import { GraphLegendPanel } from "@/components/graph-legend-panel";
@@ -45,13 +48,7 @@ export default function Home() {
   const graphInstanceRef = useRef<any>(null);
   const [nodes, setNodes] = useState<NodeType[]>([]);
   const [links, setLinks] = useState<LinkType[]>([]);
-  const [title, setTitle] = useState("");
 
-  const [description, setDescription] = useState("");
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
-  const [fromId, setFromId] = useState("");
-  const [toId, setToId] = useState("");
-  const [linkLabel, setLinkLabel] = useState("");
   const [selectedGroupFilters, setSelectedGroupFilters] = useState<string[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodeType | null>(null);
   const [highlightNodes, setHighlightNodes] = useState<Set<string>>(new Set());
@@ -61,6 +58,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedLink, setSelectedLink] = useState<{ id: string; label?: string; fromName?: string; toName?: string } | null>(null);
+  const [reachOutContact, setReachOutContact] = useState<Contact | null>(null);
 
   // Zoom Controls
   const [currentZoom, setCurrentZoom] = useState(1);
@@ -476,64 +474,13 @@ export default function Home() {
     instance.graphData(graphData as any);
   }, [isClusterMode, graphData]);
 
-  // if groups change and any active filter no longer exists, clean up
+  // Handle selected groups cleanup
   useEffect(() => {
     const valid = selectedGroupFilters.filter(g => groups.includes(g));
     if (valid.length !== selectedGroupFilters.length) {
       setSelectedGroupFilters(valid);
     }
   }, [groups, selectedGroupFilters]);
-
-  async function createNode(e?: FormEvent) {
-    e?.preventDefault();
-    setError(null);
-    try {
-      const res = await fetch("/api/contacts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: title, description, groups: selectedGroups }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        console.error("Create contact failed:", res.status, txt);
-        setError(`Create contact failed: ${res.status}`);
-        return;
-      }
-      setTitle("");
-      setDescription("");
-      setSelectedGroups([]);
-      await loadData();
-    } catch (err: any) {
-      console.error(err);
-      setError(String(err?.message ?? err));
-    }
-  }
-
-  async function createLink(e?: FormEvent) {
-    e?.preventDefault();
-    setError(null);
-    try {
-      const res = await fetch("/api/links", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromId, toId, label: linkLabel }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        console.error("Create link failed:", res.status, txt);
-        setError(`Create link failed: ${res.status}`);
-        return;
-      }
-      setFromId("");
-      setToId("");
-      setLinkLabel("");
-      await loadData();
-    } catch (err: any) {
-      console.error(err);
-      setError(String(err?.message ?? err));
-    }
-  }
-
 
   async function handleInteractionLogged(contactIds: string[]) {
     // Optimistic update: Remove from due list and highlights immediately
@@ -705,17 +652,6 @@ export default function Home() {
       .filter((n): n is NodeType => n !== undefined);
   }, [selectedNode, links, nodes]);
 
-  // Validation Logic
-  const isNodeNameEmpty = title.trim() === "";
-
-  const isSelfLink = fromId !== "" && toId !== "" && fromId === toId;
-  const isDuplicateLink = useMemo(() => {
-    if (fromId === "" || toId === "") return false;
-    return links.some(l => l.fromId === fromId && l.toId === toId);
-  }, [fromId, toId, links]);
-
-  const isLinkInvalid = fromId === "" || toId === "" || isSelfLink || isDuplicateLink;
-
   // Zoom handlers
   const handleZoomIn = useCallback(() => {
     if (!graphInstanceRef.current) return;
@@ -755,32 +691,16 @@ export default function Home() {
       {!isFullscreen && (
         <aside id="tour-sidebar" className="w-80 border-r bg-background p-6 flex flex-col gap-6 shrink-0 overflow-y-auto">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Network+" className="size-8 rounded-lg" />
+            <img src="/logo.svg" alt="Network+" className="size-8 rounded-lg" />
             <h1 className="font-bold text-xl tracking-tight">Network+</h1>
           </div>
 
           <DueSoonList contacts={dueContacts} onSelect={(contact) => {
             const targetNode = nodes.find(n => n.id === contact.id);
             if (targetNode) {
-              setSelectedNode(targetNode);
-
-              const instance = graphInstanceRef.current;
-              if (instance) {
-                const internalNode = instance.graphData().nodes.find((n: any) => n.id === targetNode.id);
-                if (internalNode) {
-                  instance.centerAt(internalNode.x, internalNode.y, 1000);
-                  instance.zoom(6, 2000);
-                }
-              }
-
-              const neighborIds = new Set<string>();
-              neighborIds.add(targetNode.id);
-              setHighlightNodes(neighborIds);
-              setTimeout(() => {
-                setHighlightNodes(new Set());
-              }, 3000);
+              setReachOutContact(targetNode);
             } else {
-              console.warn("No matching node found for contact:", contact.name);
+              setReachOutContact(contact as Contact);
             }
           }} />
         </aside >
@@ -812,6 +732,13 @@ export default function Home() {
             </div>
           )
         }
+        <ReachOutModal 
+          allContacts={nodes}
+          initialContact={reachOutContact} 
+          open={!!reachOutContact} 
+          onOpenChange={(open) => !open && setReachOutContact(null)} 
+          onSuccess={handleInteractionLogged} 
+        />
       </main >
 
       {/* Right Sidebar - Tools */}
@@ -819,86 +746,46 @@ export default function Home() {
         < aside className="w-80 border-l bg-background p-6 flex flex-col gap-6 shrink-0 h-[calc(100vh-57px)] sticky top-0 overflow-y-auto" >
           <h2 className="font-semibold text-lg">Tools</h2>
 
-          <Card id="tour-add-contact">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Add Contact</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={createNode} className="flex flex-col gap-3">
-                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Name" className="w-full p-2 border rounded-md text-sm bg-background" />
-                <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" className="w-full p-2 border rounded-md text-sm bg-background" />
-
-                <div className="relative">
-                  <MultiSelect
-                    options={groups}
-                    selected={selectedGroups}
-                    onChange={setSelectedGroups}
-                    placeholder="Select groups..."
+          <Card className="shadow-none border-none bg-transparent gap-4 py-0">
+            <div className="flex flex-col gap-4">
+              {/* Data Section */}
+              <div className="flex flex-col gap-3 p-4 border rounded-xl bg-card shadow-sm">
+                <h3 className="font-semibold text-sm px-1 flex items-center gap-2">
+                  Data Tools
+                </h3>
+                <div className="flex flex-col gap-2">
+                  <div id="tour-import-contacts">
+                    <ContactImportModal onSuccess={() => {
+                      loadData();
+                    }} />
+                  </div>
+                  <div id="tour-import-messages">
+                    <LinkedInImportModal onSuccess={() => {
+                      loadData();
+                    }} />
+                  </div>
+                  <BulkEditModal
+                    contacts={nodes}
+                    allGroups={groups}
+                    initialGroupFilter={selectedGroupFilters}
+                    onSuccess={() => {
+                      loadData();
+                    }}
                   />
                 </div>
-
-                <Button type="submit" className="w-full" disabled={isNodeNameEmpty}>
-                  Create Contact
-                </Button>
-                {isNodeNameEmpty && title !== "" && (
-                  <p className="text-xs text-destructive">Name is required.</p>
-                )}
-              </form>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Add Link</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={createLink} className="flex flex-col gap-3">
-                <select value={fromId} onChange={(e) => setFromId(e.target.value)} className="w-full p-2 border rounded-md text-sm bg-background">
-                  <option value="">Select source</option>
-                  {nodes.map((n) => (
-                    <option key={n.id} value={n.id}>{n.name}</option>
-                  ))}
-                </select>
-                <select value={toId} onChange={(e) => setToId(e.target.value)} className="w-full p-2 border rounded-md text-sm bg-background">
-                  <option value="">Select target</option>
-                  {nodes.map((n) => (
-                    <option key={n.id} value={n.id}>{n.name}</option>
-                  ))}
-                </select>
-                <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} placeholder="Label (optional)" className="w-full p-2 border rounded-md text-sm bg-background" />
-                <Button type="submit" className="w-full" disabled={isLinkInvalid}>
-                  Create Link
-                </Button>
-                {isSelfLink && <p className="text-xs text-destructive">Cannot link a contact to itself.</p>}
-                {isDuplicateLink && <p className="text-xs text-destructive">Link already exists.</p>}
-              </form>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Data</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              <div id="tour-import-contacts">
-                <ContactImportModal onSuccess={() => {
-                  loadData();
-                }} />
               </div>
-              <div id="tour-import-messages">
-                <LinkedInImportModal onSuccess={() => {
-                  loadData();
-                }} />
+
+              {/* Management Section */}
+              <div className="flex flex-col gap-3 p-4 border rounded-xl bg-card shadow-sm">
+                <h3 className="font-semibold text-sm px-1 flex items-center gap-2">
+                  Management
+                </h3>
+                <div className="flex flex-col gap-2">
+                  <AddContactModal groups={groups} onSuccess={loadData} />
+                  <AddLinkModal nodes={nodes} links={links} onSuccess={loadData} />
+                </div>
               </div>
-              <BulkEditModal
-                contacts={nodes}
-                allGroups={groups}
-                initialGroupFilter={selectedGroupFilters}
-                onSuccess={() => {
-                  loadData();
-                }}
-              />
-            </CardContent>
+            </div>
           </Card>
 
           <div className="py-4">

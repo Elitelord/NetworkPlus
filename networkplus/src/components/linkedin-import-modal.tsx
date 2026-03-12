@@ -255,7 +255,7 @@ export function LinkedInImportModal({
                 onClick={() => setOpen(true)}
             >
                 <MessageSquare className="size-4" />
-                Import LinkedIn Messages
+                Import Messages
             </Button>
             <DialogContent className="sm:max-w-[650px] max-h-[85vh] overflow-y-auto flex flex-col">
                 <DialogHeader>

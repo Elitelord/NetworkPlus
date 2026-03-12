@@ -4,6 +4,14 @@ import { initAdmin } from "@/lib/firebase-admin";
 import { getDueSoonContacts } from "@/lib/contacts";
 
 export async function GET(req: Request) {
+    return handleCron(req);
+}
+
+export async function POST(req: Request) {
+    return handleCron(req);
+}
+
+async function handleCron(req: Request): Promise<NextResponse> {
     try {
         // Verify cron secret
         const authHeader = req.headers.get("authorization");

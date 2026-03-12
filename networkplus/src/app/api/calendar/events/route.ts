@@ -73,7 +73,7 @@ export async function POST(req: Request) {
 
         const userId = session.user.id;
         const body = await req.json();
-        const { title, description, startTime, endTime, contactIds, attendeeEmails } = body;
+        const { title, description, startTime, endTime, contactIds, attendeeEmails, createMeetLink } = body;
 
         if (!title || !startTime) {
             return NextResponse.json({ error: "Title and start time are required" }, { status: 400 });
@@ -126,9 +126,18 @@ export async function POST(req: Request) {
             eventBody.attendees = emails.map((email: string) => ({ email }));
         }
 
+        if (createMeetLink) {
+            eventBody.conferenceData = {
+                createRequest: {
+                    requestId: `meet-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+                    conferenceSolutionKey: { type: "hangoutsMeet" }
+                }
+            };
+        }
+
         // Create event in Google Calendar
         const createRes = await fetch(
-            "https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all",
+            "https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all&conferenceDataVersion=1",
             {
                 method: "POST",
                 headers: {

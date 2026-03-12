@@ -30,6 +30,8 @@ interface MultiSelectProps {
     placeholder?: string;
     className?: string;
     creatable?: boolean;
+    renderOption?: (option: Option) => React.ReactNode;
+    renderSelectedItem?: (option: Option) => React.ReactNode;
 }
 
 export function MultiSelect({
@@ -39,6 +41,8 @@ export function MultiSelect({
     placeholder = "Select...",
     className,
     creatable = true,
+    renderOption,
+    renderSelectedItem,
 }: MultiSelectProps) {
     const [open, setOpen] = React.useState(false);
     const [inputValue, setInputValue] = React.useState("");
@@ -83,7 +87,7 @@ export function MultiSelect({
                                     handleUnselect(option);
                                 }}
                             >
-                                {option}
+                                {renderSelectedItem ? renderSelectedItem(option) : option}
                                 <div
                                     className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                                     onKeyDown={(e) => {
@@ -151,7 +155,7 @@ export function MultiSelect({
                                             selected.includes(option) ? "opacity-100" : "opacity-0"
                                         )}
                                     />
-                                    {option}
+                                    {renderOption ? renderOption(option) : option}
                                 </CommandItem>
                             ))}
                             {creatable && inputValue.trim() !== "" && !availableOptions.some(o => o.toLowerCase() === inputValue.trim().toLowerCase()) && !selected.some(s => s.toLowerCase() === inputValue.trim().toLowerCase()) && (

@@ -9,7 +9,7 @@ export default {
             allowDangerousEmailAccountLinking: true,
             authorization: {
                 params: {
-                    scope: "openid profile email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events",
+                    scope: "openid profile email https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events",
                     access_type: "offline",
                     prompt: "consent",
                 },
@@ -23,7 +23,7 @@ export default {
         authorized({ auth, request: { nextUrl } }) {
             const isLoggedIn = !!auth?.user;
             const isApiAuthRoute = nextUrl.pathname.startsWith("/api/auth");
-            const isPublicRoute = ["/", "/signin", "/signup"].includes(nextUrl.pathname);
+            const isPublicRoute = ["/", "/signin", "/signup", "/terms", "/privacy"].includes(nextUrl.pathname);
 
             if (isApiAuthRoute) {
                 return true;
