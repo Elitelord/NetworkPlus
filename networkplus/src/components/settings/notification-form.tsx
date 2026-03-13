@@ -30,6 +30,7 @@ const notificationFormSchema = z.object({
     catchUpGroups: z.array(z.string()).optional(),
     catchUpCategories: z.array(z.string()).optional(),
     catchUpContactIds: z.array(z.string()).optional(),
+    filterReachOutByPreferences: z.boolean().optional(),
 })
 
 type NotificationFormValues = z.infer<typeof notificationFormSchema>
@@ -79,6 +80,7 @@ export function NotificationForm({ defaultValues, availableGroups, availableCate
             catchUpGroups: defaultValues.catchUpGroups ?? [],
             catchUpCategories: defaultValues.catchUpCategories ?? [],
             catchUpContactIds: defaultValues.catchUpContactIds ?? [],
+            filterReachOutByPreferences: defaultValues.filterReachOutByPreferences ?? false,
         },
     })
 
@@ -146,6 +148,27 @@ export function NotificationForm({ defaultValues, availableGroups, availableCate
                                 <FormLabel className="text-base">Daily Catch-up</FormLabel>
                                 <FormDescription>
                                     Receive a daily notification with contacts to catch up with.
+                                </FormDescription>
+                            </div>
+                            <FormControl>
+                                <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                />
+                            </FormControl>
+                        </FormItem>
+                    )}
+                />
+
+                <FormField
+                    control={form.control}
+                    name="filterReachOutByPreferences"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                            <div className="space-y-0.5">
+                                <FormLabel className="text-base">Filter Dashboard</FormLabel>
+                                <FormDescription>
+                                    Only show contacts matching these filters in the dashboard reach-out list.
                                 </FormDescription>
                             </div>
                             <FormControl>

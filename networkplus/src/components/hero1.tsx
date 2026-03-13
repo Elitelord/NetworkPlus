@@ -17,7 +17,7 @@ interface Hero1Props {
       url: string;
     };
   };
-  image: {
+  image?: {
     src: string;
     alt: string;
   };
@@ -37,10 +37,7 @@ const Hero1 = ({
       url: "https://www.shadcnblocks.com",
     },
   },
-  image = {
-    src: "https://deifkwefumgah.cloudfront.net/shadcnblocks/block/placeholder-1.svg",
-    alt: "Hero section demo image showing interface components",
-  },
+  image,
 }: Hero1Props) => {
   return (
     <section className="py-12 md:py-20">
@@ -74,13 +71,15 @@ const Hero1 = ({
               )}
             </div>
           </div>
-          <div className="mt-4 w-full max-w-5xl">
-            <img
-              src={image.src}
-              alt={image.alt}
-              className="w-full rounded-xl border object-cover shadow-2xl"
-            />
-          </div>
+          {image && (
+            <div className="mt-4 w-full max-w-5xl">
+              <img
+                src={image.src}
+                alt={image.alt}
+                className="w-full rounded-xl border object-cover shadow-2xl"
+              />
+            </div>
+          )}
         </div>
       </div>
     </section>

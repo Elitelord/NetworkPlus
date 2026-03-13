@@ -153,6 +153,7 @@ const notificationPreferencesSchema = z.object({
     catchUpGroups: z.array(z.string()).optional(),
     catchUpCategories: z.array(z.string()).optional(),
     catchUpContactIds: z.array(z.string()).optional(),
+    filterReachOutByPreferences: z.boolean().optional(),
 })
 
 export async function updateNotificationPreferences(data: z.infer<typeof notificationPreferencesSchema>) {
@@ -176,6 +177,7 @@ export async function updateNotificationPreferences(data: z.infer<typeof notific
                 catchUpGroups: result.data.catchUpGroups ?? [],
                 catchUpCategories: result.data.catchUpCategories ?? [],
                 catchUpContactIds: result.data.catchUpContactIds ?? [],
+                filterReachOutByPreferences: result.data.filterReachOutByPreferences ?? false,
             } as any,
         })
         revalidatePath("/settings")

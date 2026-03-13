@@ -432,7 +432,7 @@ export function BulkEditModal({ contacts, allGroups, initialGroupFilter, onSucce
                                             <td className="p-3 font-medium">
                                                 <div className="flex items-center gap-2">
                                                     {contact.name}
-                                                    {contact.strengthScore && contact.strengthScore < 20 && (
+                                                    {contact.strengthScore !== undefined && contact.strengthScore < 20 && (
                                                         <span className="flex size-2 rounded-full bg-destructive flex-shrink-0" />
                                                     )}
                                                 </div>

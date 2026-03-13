@@ -29,6 +29,7 @@ model User {
   catchUpGroups        String[]   @default([])
   catchUpCategories    String[]   @default([])
   catchUpContactIds    String[]   @default([])
+  filterReachOutByPreferences Boolean @default(false)
   lastCatchUpSentAt    DateTime?
 }
 

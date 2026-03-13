@@ -84,6 +84,19 @@ const LAST_NAME_HEADERS = new Set([
     "surname",
 ]);
 
+// Helper to normalize strings for comparison (lowercase, remove non-alphanumeric)
+const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const normalizeSet = (s: Set<string>) => new Set([...s].map(normalize));
+
+const N_EMAIL_HEADERS = normalizeSet(EMAIL_HEADERS);
+const N_PHONE_HEADERS = normalizeSet(PHONE_HEADERS);
+const N_GROUP_HEADERS = normalizeSet(GROUP_HEADERS);
+const N_DESCRIPTION_HEADERS = normalizeSet(DESCRIPTION_HEADERS);
+const N_NAME_HEADERS = normalizeSet(NAME_HEADERS);
+const N_FIRST_NAME_HEADERS = normalizeSet(FIRST_NAME_HEADERS);
+const N_LAST_NAME_HEADERS = normalizeSet(LAST_NAME_HEADERS);
+
 // Headers we handle explicitly — everything else becomes metadata
 const KNOWN_HEADERS = new Set([
     ...EMAIL_HEADERS,
@@ -94,6 +107,8 @@ const KNOWN_HEADERS = new Set([
     ...FIRST_NAME_HEADERS,
     ...LAST_NAME_HEADERS,
 ]);
+
+const N_KNOWN_HEADERS = normalizeSet(KNOWN_HEADERS);
 
 // ─── File Type Detection ─────────────────────────────────────────────────────
 
@@ -108,20 +123,10 @@ export function detectFileType(file: File): "csv" | "vcf" | null {
 
 function findHeaderValue(
     row: Record<string, string>,
-    candidates: Set<string>
+    normalizedCandidates: Set<string>
 ): string | undefined {
-    // Helper to normalize strings for comparison (lowercase, remove non-alphanumeric)
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-    // Create a normalized set of candidates for efficient lookup
-    const normalizedCandidates = new Set<string>();
-    for (const c of candidates) {
-        normalizedCandidates.add(normalize(c));
-    }
-
     for (const key of Object.keys(row)) {
-        const normalizedKey = normalize(key);
-        if (normalizedCandidates.has(normalizedKey)) {
+        if (normalizedCandidates.has(normalize(key))) {
             return row[key];
         }
     }
@@ -130,12 +135,12 @@ function findHeaderValue(
 
 function deriveName(row: Record<string, string>): string {
     // 1. Direct name field
-    const directName = findHeaderValue(row, NAME_HEADERS);
+    const directName = findHeaderValue(row, N_NAME_HEADERS);
     if (directName?.trim()) return directName.trim();
 
     // 2. First Name + Last Name
-    const first = findHeaderValue(row, FIRST_NAME_HEADERS)?.trim() || "";
-    const last = findHeaderValue(row, LAST_NAME_HEADERS)?.trim() || "";
+    const first = findHeaderValue(row, N_FIRST_NAME_HEADERS)?.trim() || "";
+    const last = findHeaderValue(row, N_LAST_NAME_HEADERS)?.trim() || "";
     const combined = `${first} ${last}`.trim();
     if (combined) return combined;
 
@@ -144,53 +149,10 @@ function deriveName(row: Record<string, string>): string {
 
 // ─── CSV Parsing ─────────────────────────────────────────────────────────────
 
-function normalizeCSVRow(
-    row: Record<string, string>,
-    rowNum: number
-): { contact: NormalizedContact } | { skipped: SkippedRow } {
-    const name = deriveName(row);
-    if (!name) {
-        return {
-            skipped: { row: rowNum, name: "Unknown", reason: "Could not derive name from any column" },
-        };
-    }
-
-    const email = findHeaderValue(row, EMAIL_HEADERS)?.trim() || undefined;
-    const phone = findHeaderValue(row, PHONE_HEADERS)?.trim() || undefined;
-    const group = findHeaderValue(row, GROUP_HEADERS)?.trim() || undefined;
-    const description = findHeaderValue(row, DESCRIPTION_HEADERS)?.trim() || undefined;
-
-    // Collect unknown headers into metadata
-    // Helper to normalize strings for comparison (lowercase, remove non-alphanumeric)
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-    const metadata: Record<string, any> = {};
-    const normalizedKnown = new Set([...KNOWN_HEADERS].map(normalize));
-
-    for (const key of Object.keys(row)) {
-        const normalizedKey = normalize(key);
-        if (!normalizedKnown.has(normalizedKey) && row[key]?.trim()) {
-            metadata[key] = row[key].trim();
-        }
-    }
-
-    return {
-        contact: {
-            name,
-            email,
-            phone,
-            group,
-            description,
-            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-        },
-    };
-}
 
 // All known header candidates flattened for detecting the real header row
 const ALL_KNOWN_NORMALIZED = new Set([
-    ...[...EMAIL_HEADERS, ...PHONE_HEADERS, ...GROUP_HEADERS, ...DESCRIPTION_HEADERS,
-    ...NAME_HEADERS, ...FIRST_NAME_HEADERS, ...LAST_NAME_HEADERS,
-    ].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, "")),
+    ...N_KNOWN_HEADERS,
     "url", "position", "connectedon", "title", "website",
 ]);
 
@@ -215,7 +177,7 @@ export function parseCSV(file: File): Promise<ParseResult> {
 
                 // Find the real header row (skip preamble lines like LinkedIn's "Notes:" row)
                 const lines = text.split(/\r?\n/);
-                let headerIdx = 0;
+                let headerIdx = -1;
                 for (let i = 0; i < Math.min(lines.length, 10); i++) {
                     if (looksLikeHeaderRow(lines[i])) {
                         headerIdx = i;
@@ -226,6 +188,9 @@ export function parseCSV(file: File): Promise<ParseResult> {
                 // Reconstruct CSV from the real header row onward
                 if (headerIdx > 0) {
                     text = lines.slice(headerIdx).join("\n");
+                } else if (headerIdx === -1 && lines.length > 0) {
+                    // If no header found in first 10 rows, use first row anyway as fallback
+                    headerIdx = 0;
                 }
 
                 Papa.parse(text, {
@@ -235,15 +200,69 @@ export function parseCSV(file: File): Promise<ParseResult> {
                         const valid: NormalizedContact[] = [];
                         const skipped: SkippedRow[] = [];
 
+                        if (results.data.length === 0) {
+                            resolve({ valid: [], skipped: [], fileType: "csv" });
+                            return;
+                        }
+
+                        // Determine field mappings once
+                        const firstRow = results.data[0] as Record<string, string>;
+                        const keys = Object.keys(firstRow);
+                        
+                        const colMap = {
+                            name: keys.find(k => N_NAME_HEADERS.has(normalize(k))),
+                            first: keys.find(k => N_FIRST_NAME_HEADERS.has(normalize(k))),
+                            last: keys.find(k => N_LAST_NAME_HEADERS.has(normalize(k))),
+                            email: keys.find(k => N_EMAIL_HEADERS.has(normalize(k))),
+                            phone: keys.find(k => N_PHONE_HEADERS.has(normalize(k))),
+                            group: keys.find(k => N_GROUP_HEADERS.has(normalize(k))),
+                            description: keys.find(k => N_DESCRIPTION_HEADERS.has(normalize(k))),
+                        };
+
+                        const metadataKeys = keys.filter(k => {
+                            const nk = normalize(k);
+                            return !N_KNOWN_HEADERS.has(nk) && !N_FIRST_NAME_HEADERS.has(nk) && !N_LAST_NAME_HEADERS.has(nk);
+                        });
+
                         (results.data as Record<string, string>[]).forEach((row, index) => {
                             const rowNum = index + 2; // header is row 1
-                            const result = normalizeCSVRow(row, rowNum);
-
-                            if ("contact" in result) {
-                                valid.push(result.contact);
-                            } else {
-                                skipped.push(result.skipped);
+                            
+                            // Derive name
+                            let name = "";
+                            if (colMap.name) {
+                                name = row[colMap.name]?.trim() || "";
+                            } 
+                            
+                            if (!name && colMap.first) {
+                                const first = row[colMap.first]?.trim() || "";
+                                const last = colMap.last ? (row[colMap.last]?.trim() || "") : "";
+                                name = `${first} ${last}`.trim();
                             }
+
+                            if (!name) {
+                                skipped.push({ row: rowNum, name: "Unknown", reason: "Could not derive name from any column" });
+                                return;
+                            }
+
+                            const contact: NormalizedContact = {
+                                name,
+                                email: colMap.email ? (row[colMap.email]?.trim() || undefined) : undefined,
+                                phone: colMap.phone ? (row[colMap.phone]?.trim() || undefined) : undefined,
+                                group: colMap.group ? (row[colMap.group]?.trim() || undefined) : undefined,
+                                description: colMap.description ? (row[colMap.description]?.trim() || undefined) : undefined,
+                            };
+
+                            const metadata: Record<string, any> = {};
+                            for (const k of metadataKeys) {
+                                const val = row[k]?.trim();
+                                if (val) metadata[k] = val;
+                            }
+
+                            if (Object.keys(metadata).length > 0) {
+                                contact.metadata = metadata;
+                            }
+
+                            valid.push(contact);
                         });
 
                         resolve({ valid, skipped, fileType: "csv" });

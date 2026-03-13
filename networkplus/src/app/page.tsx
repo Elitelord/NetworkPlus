@@ -19,7 +19,6 @@ export default function Home() {
               primary: { text: "Get Started", url: "/signup" },
               secondary: { text: "Learn More", url: "#features" }
             }}
-            image={{ src: "/images/network-plus.png", alt: "Network Plus hero image" }}
           />
         </header>
 
