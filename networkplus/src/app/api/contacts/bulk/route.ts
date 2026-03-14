@@ -62,11 +62,9 @@ export async function PATCH(req: Request) {
 
         await Promise.all(updatePromises);
 
-        // Trigger inference for all updated contacts in background
-        const { updateInferredLinks } = await import("@/lib/inference");
-        for (const contact of contacts) {
-            updateInferredLinks(contact.id).catch(err => console.error("Inference failed for", contact.id, err));
-        }
+        // Trigger inference for all updated contacts
+        const { updateInferredLinksBulk } = await import("@/lib/inference");
+        await updateInferredLinksBulk(contacts.map(c => c.id));
 
         return NextResponse.json({ success: true, updatedCount: contacts.length });
     } catch (err: any) {

@@ -125,10 +125,6 @@ export async function POST(req: Request) {
                     },
                 });
 
-                // Trigger inference
-                const { updateInferredLinks } = await import("@/lib/inference");
-                await updateInferredLinks(newContact.id);
-
                 importedContacts.push(newContact);
 
             } catch (err) {
@@ -136,6 +132,12 @@ export async function POST(req: Request) {
                 errors.push(`Row ${originalIndex + 1}: ${(err as Error).message}`);
                 skippedRows.push({ row: originalIndex + 1, name: name, reason: "Database error" });
             }
+        }
+
+        // Trigger bulk inference for all newly imported contacts
+        if (importedContacts.length > 0) {
+            const { updateInferredLinksBulk } = await import("@/lib/inference");
+            await updateInferredLinksBulk(importedContacts.map(c => c.id));
         }
 
         return NextResponse.json({

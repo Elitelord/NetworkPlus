@@ -3,154 +3,131 @@ import prisma from "@lib/prisma";
 
 /**
  * Updates inferred links for a specific contact based on the "Shared Group" rule.
- * 
- * Rules:
- * 1. If two contacts share the same non-null group, create an inferred link.
- * 2. Manual links take precedence (if a manual link exists, do not create inferred).
- * 3. Inferred links are bidirectional in concept, but stored as directed. We will create one if missing.
- *    (Actually, force-directed graphs often treat links as undirected unless specified. 
- *     We will standardize on creating one link per pair to avoid clutter, e.g., Low ID -> High ID).
- * 4. Cleaning up: If the group changes, old inferred links for "shared_group" should be removed.
  */
 export async function updateInferredLinks(contactId: string) {
-    const contact = await prisma.contact.findUnique({
-        where: { id: contactId },
+    return updateInferredLinksBulk([contactId]);
+}
+
+/**
+ * Updates inferred links for multiple contacts efficiently.
+ */
+export async function updateInferredLinksBulk(contactIds: string[]) {
+    if (contactIds.length === 0) return;
+
+    // 1. Fetch all involved contacts
+    const contacts = await prisma.contact.findMany({
+        where: { id: { in: contactIds } },
         select: { id: true, groups: true, ownerId: true }
     });
 
-    if (!contact || !contact.groups || contact.groups.length === 0) {
-        // If no groups, remove all "shared_group" inferred links for this contact
-        await prisma.link.deleteMany({
-            where: {
-                OR: [
-                    { fromId: contactId },
-                    { toId: contactId }
-                ],
-                label: "shared_group",
-                metadata: {
-                    path: ["source"],
-                    equals: "inferred"
-                }
-            }
-        });
-        return;
-    }
+    if (contacts.length === 0) return;
 
-    const { groups, ownerId } = contact;
+    // group by owner to handle multi-user scenarios if necessary, 
+    // though usually one request is for one user.
+    const ownerId = contacts[0].ownerId;
+    const allAffectedContactIds = new Set(contacts.map(c => c.id));
 
-    // 1. Find all potential target contacts (matches ANY group)
-    // We can't easily do "find contacts where groups array contains any of my groups" in one simple query without array overlap operators which might vary by DB.
-    // However, Prisma supports basic array filtering. `groups: { hasSome: [...] }`
-    const sameGroupContacts = await prisma.contact.findMany({
+    // 2. For each contact, identify what groups they are in
+    const contactGroupsMap = new Map<string, string[]>();
+    const allGroupsInvolved = new Set<string>();
+
+    contacts.forEach(c => {
+        const gs = c.groups || [];
+        contactGroupsMap.set(c.id, gs);
+        gs.forEach(g => allGroupsInvolved.add(g));
+    });
+
+    // 3. Find ALL contacts in the database that share ANY of these groups
+    // This is much faster than doing it per-contact.
+    const potentialTargets = await prisma.contact.findMany({
         where: {
             ownerId: ownerId,
-            groups: { hasSome: groups },
-            id: { not: contactId } // Exclude self
+            groups: { hasSome: Array.from(allGroupsInvolved) }
         },
         select: { id: true, groups: true }
     });
 
-    // 2. We need to manage links PER GROUP.
-    // Strategy:
-    // A. Identify all valid (ContactB, SharedGroup) pairs.
-    // B. Reconcile with existing links.
+    // 4. Determine valid links that SHOULD exist
+    // Link key format: "LowID:HighID:GroupName"
+    const validLinkKeys = new Set<string>();
 
-    const validLinks = new Set<string>(); // "otherId:groupName"
+    // We only need to check links where at least one side is in our `contactIds` list
+    for (const source of contacts) {
+        const sourceGroups = contactGroupsMap.get(source.id) || [];
+        if (sourceGroups.length === 0) continue;
 
-    for (const other of sameGroupContacts) {
-        // Find shared groups between contact and other
-        const shared = groups.filter(g => other.groups.includes(g));
-        for (const g of shared) {
-            validLinks.add(`${other.id}:${g}`);
+        for (const target of potentialTargets) {
+            if (source.id === target.id) continue;
+
+            const shared = sourceGroups.filter(g => target.groups.includes(g));
+            for (const g of shared) {
+                const [a, b] = [source.id, target.id].sort();
+                validLinkKeys.add(`${a}:${b}:${g}`);
+            }
         }
     }
 
-    // 3. Delete invalid inferred links
-    // Fetch all existing inferred links for this contact
+    // 5. Fetch existing shared_group links for these contacts
     const existingInferred = await prisma.link.findMany({
         where: {
             OR: [
-                { fromId: contactId },
-                { toId: contactId }
+                { fromId: { in: Array.from(allAffectedContactIds) } },
+                { toId: { in: Array.from(allAffectedContactIds) } }
             ],
-            label: "shared_group",
-            metadata: {
-                path: ["source"],
-                equals: "inferred"
-            }
+            label: "shared_group"
         }
     });
 
-    const deletedLinkIds = new Set<string>();
-    for (const link of existingInferred) {
-        const otherId = link.fromId === contactId ? link.toId : link.fromId;
-        const group = (link.metadata as any)?.group;
+    // 6. Partition existing links: stay, delete, or ignore (if unrelated to our current targets)
+    const linksToDelete: string[] = [];
+    const existingLinkMap = new Set<string>(); // "LowID:HighID:GroupName"
 
-        if (group && !validLinks.has(`${otherId}:${group}`)) {
-            // This specific link (for this group) is no longer valid
-            await prisma.link.delete({ where: { id: link.id } });
-            deletedLinkIds.add(link.id);
-        } else if (!group) {
-            // Legacy or malformed inferred link (no group in metadata), remove it to be safe or update it?
-            // Safest to remove and let it regenerate.
-            await prisma.link.delete({ where: { id: link.id } });
-            deletedLinkIds.add(link.id);
+    for (const link of existingInferred) {
+        const meta = link.metadata as any;
+        const group = meta?.group;
+        const [a, b] = [link.fromId, link.toId].sort();
+        const key = `${a}:${b}:${group}`;
+
+        // If one of the contacts is in our updated list, we must validate it
+        const isAffected = allAffectedContactIds.has(link.fromId) || allAffectedContactIds.has(link.toId);
+        
+        if (isAffected) {
+            if (group && validLinkKeys.has(key)) {
+                existingLinkMap.add(key);
+            } else {
+                linksToDelete.push(link.id);
+            }
         }
     }
 
-    // 4. Create missing links
-    for (const linkKey of Array.from(validLinks)) {
-        // Split on first colon only — cuid IDs never contain colons, but group names might
-        const colonIdx = linkKey.indexOf(":");
-        const otherId = linkKey.substring(0, colonIdx);
-        const groupName = linkKey.substring(colonIdx + 1);
-
-        // Check for MANUAL link first ( Manual takes precedence over ALL inferred links between these two?
-        // User said: "manual links must always take precedence".
-        // Use case: If I manually link A and B with "Known from Gym", do I still want an inferred link "Shared Group: Gym"?
-        // Usually, if a manual link exists, we suppress inferred links to avoid noise.
-        // So if ANY manual link exists between A and B, we skip creating inferred links.
-
-        const existingManual = await prisma.link.findFirst({
-            where: {
-                OR: [
-                    { fromId: contactId, toId: otherId },
-                    { fromId: otherId, toId: contactId }
-                ],
-                // Manual links do NOT have metadata.source === 'inferred'
-                NOT: {
-                    metadata: {
-                        path: ["source"],
-                        equals: "inferred"
-                    }
-                }
-            }
+    // 7. Perform Deletions
+    if (linksToDelete.length > 0) {
+        await prisma.link.deleteMany({
+            where: { id: { in: linksToDelete } }
         });
+    }
 
-        if (existingManual) continue;
+    // 8. Create Missing Links
+    const linksToCreate = [];
+    for (const linkKey of validLinkKeys) {
+        if (existingLinkMap.has(linkKey)) continue;
 
-        // Check if specific inferred link exists (exclude links that were deleted in step 3)
-        const existingSpecific = existingInferred.find(l =>
-            !deletedLinkIds.has(l.id) &&
-            (l.fromId === otherId || l.toId === otherId) &&
-            (l.metadata as any)?.group === groupName
+        const [fromId, toId, groupName] = linkKey.split(":");
+
+        linksToCreate.push({
+            fromId,
+            toId,
+            label: "shared_group",
+            weight: 1.0,
+            metadata: { rule: "shared_group", group: groupName }
+        });
+    }
+
+    if (linksToCreate.length > 0) {
+        // Prisma doesn't support createMany with Json metadata easily in some versions/providers without workaround,
+        // but since we are usually creating a moderate amount, loop is fine, or use transaction.
+        await prisma.$transaction(
+            linksToCreate.map(data => prisma.link.create({ data }))
         );
-
-        if (existingSpecific) continue;
-
-        // Create new inferred link
-        // Maintain consistent direction
-        const [from, to] = [contactId, otherId].sort();
-
-        await prisma.link.create({
-            data: {
-                fromId: from,
-                toId: to,
-                label: "shared_group",
-                weight: 1.0,
-                // Store the group name in metadata so we can distinguish multiple links
-                metadata: { source: "inferred", rule: "shared_group", group: groupName }
-            }
-        });
     }
 }
