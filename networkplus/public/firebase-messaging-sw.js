@@ -2,7 +2,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: "AIzaSyBJGjQDWmcMgby5vC6uGKHb1GQ8Fx880CA",
+  apiKey: "AIzaSyAX5DGvidsslth2-CmAYncVQ5TtcPGY_jc",
   authDomain: "networkpluspush.firebaseapp.com",
   projectId: "networkpluspush",
   storageBucket: "networkpluspush.firebasestorage.app",
