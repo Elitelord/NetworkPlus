@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
+import { parseJsonBody, apiError } from "@/lib/api-utils";
 
 export async function POST(req: Request) {
     try {
@@ -10,7 +11,9 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await req.json();
+        const parsed = await parseJsonBody(req);
+        if (!parsed.ok) return parsed.response;
+        const body = parsed.data as Record<string, unknown>;
         const { contactIds, type = "OTHER", content, date, platform = "OTHER", durationMinutes, messageCount } = body;
 
         // Fallback for single contactId support (if needed during transition or just for safety)
@@ -94,9 +97,6 @@ export async function POST(req: Request) {
         return NextResponse.json(interaction);
     } catch (err) {
         console.error("Create interaction failed:", err);
-        return NextResponse.json(
-            { error: "Internal Server Error" },
-            { status: 500 }
-        );
+        return apiError(err);
     }
 }

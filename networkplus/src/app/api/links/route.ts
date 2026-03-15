@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import prisma from "@lib/prisma";
-
 import { auth } from "@/auth";
+import { parseJsonBody, apiError } from "@/lib/api-utils";
 
 export async function GET() {
   try {
@@ -19,7 +19,7 @@ export async function GET() {
     });
     return NextResponse.json(links);
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return apiError(err);
   }
 }
 
@@ -28,8 +28,21 @@ export async function POST(req: Request) {
     const session = await auth() as Session | null;
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const body = await req.json();
+    const parsed = await parseJsonBody(req);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data as { fromId?: unknown; toId?: unknown; label?: unknown };
     const { fromId, toId, label } = body;
+
+    if (typeof fromId !== "string" || !fromId.trim() || typeof toId !== "string" || !toId.trim()) {
+      return NextResponse.json({ error: "Valid fromId and toId are required" }, { status: 400 });
+    }
+    if (fromId === toId) {
+      return NextResponse.json({ error: "fromId and toId must be different" }, { status: 400 });
+    }
+    const trimmedLabel = typeof label === "string" ? label.trim() : undefined;
+    if (trimmedLabel !== undefined && trimmedLabel.length > 500) {
+      return NextResponse.json({ error: "Label must be 500 characters or less" }, { status: 400 });
+    }
 
     // Validate that contacts exist AND belong to user
     const c1 = await prisma.contact.findFirst({ where: { id: fromId, ownerId: session.user.id } });
@@ -39,30 +52,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Source or target contact not found or unauthorized" }, { status: 400 });
     }
 
-    // Cleanup: If an inferred link exists between these two, delete it so the manual one takes precedence
-    await prisma.link.deleteMany({
-      where: {
-        OR: [
-          { fromId: fromId, toId: toId },
-          { fromId: toId, toId: fromId },
-        ],
-        metadata: {
-          path: ["source"],
-          equals: "inferred"
-        }
-      }
-    });
-
     const link = await prisma.link.create({
       data: {
-        fromId,
-        toId,
-        label,
+        fromId: fromId.trim(),
+        toId: toId.trim(),
+        label: trimmedLabel || null,
       },
     });
     return NextResponse.json(link);
   } catch (err) {
     console.error("Create link failed:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return apiError(err);
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
+import { parseJsonBody, apiError, LIMITS, clampString, clampGroupsArray } from "@/lib/api-utils";
 
 export async function GET(req: Request) {
     try {
@@ -29,43 +30,43 @@ export async function GET(req: Request) {
 
         return NextResponse.json(contacts);
     } catch (err) {
-        return NextResponse.json({ error: String(err) }, { status: 500 });
+        return apiError(err);
     }
 }
 
 export async function POST(req: Request) {
     try {
         const session = await auth() as Session | null;
-        const body = await req.json();
-        const { name, description, group, groups, email, phone } = body;
-
-        if (!name) {
-            return NextResponse.json(
-                { error: "Name is required" },
-                { status: 400 }
-            );
-        }
-
-        // Handle backward compatibility
-        let validGroups = Array.isArray(groups) ? groups : [];
-        if (group && typeof group === 'string' && !validGroups.includes(group)) {
-            validGroups.push(group);
-        }
-
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const parsed = await parseJsonBody(req);
+        if (!parsed.ok) return parsed.response;
+        const body = parsed.data as Record<string, unknown>;
+        const { group } = body;
+        const name = clampString(body.name, LIMITS.name);
+        const description = clampString(body.description, LIMITS.description) ?? undefined;
+        const email = clampString(body.email, LIMITS.email) ?? undefined;
+        const phone = clampString(body.phone, LIMITS.phone) ?? undefined;
+        let validGroups = clampGroupsArray(body.groups);
+        if (group && typeof group === "string") {
+            const g = clampString(group, LIMITS.groupItem);
+            if (g && !validGroups.includes(g)) validGroups = [...validGroups, g];
+        }
+
+        if (!name || name.length === 0) {
+            return NextResponse.json({ error: "Name is required" }, { status: 400 });
         }
 
         const newContact = await prisma.contact.create({
             data: {
                 ownerId: session.user.id,
                 name,
-                description,
+                description: description ?? null,
                 groups: validGroups,
-                email,
-                phone,
-                // group: group || null, // Keep existing if schema still had it? Schema replaced it.
-                // If we absolutely removed `group` from schema, we can't pass it.
+                email: email ?? null,
+                phone: phone ?? null,
             },
         });
 
@@ -76,6 +77,6 @@ export async function POST(req: Request) {
         return NextResponse.json(newContact);
     } catch (err) {
         console.error("Create contact failed:", err);
-        return NextResponse.json({ error: String(err) }, { status: 500 });
+        return apiError(err);
     }
 }

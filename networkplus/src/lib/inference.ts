@@ -8,10 +8,26 @@ export async function updateInferredLinks(contactId: string) {
     return updateInferredLinksBulk([contactId]);
 }
 
+const INFERENCE_CHUNK_SIZE = 200;
+
 /**
  * Updates inferred links for multiple contacts efficiently.
+ * Processes in chunks to avoid oversized transactions and DB load.
  */
 export async function updateInferredLinksBulk(contactIds: string[]) {
+    if (contactIds.length === 0) return;
+
+    const chunks: string[][] = [];
+    for (let i = 0; i < contactIds.length; i += INFERENCE_CHUNK_SIZE) {
+        chunks.push(contactIds.slice(i, i + INFERENCE_CHUNK_SIZE));
+    }
+
+    for (const chunk of chunks) {
+        await updateInferredLinksBulkChunk(chunk);
+    }
+}
+
+async function updateInferredLinksBulkChunk(contactIds: string[]) {
     if (contactIds.length === 0) return;
 
     // 1. Fetch all involved contacts
@@ -67,14 +83,14 @@ export async function updateInferredLinksBulk(contactIds: string[]) {
         }
     }
 
-    // 5. Fetch existing shared_group links for these contacts
+    // 5. Fetch existing inferred (shared_group) links by metadata.rule, not label
     const existingInferred = await prisma.link.findMany({
         where: {
             OR: [
                 { fromId: { in: Array.from(allAffectedContactIds) } },
                 { toId: { in: Array.from(allAffectedContactIds) } }
             ],
-            label: "shared_group"
+            metadata: { path: ["rule"], equals: "shared_group" }
         }
     });
 
@@ -117,15 +133,13 @@ export async function updateInferredLinksBulk(contactIds: string[]) {
         linksToCreate.push({
             fromId,
             toId,
-            label: "shared_group",
+            label: groupName,
             weight: 1.0,
-            metadata: { rule: "shared_group", group: groupName }
+            metadata: { rule: "shared_group", group: groupName, source: "inferred" }
         });
     }
 
     if (linksToCreate.length > 0) {
-        // Prisma doesn't support createMany with Json metadata easily in some versions/providers without workaround,
-        // but since we are usually creating a moderate amount, loop is fine, or use transaction.
         await prisma.$transaction(
             linksToCreate.map(data => prisma.link.create({ data }))
         );

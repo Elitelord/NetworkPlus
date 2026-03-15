@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import prisma from "@lib/prisma"
 import { z } from "zod"
+import { parseJsonBody, apiError, checkRateLimit, getRateLimitId, RATE_LIMITS } from "@/lib/api-utils"
 
 const registerSchema = z.object({
     name: z.string().min(1, "Name is required"),
@@ -11,7 +12,13 @@ const registerSchema = z.object({
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json()
+        const limited = checkRateLimit(getRateLimitId(req), RATE_LIMITS.register)
+        if (limited) return limited
+
+        const parsed = await parseJsonBody(req)
+        if (!parsed.ok) return parsed.response
+        const body = parsed.data
+
         const result = registerSchema.safeParse(body)
 
         if (!result.success) {
@@ -51,9 +58,6 @@ export async function POST(req: Request) {
         )
     } catch (error) {
         console.error("Registration error:", error)
-        return NextResponse.json(
-            { error: "Something went wrong. Please try again." },
-            { status: 500 }
-        )
+        return apiError(error)
     }
 }

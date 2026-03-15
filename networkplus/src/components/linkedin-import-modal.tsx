@@ -28,6 +28,7 @@ import {
     type LinkedInConversation,
     type SkippedConversation,
 } from "@/lib/linkedin-message-parser";
+import { MAX_UPLOAD_FILE_BYTES } from "@/lib/api-utils";
 
 type MatchedConversation = LinkedInConversation & {
     matched: boolean;
@@ -72,8 +73,8 @@ export function LinkedInImportModal({
 
         setUploadError(null);
 
-        if (file.size > 10 * 1024 * 1024) {
-            setUploadError("File size exceeds 10MB limit.");
+        if (file.size > MAX_UPLOAD_FILE_BYTES) {
+            setUploadError(`File size exceeds ${MAX_UPLOAD_FILE_BYTES / (1024 * 1024)}MB limit.`);
             return;
         }
 

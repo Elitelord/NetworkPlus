@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
+import { parseJsonBody, apiError, checkRateLimit, getRateLimitId, RATE_LIMITS, LIMITS, clampGroupsArray } from "@/lib/api-utils";
 
 export async function PATCH(req: Request) {
     try {
@@ -10,11 +11,24 @@ export async function PATCH(req: Request) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await req.json();
+        const limited = checkRateLimit(getRateLimitId(req, session.user.id), RATE_LIMITS.bulk);
+        if (limited) return limited;
+
+        const parsed = await parseJsonBody(req);
+        if (!parsed.ok) return parsed.response;
+        const body = parsed.data as { contactIds?: unknown; action?: string; groups?: unknown };
         const { contactIds, action, groups } = body;
 
         if (!Array.isArray(contactIds) || contactIds.length === 0) {
             return NextResponse.json({ error: "No contacts selected" }, { status: 400 });
+        }
+
+        const MAX_BULK_SIZE = 500;
+        if (contactIds.length > MAX_BULK_SIZE) {
+            return NextResponse.json(
+                { error: `Too many contacts. Maximum ${MAX_BULK_SIZE} per request.` },
+                { status: 400 }
+            );
         }
 
         if (action !== "add_group" && action !== "remove_group") {
@@ -23,6 +37,11 @@ export async function PATCH(req: Request) {
 
         if (!Array.isArray(groups) || groups.length === 0) {
             return NextResponse.json({ error: "Groups array is required" }, { status: 400 });
+        }
+
+        const validGroups = clampGroupsArray(groups);
+        if (validGroups.length === 0) {
+            return NextResponse.json({ error: "At least one valid group name is required" }, { status: 400 });
         }
 
         const userId = session.user.id;
@@ -67,9 +86,9 @@ export async function PATCH(req: Request) {
         await updateInferredLinksBulk(contacts.map(c => c.id));
 
         return NextResponse.json({ success: true, updatedCount: contacts.length });
-    } catch (err: any) {
+    } catch (err) {
         console.error("Bulk update failed:", err);
-        return NextResponse.json({ error: String(err) }, { status: 500 });
+        return apiError(err);
     }
 }
 
@@ -85,6 +104,14 @@ export async function DELETE(req: Request) {
 
         if (!Array.isArray(contactIds) || contactIds.length === 0) {
             return NextResponse.json({ error: "No contacts selected" }, { status: 400 });
+        }
+
+        const MAX_BULK_DELETE = 500;
+        if (contactIds.length > MAX_BULK_DELETE) {
+            return NextResponse.json(
+                { error: `Too many contacts. Maximum ${MAX_BULK_DELETE} per delete.` },
+                { status: 400 }
+            );
         }
 
         const userId = session.user.id;
@@ -109,8 +136,8 @@ export async function DELETE(req: Request) {
         });
 
         return NextResponse.json({ success: true, deletedCount: result.count });
-    } catch (err: any) {
+    } catch (err) {
         console.error("Bulk delete failed:", err);
-        return NextResponse.json({ error: String(err) }, { status: 500 });
+        return apiError(err);
     }
 }

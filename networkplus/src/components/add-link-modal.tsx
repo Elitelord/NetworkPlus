@@ -13,7 +13,7 @@ import { LinkIcon } from "lucide-react";
 
 interface AddLinkModalProps {
   nodes: { id: string; name: string }[];
-  links: { fromId: string; toId: string }[];
+  links: { fromId: string; toId: string; label?: string | null }[];
   onSuccess: () => void;
 }
 
@@ -28,8 +28,15 @@ export function AddLinkModal({ nodes, links, onSuccess }: AddLinkModalProps) {
   const isSelfLink = fromId !== "" && toId !== "" && fromId === toId;
   const isDuplicateLink = useMemo(() => {
     if (fromId === "" || toId === "") return false;
-    return links.some((l) => l.fromId === fromId && l.toId === toId);
-  }, [fromId, toId, links]);
+    const normLabel = linkLabel?.trim() ?? "";
+    return links.some((l) => {
+      const [lFrom, lTo] = l.fromId < l.toId ? [l.fromId, l.toId] : [l.toId, l.fromId];
+      const [f, t] = fromId < toId ? [fromId, toId] : [toId, fromId];
+      if (lFrom !== f || lTo !== t) return false;
+      const existingLabel = (l.label ?? "").trim();
+      return existingLabel === normLabel;
+    });
+  }, [fromId, toId, linkLabel, links]);
 
   const isLinkInvalid = fromId === "" || toId === "" || isSelfLink || isDuplicateLink;
 

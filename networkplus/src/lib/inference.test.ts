@@ -15,7 +15,7 @@ vi.mock("@lib/prisma", () => ({
 }));
 
 import prisma from "@lib/prisma";
-import { updateInferredLinksBulk } from "./inference";
+import { updateInferredLinksBulk, updateInferredLinks } from "./inference";
 
 const mockPrisma = prisma as unknown as {
   contact: { findMany: ReturnType<typeof vi.fn> };
@@ -46,14 +46,14 @@ describe("updateInferredLinksBulk", () => {
         { id: "b", groups: ["G1"] },
       ]);
 
-    // Existing shared_group link between a and b with arbitrary metadata.source
+    // Existing inferred link between a and b (identified by metadata.rule)
     mockPrisma.link.findMany.mockResolvedValueOnce([
       {
         id: "link1",
         fromId: "a",
         toId: "b",
-        label: "shared_group",
-        metadata: { source: "manual", group: "G1" },
+        label: "G1",
+        metadata: { rule: "shared_group", group: "G1", source: "manual" },
       },
     ]);
 
@@ -102,8 +102,8 @@ describe("updateInferredLinksBulk", () => {
         id: "stale",
         fromId: "a",
         toId: "b",
-        label: "shared_group",
-        metadata: { group: "G1" },
+        label: "G1",
+        metadata: { rule: "shared_group", group: "G1" },
       },
     ]);
 
@@ -129,11 +129,95 @@ describe("updateInferredLinksBulk", () => {
     // Stale link should be deleted
     expect(deletedIds).toEqual(["stale"]);
 
-    // New link between a and c for group G2 should be created
+    // New link between a and c for group G2 should be created; label is the group name
     expect(createdLinks).toHaveLength(1);
     expect(createdLinks[0]).toMatchObject({
-      label: "shared_group",
-      metadata: { rule: "shared_group", group: "G2" },
+      label: "G2",
+      metadata: { rule: "shared_group", group: "G2", source: "inferred" },
     });
+  });
+
+  it("does not call prisma when contactIds is empty", async () => {
+    await updateInferredLinksBulk([]);
+    expect(mockPrisma.contact.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.link.findMany).not.toHaveBeenCalled();
+  });
+
+  it("returns early when no contacts found for given ids", async () => {
+    mockPrisma.contact.findMany.mockResolvedValueOnce([]);
+    await updateInferredLinksBulk(["nonexistent-id"]);
+    expect(mockPrisma.contact.findMany).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.link.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.link.create).not.toHaveBeenCalled();
+  });
+
+  it("creates links when three contacts share one group", async () => {
+    mockPrisma.contact.findMany
+      .mockResolvedValueOnce([
+        { id: "a", groups: ["G1"], ownerId: "user1" },
+        { id: "b", groups: ["G1"], ownerId: "user1" },
+        { id: "c", groups: ["G1"], ownerId: "user1" },
+      ])
+      .mockResolvedValueOnce([
+        { id: "a", groups: ["G1"] },
+        { id: "b", groups: ["G1"] },
+        { id: "c", groups: ["G1"] },
+      ]);
+    mockPrisma.link.findMany.mockResolvedValueOnce([]);
+    mockPrisma.link.deleteMany.mockResolvedValue({ count: 0 });
+    const createdLinks: any[] = [];
+    mockPrisma.link.create.mockImplementation(({ data }) => {
+      createdLinks.push(data);
+      return Promise.resolve(data);
+    });
+    mockPrisma.$transaction.mockImplementation(async (ops: any[]) => {
+      for (const op of ops) await op;
+    });
+
+    await updateInferredLinksBulk(["a", "b", "c"]);
+
+    // Valid pairs: a-b, a-c, b-c (order normalized to low:high)
+    expect(createdLinks).toHaveLength(3);
+    const keys = createdLinks.map((l) => `${l.fromId}:${l.toId}:${l.label}`).sort();
+    expect(keys).toEqual(["a:b:G1", "a:c:G1", "b:c:G1"]);
+    createdLinks.forEach((l) => {
+      expect(l.metadata).toMatchObject({ rule: "shared_group", group: "G1", source: "inferred" });
+    });
+  });
+
+  it("creates no links when contact has no groups", async () => {
+    mockPrisma.contact.findMany
+      .mockResolvedValueOnce([{ id: "solo", groups: [], ownerId: "user1" }])
+      .mockResolvedValueOnce([{ id: "solo", groups: [] }]);
+    mockPrisma.link.findMany.mockResolvedValueOnce([]);
+
+    await updateInferredLinksBulk(["solo"]);
+
+    expect(mockPrisma.link.create).not.toHaveBeenCalled();
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("updateInferredLinks single contact delegates to bulk", async () => {
+    mockPrisma.contact.findMany
+      .mockResolvedValueOnce([{ id: "x", groups: ["G1"], ownerId: "user1" }])
+      .mockResolvedValueOnce([
+        { id: "x", groups: ["G1"] },
+        { id: "y", groups: ["G1"] },
+      ]);
+    mockPrisma.link.findMany.mockResolvedValueOnce([]);
+    const createdLinks: any[] = [];
+    mockPrisma.link.create.mockImplementation(({ data }) => {
+      createdLinks.push(data);
+      return Promise.resolve(data);
+    });
+    mockPrisma.$transaction.mockImplementation(async (ops: any[]) => {
+      for (const op of ops) await op;
+    });
+
+    await updateInferredLinks("x");
+
+    expect(mockPrisma.contact.findMany).toHaveBeenCalled();
+    expect(createdLinks).toHaveLength(1);
+    expect(createdLinks[0]).toMatchObject({ fromId: "x", toId: "y", label: "G1" });
   });
 });

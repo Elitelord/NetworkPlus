@@ -18,6 +18,7 @@ import {
     type NormalizedContact,
     type SkippedRow,
 } from "@/lib/contact-parser";
+import { MAX_UPLOAD_FILE_BYTES } from "@/lib/api-utils";
 
 type ImportSummary = {
     imported: number;
@@ -43,9 +44,9 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
         setUploadError(null);
         setLargeFileWarning(false);
 
-        // Validate file size
-        if (file.size > 2 * 1024 * 1024) {
-            setUploadError("File size exceeds 2MB limit.");
+        // Validate file size (max 20MB to avoid memory pressure)
+        if (file.size > MAX_UPLOAD_FILE_BYTES) {
+            setUploadError(`File size exceeds ${MAX_UPLOAD_FILE_BYTES / (1024 * 1024)}MB limit.`);
             return;
         }
 

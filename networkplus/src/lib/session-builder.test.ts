@@ -172,5 +172,54 @@ describe("Session Builder", () => {
         // Session 2 should have msg 3
         expect(sessions[1].messageCount).toBe(1);
     });
+
+    it("returns empty array for empty messages", () => {
+        const sessions = buildSessions([]);
+        expect(sessions).toEqual([]);
+    });
+
+    it("returns empty array for null/undefined input", () => {
+        expect(buildSessions(null as any)).toEqual([]);
+        expect(buildSessions(undefined as any)).toEqual([]);
+    });
+
+    it("single message creates one session", () => {
+        const messages: RawMessage[] = [
+            {
+                id: "1",
+                platform: "SMS",
+                date: new Date("2026-02-21T10:00:00Z"),
+                contactId: "contact-1",
+                direction: "INBOUND",
+            },
+        ];
+        const sessions = buildSessions(messages);
+        expect(sessions).toHaveLength(1);
+        expect(sessions[0].messageCount).toBe(1);
+        expect(sessions[0].directionSummary).toBe("INBOUND");
+        expect(sessions[0].durationSeconds).toBe(0);
+    });
+
+    it("all OUTBOUND messages in session yield directionSummary OUTBOUND", () => {
+        const messages: RawMessage[] = [
+            {
+                id: "1",
+                platform: "SMS",
+                date: new Date("2026-02-21T10:00:00Z"),
+                contactId: "contact-1",
+                direction: "OUTBOUND",
+            },
+            {
+                id: "2",
+                platform: "SMS",
+                date: new Date("2026-02-21T10:10:00Z"),
+                contactId: "contact-1",
+                direction: "OUTBOUND",
+            },
+        ];
+        const sessions = buildSessions(messages);
+        expect(sessions).toHaveLength(1);
+        expect(sessions[0].directionSummary).toBe("OUTBOUND");
+    });
 });
 

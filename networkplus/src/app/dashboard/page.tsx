@@ -15,9 +15,19 @@ import { ReachOutModal } from "@/components/reach-out-modal";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { GraphZoomControls } from "@/components/graph-zoom-controls";
 import { GraphLegendPanel } from "@/components/graph-legend-panel";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTheme } from "next-themes";
 import { classifyGroupType, GROUP_TYPE_COLORS, type GroupType } from "@/lib/group-type-classifier";
 import { useGraphSettings } from "@/hooks/use-graph-settings";
+import { ListTodo, Wrench } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type NodeMetadata = { groups?: string[];[key: string]: any };
 
@@ -46,6 +56,7 @@ export default function Home() {
   const { resolvedTheme } = useTheme();
   const graphRef = useRef<HTMLDivElement | null>(null);
   const graphInstanceRef = useRef<any>(null);
+  const asyncCleanupRef = useRef<(() => void) | null>(null);
   const [nodes, setNodes] = useState<NodeType[]>([]);
   const [links, setLinks] = useState<LinkType[]>([]);
 
@@ -64,6 +75,18 @@ export default function Home() {
   const [currentZoom, setCurrentZoom] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const DEFAULT_ZOOM = 1;
+
+  // Overlay mode: fullscreen OR small/cramped screen — show Catch up + Tools as overlay buttons
+  // Default true so mobile gets overlay UI on first paint before matchMedia runs
+  const [isSmallScreen, setIsSmallScreen] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const handle = () => setIsSmallScreen(mq.matches);
+    handle();
+    mq.addEventListener("change", handle);
+    return () => mq.removeEventListener("change", handle);
+  }, []);
+  const overlayMode = isFullscreen || isSmallScreen;
 
   // Graph Settings
   const { settings } = useGraphSettings();
@@ -298,13 +321,18 @@ export default function Home() {
         strengthScore: n.strengthScore || 0,
         isCluster: false,
       })),
-      links: nodeLinks.map((l) => ({
-        source: l.fromId,
-        target: l.toId,
-        label: l.label,
-        metadata: l.metadata,
-        id: l.id,
-      })),
+      links: nodeLinks.map((l) => {
+        const effectiveLabel = (l.metadata as any)?.rule === "shared_group" && (l.metadata as any)?.group
+          ? (l.metadata as any).group
+          : (l.label ?? "");
+        return {
+          source: l.fromId,
+          target: l.toId,
+          label: effectiveLabel,
+          metadata: l.metadata,
+          id: l.id,
+        };
+      }),
     };
   }, [visibleNodes, nodeLinks, isClusterMode]);
 
@@ -455,14 +483,35 @@ export default function Home() {
         .graphData(graphData as any);
 
       graphInstanceRef.current = myGraph;
+
+      // Resize graph when container size changes (e.g. mobile layout, orientation, window resize)
+      const resizeObserver = new ResizeObserver(() => {
+        if (!el || !myGraph) return;
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+        if (w > 0 && h > 0) {
+          myGraph.width(w).height(h);
+        }
+      });
+      resizeObserver.observe(el);
+
+      asyncCleanupRef.current = () => {
+        resizeObserver.disconnect();
+        try {
+          if (myGraph) myGraph.graphData({ nodes: [], links: [] });
+        } catch {
+          // ignore
+        }
+        graphInstanceRef.current = null;
+      };
     });
 
     return () => {
-      try {
-        if (myGraph) myGraph.graphData({ nodes: [], links: [] });
-      } catch {
-        // ignore
+      if (asyncCleanupRef.current) {
+        asyncCleanupRef.current();
+        asyncCleanupRef.current = null;
       }
+      graphInstanceRef.current = null;
     };
   }, [nodes, links, selectedGroupFilters, highlightNodes, showDueNodes, dueNodeIds, resolvedTheme]);
 
@@ -612,7 +661,8 @@ export default function Home() {
       });
       if (!res.ok) throw new Error("Delete failed");
       setSelectedLink(null);
-      await loadData();
+      setLinks((prev) => prev.filter((l) => l.id !== id));
+      loadData().catch((err) => console.error("Refresh after delete failed:", err));
     } catch (err: any) {
       console.error(err);
       setError("Failed to delete link");
@@ -685,30 +735,148 @@ export default function Home() {
     setCurrentZoom(zoomLevel);
   }, []);
 
+  const dueSoonSelect = useCallback((contact: Contact) => {
+    const targetNode = nodes.find(n => n.id === contact.id);
+    if (targetNode) {
+      setReachOutContact(targetNode);
+    } else {
+      setReachOutContact(contact as Contact);
+    }
+  }, [nodes]);
+
+  const toolsContentBody = (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 p-4 border rounded-xl bg-card/50 shadow-sm">
+        <h3 className="font-semibold text-sm px-1 flex items-center gap-2">Data Tools</h3>
+        <div className="flex flex-col gap-2">
+          <div id="tour-import-contacts">
+            <ContactImportModal onSuccess={() => loadData()} />
+          </div>
+          <div id="tour-import-messages">
+            <LinkedInImportModal onSuccess={() => loadData()} />
+          </div>
+          <BulkEditModal
+            contacts={nodes}
+            allGroups={groups}
+            initialGroupFilter={selectedGroupFilters}
+            onSuccess={() => loadData()}
+          />
+        </div>
+      </div>
+      <div className="flex flex-col gap-3 p-4 border rounded-xl bg-card/50 shadow-sm">
+        <h3 className="font-semibold text-sm px-1 flex items-center gap-2">Management</h3>
+        <div className="flex flex-col gap-2">
+          <AddContactModal groups={groups} onSuccess={loadData} />
+          <AddLinkModal nodes={nodes} links={links} onSuccess={loadData} />
+        </div>
+      </div>
+      <div className="py-2">
+        <h3 className="font-semibold text-sm mb-2">Recent Contacts</h3>
+        <ul className="space-y-1">
+          {nodes.slice(-5).reverse().map((n) => (
+            <li
+              key={n.id}
+              className="text-xs text-muted-foreground truncate hover:text-foreground cursor-pointer"
+              onClick={() => focusNode(n.id)}
+            >
+              {n.name}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+
+  const toolsContent = (
+    <div className="flex flex-col gap-6 overflow-y-auto h-full">
+      <h2 className="font-semibold text-lg">Tools</h2>
+      {toolsContentBody}
+    </div>
+  );
+
+  // Match zoom/legend: same glass on buttons; stronger blur on overlay panels so they match bottom FABs
+  const overlayPanelGlass = "bg-background/60 backdrop-blur-xl border shadow-lg rounded-xl";
+  const overlayButtonBase =
+    "rounded-xl shadow-lg border hover:bg-accent/80 transition-all duration-300 flex items-center justify-center gap-2 text-foreground px-3 py-2.5 text-sm font-medium bg-background/60 backdrop-blur-xl";
+
   return (
     <div className="flex h-[calc(100vh-57px)] overflow-hidden bg-zinc-50 dark:bg-black font-sans">
-      {/* Left Sidebar */}
-      {!isFullscreen && (
-        <aside id="tour-sidebar" className="w-80 border-r bg-background p-6 flex flex-col gap-6 shrink-0 overflow-y-auto">
+      {/* Left Sidebar — only when desktop and not in overlay mode */}
+      {!overlayMode && (
+        <aside id="tour-sidebar" className="hidden md:flex w-80 border-r bg-background p-6 flex-col gap-6 shrink-0 overflow-y-auto">
           <div className="flex items-center gap-2">
             <img src="/logo.svg" alt="Network+" className="size-8 rounded-lg" />
             <h1 className="font-bold text-xl tracking-tight">Network+</h1>
           </div>
-
-          <DueSoonList contacts={dueContacts} onSelect={(contact) => {
-            const targetNode = nodes.find(n => n.id === contact.id);
-            if (targetNode) {
-              setReachOutContact(targetNode);
-            } else {
-              setReachOutContact(contact as Contact);
-            }
-          }} />
-        </aside >
+          <DueSoonList contacts={dueContacts} onSelect={dueSoonSelect} />
+        </aside>
       )}
 
       {/* Main Content - Graph */}
-      < main className="flex-1 relative overflow-hidden flex flex-col" >
-        <div id="graph" ref={graphRef} className="flex-1 w-full h-full bg-zinc-100 dark:bg-zinc-900/50"></div>
+      <main className="flex-1 relative overflow-hidden flex flex-col min-w-0 min-h-0">
+        {/* Overlay mode: only the top bar overlays — graph stays fully interactive for touch drag/pan */}
+        {overlayMode && (
+          <div className="absolute top-0 left-0 right-0 z-20 flex items-start justify-between p-4 gap-2">
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(overlayButtonBase)}
+                    title="Contacts due for outreach"
+                    aria-label="Open Catch up list"
+                  >
+                    <ListTodo className="size-5 shrink-0" />
+                    <span>Catch up</span>
+                  </button>
+                </DialogTrigger>
+                <DialogContent
+                  className={cn("max-w-sm max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden", overlayPanelGlass)}
+                  showCloseButton
+                >
+                  <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/50">
+                    <DialogTitle>Catch up</DialogTitle>
+                  </DialogHeader>
+                  <div className="flex-1 overflow-y-auto min-h-0 p-4">
+                    <DueSoonList contacts={dueContacts} onSelect={dueSoonSelect} />
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(overlayButtonBase)}
+                    title="Import, add contact, and more"
+                    aria-label="Open Tools menu"
+                  >
+                    <Wrench className="size-5 shrink-0" />
+                    <span>Tools</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="bottom"
+                  align="end"
+                  sideOffset={8}
+                  className={cn(
+                    "w-[min(20rem,calc(100vw-2rem))] max-h-[min(70vh,28rem)] overflow-y-auto p-0",
+                    overlayPanelGlass
+                  )}
+                >
+                  <div className="p-3 border-b border-border/50">
+                    <h3 className="font-semibold text-sm">Tools</h3>
+                  </div>
+                  <div className="p-3 overflow-y-auto">
+                    {toolsContentBody}
+                  </div>
+                </PopoverContent>
+              </Popover>
+          </div>
+        )}
+        <div
+          id="graph"
+          ref={graphRef}
+          className="flex-1 w-full min-h-0 bg-zinc-100 dark:bg-zinc-900/50 touch-none"
+        />
         <GraphZoomControls
           currentZoom={currentZoom}
           onZoomIn={handleZoomIn}
@@ -727,7 +895,7 @@ export default function Home() {
         />
         {
           error && (
-            <div className="absolute top-4 left-4 right-4 bg-destructive/10 text-destructive p-3 rounded-md border border-destructive/20 text-sm">
+            <div className="absolute top-4 left-4 right-4 z-20 p-3 rounded-xl text-sm text-destructive bg-destructive/10 backdrop-blur-lg border border-destructive/30 shadow-lg">
               {error}
             </div>
           )
@@ -739,68 +907,13 @@ export default function Home() {
           onOpenChange={(open) => !open && setReachOutContact(null)} 
           onSuccess={handleInteractionLogged} 
         />
-      </main >
+      </main>
 
-      {/* Right Sidebar - Tools */}
-      {!isFullscreen && (
-        < aside className="w-80 border-l bg-background p-6 flex flex-col gap-6 shrink-0 h-[calc(100vh-57px)] sticky top-0 overflow-y-auto" >
-          <h2 className="font-semibold text-lg">Tools</h2>
-
-          <Card className="shadow-none border-none bg-transparent gap-4 py-0">
-            <div className="flex flex-col gap-4">
-              {/* Data Section */}
-              <div className="flex flex-col gap-3 p-4 border rounded-xl bg-card shadow-sm">
-                <h3 className="font-semibold text-sm px-1 flex items-center gap-2">
-                  Data Tools
-                </h3>
-                <div className="flex flex-col gap-2">
-                  <div id="tour-import-contacts">
-                    <ContactImportModal onSuccess={() => {
-                      loadData();
-                    }} />
-                  </div>
-                  <div id="tour-import-messages">
-                    <LinkedInImportModal onSuccess={() => {
-                      loadData();
-                    }} />
-                  </div>
-                  <BulkEditModal
-                    contacts={nodes}
-                    allGroups={groups}
-                    initialGroupFilter={selectedGroupFilters}
-                    onSuccess={() => {
-                      loadData();
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Management Section */}
-              <div className="flex flex-col gap-3 p-4 border rounded-xl bg-card shadow-sm">
-                <h3 className="font-semibold text-sm px-1 flex items-center gap-2">
-                  Management
-                </h3>
-                <div className="flex flex-col gap-2">
-                  <AddContactModal groups={groups} onSuccess={loadData} />
-                  <AddLinkModal nodes={nodes} links={links} onSuccess={loadData} />
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <div className="py-4">
-            <h3 className="font-semibold text-sm mb-2">Recent Contacts</h3>
-            <ul className="space-y-1">
-              {nodes.slice(-5).reverse().map((n) => (
-                <li key={n.id} className="text-xs text-muted-foreground truncate hover:text-foreground cursor-pointer" onClick={() => {
-                  focusNode(n.id);
-                }}>
-                  {n.name}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </aside >
+      {/* Right Sidebar - Tools (desktop only, hidden in overlay mode) */}
+      {!overlayMode && (
+        <aside className="hidden md:flex w-80 border-l bg-background p-6 flex-col gap-6 shrink-0 h-[calc(100vh-57px)] sticky top-0 overflow-y-auto">
+          {toolsContent}
+        </aside>
       )}
 
 
@@ -835,6 +948,6 @@ export default function Home() {
         onUpdate={updateLink}
         onDelete={deleteLink}
       />
-    </div >
+    </div>
   );
 }

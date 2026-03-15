@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import localforage from 'localforage';
-import { saveNodes, loadNodes, saveLinks, loadLinks, clearLocal } from '@/lib/localstore';
+import { saveNodes, loadNodes, saveLinks, loadLinks, clearLocal, syncWithServer } from '@/lib/localstore';
 
 describe('localstore persistence', () => {
   beforeEach(async () => {
@@ -66,6 +66,22 @@ describe('localstore persistence', () => {
     expect(loaded).toHaveLength(2);
     expect((loaded[0] as any).title).toBeUndefined();
     expect((loaded[1] as any).extra).toBe('ghost data');
+  });
+
+  it('syncWithServer fetches and persists nodes and links', async () => {
+    const serverNodes = [{ id: 'sn1', title: 'Server Node' }];
+    const serverLinks = [{ id: 'sl1', fromId: 'sn1', toId: 'sn2' }];
+    const fetchNodes = () => Promise.resolve(serverNodes);
+    const fetchLinks = () => Promise.resolve(serverLinks);
+
+    const result = await syncWithServer(fetchNodes, fetchLinks);
+
+    expect(result.nodes).toEqual(serverNodes);
+    expect(result.links).toEqual(serverLinks);
+    const loadedNodes = await loadNodes();
+    const loadedLinks = await loadLinks();
+    expect(loadedNodes).toEqual(serverNodes);
+    expect(loadedLinks).toEqual(serverLinks);
   });
 });
 

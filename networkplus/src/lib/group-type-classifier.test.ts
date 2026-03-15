@@ -4,6 +4,7 @@ import {
     classifyGroups,
     groupsByType,
     GROUP_TYPE_LABELS,
+    GROUP_TYPE_COLORS,
     type GroupType,
 } from "./group-type-classifier";
 
@@ -150,6 +151,15 @@ describe("GROUP_TYPE_LABELS", () => {
         const types: GroupType[] = ["school", "employment", "social", "family", "community", "other"];
         for (const t of types) {
             expect(GROUP_TYPE_LABELS[t]).toBeTruthy();
+        }
+    });
+});
+
+describe("GROUP_TYPE_COLORS", () => {
+    it("has a hex color for every type", () => {
+        const types: GroupType[] = ["school", "employment", "social", "family", "community", "other"];
+        for (const t of types) {
+            expect(GROUP_TYPE_COLORS[t]).toMatch(/^#[0-9a-f]{6}$/i);
         }
     });
 });

@@ -71,4 +71,16 @@ lines and ""quotes"" inside it.",INBOX,
         // Since we didn't specify the exact internal data structure here, we just verify it extracted Alice.
         expect(aliceConv?.messageCount).toBe(1);
     });
+
+    it("throws when required columns are missing", () => {
+        const badCsv = "SOME COLUMN,OTHER\nval1,val2";
+        expect(() => parseLinkedInMessages(badCsv, "Me")).toThrow(
+            "Invalid LinkedIn messages CSV. Missing required columns"
+        );
+    });
+
+    it("returns empty conversations for empty or single-line CSV", () => {
+        expect(parseLinkedInMessages("", "Me")).toEqual({ conversations: [], skipped: [] });
+        expect(parseLinkedInMessages("Just one line", "Me")).toEqual({ conversations: [], skipped: [] });
+    });
 });

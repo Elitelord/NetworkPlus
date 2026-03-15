@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCSV } from "./contact-parser";
+import { parseCSV, detectFileType, parseFile, parseVCF } from "./contact-parser";
 
 describe("contact-parser", () => {
     it("should parse CSV with standard headers", async () => {
@@ -162,5 +162,105 @@ Very Long Name ".repeat(500),long@example.com,222,Longs`;
         // As long as it doesn't crash, and parses the valid ones, it's good.
         expect(result.valid.length).toBeGreaterThan(0);
         expect(result.valid[0].name).toBe("Normal User");
+    });
+});
+
+describe("detectFileType", () => {
+    it("returns 'csv' for .csv extension", () => {
+        const file = new File([], "data.csv", { type: "text/csv" });
+        expect(detectFileType(file)).toBe("csv");
+    });
+    it("returns 'vcf' for .vcf extension", () => {
+        const file = new File([], "contacts.vcf", { type: "text/x-vcard" });
+        expect(detectFileType(file)).toBe("vcf");
+    });
+    it("returns 'vcf' for .vcard extension", () => {
+        const file = new File([], "contacts.vcard", { type: "text/x-vcard" });
+        expect(detectFileType(file)).toBe("vcf");
+    });
+    it("returns null for unknown extension", () => {
+        const file = new File([], "data.txt", { type: "text/plain" });
+        expect(detectFileType(file)).toBe(null);
+    });
+    it("is case insensitive for extension", () => {
+        expect(detectFileType(new File([], "data.CSV", { type: "text/csv" }))).toBe("csv");
+        expect(detectFileType(new File([], "c.VCF", { type: "text/x-vcard" }))).toBe("vcf");
+    });
+});
+
+describe("parseFile", () => {
+    it("dispatches CSV to parseCSV and returns same result", async () => {
+        const csvContent = "name,email\nJane,jane@example.com";
+        const file = new File([csvContent], "test.csv", { type: "text/csv" });
+        const result = await parseFile(file);
+        expect(result.fileType).toBe("csv");
+        expect(result.valid).toHaveLength(1);
+        expect(result.valid[0].name).toBe("Jane");
+        expect(result.valid[0].email).toBe("jane@example.com");
+    });
+    it("throws for unsupported file type", async () => {
+        const file = new File([], "data.txt", { type: "text/plain" });
+        await expect(parseFile(file)).rejects.toThrow("Unsupported file type");
+    });
+});
+
+describe("parseVCF", () => {
+    it("parses a single vCard", async () => {
+        const vcfContent = `BEGIN:VCARD
+VERSION:3.0
+FN:John Doe
+EMAIL:john@example.com
+TEL:555-1234
+END:VCARD`;
+        const file = new File([vcfContent], "contact.vcf", { type: "text/x-vcard" });
+        const result = await parseVCF(file);
+        expect(result.fileType).toBe("vcf");
+        expect(result.valid).toHaveLength(1);
+        expect(result.valid[0].name).toBe("John Doe");
+        expect(result.valid[0].email).toBe("john@example.com");
+        expect(result.valid[0].phone).toBe("555-1234");
+    });
+    it("parses multiple vCards", async () => {
+        const vcfContent = `BEGIN:VCARD
+FN:Alice
+END:VCARD
+BEGIN:VCARD
+FN:Bob
+END:VCARD`;
+        const file = new File([vcfContent], "contacts.vcf", { type: "text/x-vcard" });
+        const result = await parseVCF(file);
+        expect(result.valid).toHaveLength(2);
+        expect(result.valid[0].name).toBe("Alice");
+        expect(result.valid[1].name).toBe("Bob");
+    });
+    it("skips vCards with no name and records in skipped", async () => {
+        const vcfContent = `BEGIN:VCARD
+EMAIL:noname@example.com
+END:VCARD`;
+        const file = new File([vcfContent], "bad.vcf", { type: "text/x-vcard" });
+        const result = await parseVCF(file);
+        expect(result.valid).toHaveLength(0);
+        expect(result.skipped).toHaveLength(1);
+        expect(result.skipped[0].reason).toContain("derive name");
+    });
+    it("rejects empty file", async () => {
+        const file = new File([""], "empty.vcf", { type: "text/x-vcard" });
+        await expect(parseVCF(file)).rejects.toThrow("File is empty");
+    });
+});
+
+describe("contact-parser skipped rows", () => {
+    it("skips rows that cannot derive name and records reason", async () => {
+        const csvContent = `name,email,group
+John,john@example.com,Friends
+,,Unknown
+Jane,jane@example.com,Work`;
+        const file = new File([csvContent], "test.csv", { type: "text/csv" });
+        const result = await parseCSV(file);
+        expect(result.valid).toHaveLength(2);
+        expect(result.valid[0].name).toBe("John");
+        expect(result.valid[1].name).toBe("Jane");
+        expect(result.skipped).toHaveLength(1);
+        expect(result.skipped[0].reason).toContain("Could not derive name");
     });
 });

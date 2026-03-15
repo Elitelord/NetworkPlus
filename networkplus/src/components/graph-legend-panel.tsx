@@ -147,12 +147,11 @@ export function GraphLegendPanel({
             {/* Expanded Panel */}
             <div
                 className={cn(
-                    "bg-background/60 backdrop-blur-lg border shadow-lg rounded-xl overflow-hidden transition-all duration-300 origin-bottom-left",
+                    "bg-background/60 backdrop-blur-xl border shadow-lg rounded-xl overflow-hidden transition-all duration-300 origin-bottom-left w-[320px] max-w-[calc(100vw-3rem)]",
                     isOpen
                         ? "opacity-100 scale-100 mb-2 translate-y-0"
                         : "opacity-0 scale-95 translate-y-4 pointer-events-none absolute bottom-14"
                 )}
-                style={{ width: 320 }}
             >
                 {/* Tab Switcher */}
                 <div className="flex border-b">
@@ -428,7 +427,7 @@ export function GraphLegendPanel({
                 variant="outline"
                 size="icon"
                 className={cn(
-                    "w-12 h-12 rounded-full shadow-lg bg-background hover:bg-accent transition-all duration-300",
+                    "w-12 h-12 rounded-full shadow-lg bg-background/60 backdrop-blur-xl border hover:bg-accent/80 transition-all duration-300",
                     isOpen
                         ? "rotate-90 bg-accent text-accent-foreground border-primary/50"
                         : ""

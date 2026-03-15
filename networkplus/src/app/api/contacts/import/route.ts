@@ -2,7 +2,17 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
-import { Category, Platform } from "@prisma/client";
+import { Category } from "@prisma/client";
+import {
+    parseJsonBody,
+    apiError,
+    checkRateLimit,
+    getRateLimitId,
+    RATE_LIMITS,
+    LIMITS,
+    clampString,
+    clampMetadata,
+} from "@/lib/api-utils";
 
 // Helper to validate and parse date
 function parseDate(dateStr: string | null | undefined): Date | null {
@@ -31,14 +41,25 @@ export async function POST(req: Request) {
 
         const userId = session.user.id;
 
-        const body = await req.json();
-        const { contacts } = body;
+        const limited = checkRateLimit(getRateLimitId(req, userId), RATE_LIMITS.import);
+        if (limited) return limited;
 
+        const parsed = await parseJsonBody(req);
+        if (!parsed.ok) return parsed.response;
+        const body = parsed.data as { contacts?: unknown };
+
+        const { contacts } = body;
         if (!Array.isArray(contacts)) {
             return NextResponse.json({ error: "Invalid input: contacts must be an array" }, { status: 400 });
         }
 
-        // Limit batch size if needed, but for now 1000 is small enough to process
+        const MAX_IMPORT_BATCH = 2000;
+        if (contacts.length > MAX_IMPORT_BATCH) {
+            return NextResponse.json(
+                { error: `Too many contacts. Maximum ${MAX_IMPORT_BATCH} per import.` },
+                { status: 400 }
+            );
+        }
         // We'll process sequentially or in parallel? Parallel for DB checks might be faster but need to handle race conditions if duplicates within CSV.
         // Given the constraints, let's process sequentially for simplicity and safety or use a map for in-memory dedup first.
 
@@ -74,7 +95,18 @@ export async function POST(req: Request) {
         // Let's do batch queries or sequential checks. Sequential is safer logic wise.
 
         for (const item of uniqueIncoming.values()) {
-            const { name, email, phone, description, group, category, metadata, lastInteractionAt, originalIndex } = item;
+            const { category, lastInteractionAt, originalIndex } = item;
+            const name = clampString(item.name, LIMITS.name);
+            const email = clampString(item.email, LIMITS.email) ?? undefined;
+            const phone = clampString(item.phone, LIMITS.phone) ?? undefined;
+            const description = clampString(item.description, LIMITS.description) ?? undefined;
+            const group = clampString(item.group, LIMITS.groupItem) ?? undefined;
+            const metadata = clampMetadata(item.metadata);
+
+            if (!name) {
+                skippedRows.push({ row: originalIndex + 1, name: "Unknown", reason: "Missing or invalid name" });
+                continue;
+            }
 
             try {
                 // Deduplication Logic
@@ -105,12 +137,14 @@ export async function POST(req: Request) {
                     continue;
                 }
 
-                // Parse groups
-                const groups = group
+                // Parse groups (cap length per item and total)
+                const rawGroups = group
                     ? String(group).split(',').map(g => g.trim()).filter(g => g)
                     : [];
+                const groups = rawGroups
+                    .slice(0, LIMITS.groupsArrayLength)
+                    .map(g => (g.length > LIMITS.groupItem ? g.slice(0, LIMITS.groupItem) : g));
 
-                // Create
                 const newContact = await prisma.contact.create({
                     data: {
                         ownerId: userId!,
@@ -118,9 +152,9 @@ export async function POST(req: Request) {
                         email: email || null,
                         phone: phone || null,
                         description: description || null,
-                        groups: groups,
+                        groups,
                         category: normalizeEnum<Category>(category, Category) || Category.FRIEND,
-                        metadata: metadata || undefined,
+                        metadata: metadata ?? undefined,
                         lastInteractionAt: parseDate(lastInteractionAt),
                     },
                 });
@@ -150,6 +184,6 @@ export async function POST(req: Request) {
 
     } catch (err) {
         console.error("Import failed:", err);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return apiError(err);
     }
 }

@@ -51,7 +51,7 @@ export function GraphZoomControls({
         >
             <div
                 className={cn(
-                    "bg-background/60 backdrop-blur-lg border shadow-lg rounded-xl overflow-hidden transition-all duration-300 origin-bottom-right flex flex-col items-center",
+                    "bg-background/60 backdrop-blur-xl border shadow-lg rounded-xl overflow-hidden transition-all duration-300 origin-bottom-right flex flex-col items-center",
                     isOpen ? "opacity-100 scale-100 mb-2 translate-y-0" : "opacity-0 scale-95 translate-y-4 pointer-events-none absolute bottom-12"
                 )}
             >
@@ -76,7 +76,7 @@ export function GraphZoomControls({
                                 {displayZoom}%
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent side="left" className="w-32 p-1" align="center">
+                        <PopoverContent side="left" className="w-32 p-1 bg-background/60 backdrop-blur-xl border shadow-lg rounded-xl" align="center">
                             <div className="flex flex-col gap-0.5">
                                 {zoomLevels.map((z) => (
                                     <Button
@@ -139,7 +139,7 @@ export function GraphZoomControls({
                 variant="outline"
                 size="icon"
                 className={cn(
-                    "w-12 h-12 rounded-full shadow-lg bg-background hover:bg-accent transition-all duration-300",
+                    "w-12 h-12 rounded-full shadow-lg bg-background/60 backdrop-blur-xl border hover:bg-accent/80 transition-all duration-300",
                     isOpen ? "rotate-90 bg-accent text-accent-foreground border-primary/50" : ""
                 )}
                 onClick={() => setIsOpen(!isOpen)}
