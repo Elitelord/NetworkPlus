@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
-import { Category } from "@prisma/client";
+import { Category, Prisma } from "@prisma/client";
 import {
     parseJsonBody,
     apiError,
@@ -154,7 +154,7 @@ export async function POST(req: Request) {
                         description: description || null,
                         groups,
                         category: normalizeEnum<Category>(category, Category) || Category.FRIEND,
-                        metadata: metadata ?? undefined,
+                        metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
                         lastInteractionAt: parseDate(lastInteractionAt),
                     },
                 });

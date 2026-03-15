@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
+import { Platform } from "@prisma/client";
 import { parseJsonBody, apiError } from "@/lib/api-utils";
 
 export async function POST(req: Request) {
@@ -17,9 +18,10 @@ export async function POST(req: Request) {
         const { contactIds, type = "OTHER", content, date, platform = "OTHER", durationMinutes, messageCount } = body;
 
         // Fallback for single contactId support (if needed during transition or just for safety)
-        const targets = contactIds || (body.contactId ? [body.contactId] : []);
+        const rawTargets = contactIds ?? (body.contactId != null ? [body.contactId] : []);
+        const targets = Array.isArray(rawTargets) ? rawTargets.map(String) : [String(rawTargets)];
 
-        if (!targets || targets.length === 0) {
+        if (targets.length === 0) {
             return NextResponse.json({ error: "Missing contactIds" }, { status: 400 });
         }
 
@@ -35,9 +37,9 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "One or more contacts not found or unauthorized" }, { status: 403 });
         }
 
-        const interactionDate = date ? new Date(date) : new Date();
-        const durationSeconds = durationMinutes ? parseInt(durationMinutes, 10) * 60 : undefined;
-        const msgCount = messageCount ? parseInt(messageCount, 10) : undefined;
+        const interactionDate = date != null && date !== "" ? new Date(String(date)) : new Date();
+        const durationSeconds = durationMinutes != null ? parseInt(String(durationMinutes), 10) * 60 : undefined;
+        const msgCount = messageCount != null ? parseInt(String(messageCount), 10) : undefined;
         let startTime = interactionDate;
         if (durationSeconds) {
             startTime = new Date(interactionDate.getTime() - durationSeconds * 1000);
@@ -48,17 +50,17 @@ export async function POST(req: Request) {
             // 1. Create interaction (Session)
             const interaction = await tx.interaction.create({
                 data: {
-                    type,
-                    content,
+                    type: String(type ?? "OTHER"),
+                    content: content != null && content !== "" ? String(content) : null,
                     date: interactionDate,
                     startTime,
                     endTime: interactionDate,
-                    durationSeconds,
-                    messageCount: msgCount,
-                    rawMessageCount: msgCount,
-                    platform,
+                    durationSeconds: durationSeconds ?? null,
+                    messageCount: msgCount ?? null,
+                    rawMessageCount: msgCount ?? null,
+                    platform: (platform as Platform) ?? Platform.OTHER,
                     contacts: {
-                        connect: targets.map((id: string) => ({ id })),
+                        connect: targets.map((id) => ({ id })),
                     },
                 },
             });

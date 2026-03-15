@@ -44,6 +44,7 @@ export async function POST(req: Request) {
         }
 
         const userId = session.user.id;
+        const content = clampString(description, LIMITS.interactionDescription) ?? null;
 
         // Fetch contacts to make sure they belong to the user
         const contacts = await prisma.contact.findMany({
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
                     },
                     date: interactionDate,
                     platform: platform as any,
-                    content: description || null,
+                    content,
                 }
             });
         });

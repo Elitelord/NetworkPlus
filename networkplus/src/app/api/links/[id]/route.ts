@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import prisma from "@lib/prisma";
 import { auth } from "@/auth";
+import { Prisma } from "@prisma/client";
 import { parseJsonBody, apiError } from "@/lib/api-utils";
 
 export async function PATCH(
@@ -32,9 +33,13 @@ export async function PATCH(
       const { source, ...rest } = (current?.metadata as any) || {};
       newMetadata = { ...rest, source: "manual" };
     }
-    const data: { label?: string | null; weight?: number | null; metadata: object } = { metadata: newMetadata };
-    if (body.label !== undefined) data.label = body.label;
-    if (body.weight !== undefined) data.weight = body.weight;
+    const data: {
+      label?: string | null;
+      weight?: number | null;
+      metadata: Prisma.InputJsonValue;
+    } = { metadata: (newMetadata ?? {}) as Prisma.InputJsonValue };
+    if (body.label !== undefined) data.label = typeof body.label === "string" ? body.label : null;
+    if (body.weight !== undefined) data.weight = typeof body.weight === "number" ? body.weight : null;
 
     const link = await prisma.link.update({
       where: { id },
