@@ -14,10 +14,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Sparkles, Send, Calendar, CheckSquare } from "lucide-react";
+import { Loader2, Sparkles, Send, Calendar, FileText } from "lucide-react";
 
 import { MultiSelect } from "@/components/ui/multi-select";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { LogInteractionModal } from "@/components/log-interaction-modal";
 
 export type Contact = {
   id: string;
@@ -34,30 +34,40 @@ interface ReachOutModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: (contactIds: string[]) => void;
+  /** When opening from bulk edit "Log interaction", pre-fill these contacts and open to Other tab. */
+  initialPreselectedIds?: string[];
+  /** Tab to show when modal opens (e.g. "other" when opening from bulk edit log). */
+  initialTab?: "email" | "meeting" | "other";
+  /** Pre-fill date in the Other tab form (e.g. from calendar "Add" for selected day). */
+  initialDefaultDate?: string;
 }
 
-export function ReachOutModal({ allContacts, initialContact, open, onOpenChange, onSuccess }: ReachOutModalProps) {
+export function ReachOutModal({ allContacts, initialContact, open, onOpenChange, onSuccess, initialPreselectedIds, initialTab, initialDefaultDate }: ReachOutModalProps) {
   const [activeTab, setActiveTab] = useState<string>("email");
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [subject, setSubject] = useState("");
   const [meetingTime, setMeetingTime] = useState("");
-  const [platform, setPlatform] = useState("OTHER");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   React.useEffect(() => {
-    if (open && initialContact) {
-      setSelectedContactIds([initialContact.id]);
-    } else if (!open) {
+    if (!open) {
       setSelectedContactIds([]);
       setMessage("");
       setSubject("");
       setMeetingTime("");
-      setPlatform("OTHER");
+      return;
     }
-  }, [open, initialContact]);
+    if (initialPreselectedIds && initialPreselectedIds.length > 0) {
+      setSelectedContactIds(initialPreselectedIds);
+      setActiveTab(initialTab ?? "other");
+    } else if (initialContact) {
+      setSelectedContactIds([initialContact.id]);
+      setActiveTab(initialTab ?? "email");
+    }
+  }, [open, initialContact, initialPreselectedIds, initialTab]);
 
   const selectedContacts = allContacts.filter(c => selectedContactIds.includes(c.id));
   const contactNames = selectedContacts.map(c => c.name).join(", ");
@@ -121,6 +131,9 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
       return;
     }
 
+    // Other tab has its own embedded form and doesn't use this submit
+    if (activeTab === "other") return;
+
     setIsSubmitting(true);
     setError(null);
 
@@ -147,14 +160,8 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
           createMeetLink: true
         };
       } else {
-        endpoint = "/api/interactions";
-        payload = {
-          contactIds: selectedContactIds,
-          type: "Manual",
-          platform: platform,
-          content: message,
-          date: new Date().toISOString(),
-        };
+        // Unreachable: log tab handled at start of handleSubmit
+        return;
       }
 
       const res = await fetch(endpoint, {
@@ -183,7 +190,7 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[525px] flex flex-col max-h-[90vh]">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[525px] flex flex-col max-h-[85dvh] sm:max-h-[90vh] overflow-hidden bg-background border border-border shadow-xl dark:bg-background/70 dark:backdrop-blur-xl dark:border-border/30">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Reach Out to Contacts</DialogTitle>
           <DialogDescription>
@@ -197,7 +204,7 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
           </div>
         )}
 
-        <div className="overflow-y-auto flex-1 space-y-4 px-1 pb-4">
+        <div className="overflow-y-auto flex-1 min-h-0 space-y-4 px-1 pb-4">
           <div className="space-y-2">
             <Label>Contacts</Label>
             <MultiSelect
@@ -219,8 +226,8 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
               <TabsTrigger value="meeting" className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" /> Meeting
               </TabsTrigger>
-              <TabsTrigger value="log" className="flex items-center gap-2">
-                <CheckSquare className="w-4 h-4" /> Log Only
+              <TabsTrigger value="other" className="flex items-center gap-2">
+                <FileText className="w-4 h-4" /> Other
               </TabsTrigger>
             </TabsList>
 
@@ -248,59 +255,59 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
               </div>
             )}
 
+            {activeTab !== "other" && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>{activeTab === "log" ? "Interaction Notes" : "Message Body"}</Label>
-                {activeTab !== "log" && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleGenerateMessage}
-                    disabled={isGenerating || selectedContactIds.length === 0}
-                    className="h-8 text-xs text-blue-500 hover:text-blue-600 focus:text-blue-600"
-                  >
-                    {isGenerating ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
-                    AI Suggestion
-                  </Button>
-                )}
+                <Label>Message Body</Label>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleGenerateMessage}
+                  disabled={isGenerating || selectedContactIds.length === 0}
+                  className="h-8 text-xs text-blue-500 hover:text-blue-600 focus:text-blue-600"
+                >
+                  {isGenerating ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                  AI Suggestion
+                </Button>
               </div>
               <Textarea 
-                placeholder={activeTab === "log" ? "What did you discuss?" : "Write your message here..."}
+                placeholder="Write your message here..."
                 className="min-h-[150px]"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
               />
             </div>
-
-            {activeTab === "log" && (
-              <div className="space-y-2 pt-2">
-                <Label>Platform</Label>
-                <NativeSelect value={platform} onChange={(e) => setPlatform(e.target.value)}>
-                    <NativeSelectOption value="LINKEDIN">LinkedIn</NativeSelectOption>
-                    <NativeSelectOption value="WHATSAPP">WhatsApp</NativeSelectOption>
-                    <NativeSelectOption value="IMESSAGE">iMessage / SMS</NativeSelectOption>
-                    <NativeSelectOption value="EMAIL">Email</NativeSelectOption>
-                    <NativeSelectOption value="MEETING">Meeting</NativeSelectOption>
-                    <NativeSelectOption value="CALL">Call</NativeSelectOption>
-                    <NativeSelectOption value="SOCIAL_MEDIA">Social Media</NativeSelectOption>
-                    <NativeSelectOption value="IN_PERSON">In Person</NativeSelectOption>
-                    <NativeSelectOption value="OTHER">Other</NativeSelectOption>
-                </NativeSelect>
-              </div>
+            )}
+            {activeTab === "other" && selectedContactIds.length > 0 && (
+              <LogInteractionModal
+                embedFormOnly
+                hideContactSelector
+                contactId={selectedContactIds[0]}
+                initialContactIds={selectedContactIds}
+                variant="simple"
+                defaultDate={initialDefaultDate ?? new Date().toISOString()}
+                onSuccess={(ids) => {
+                  onSuccess(ids);
+                  onOpenChange(false);
+                }}
+                onCancel={() => onOpenChange(false)}
+              />
             )}
           </div>
         </Tabs>
         </div>
 
-        <div className="flex justify-end gap-3 mt-2 flex-shrink-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting || selectedContactIds.length === 0 || (activeTab === "meeting" && !meetingTime)}>
-            {isSubmitting ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : null}
-            {activeTab === "email" ? "Send Email & Log" : activeTab === "meeting" ? "Schedule & Log" : "Save Log"}
-          </Button>
-        </div>
+        {activeTab !== "other" && (
+          <div className="flex justify-end gap-3 mt-2 flex-shrink-0">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button onClick={handleSubmit} disabled={isSubmitting || selectedContactIds.length === 0 || (activeTab === "meeting" && !meetingTime)}>
+              {isSubmitting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
+              {activeTab === "email" ? "Send Email & Log" : "Schedule & add to calendar"}
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -12,10 +12,12 @@ export async function POST(req: Request) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const { contactId, subject, body } = await req.json();
+    const data = await req.json();
+    const contactId = data.contactId ?? (Array.isArray(data.contactIds) && data.contactIds.length > 0 ? data.contactIds[0] : undefined);
+    const { subject, body: emailBody } = data;
 
-    if (!contactId || !subject || !body) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (!contactId || !subject || !emailBody) {
+      return NextResponse.json({ error: "Missing required fields (contactId or contactIds, subject, body)" }, { status: 400 });
     }
 
     const account = await prisma.account.findFirst({
@@ -45,7 +47,7 @@ export async function POST(req: Request) {
       `Subject: ${subject}`,
       "Content-Type: text/plain; charset=utf-8",
       "",
-      body,
+      emailBody,
     ];
     const emailRaw = emailLines.join("\r\n");
     const encodedEmail = Buffer.from(emailRaw).toString("base64").replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -73,7 +75,7 @@ export async function POST(req: Request) {
           platform: "EMAIL",
           date: new Date(),
           content: subject,
-          metadata: { body: body?.slice(0, 500) },
+          metadata: { body: emailBody?.slice(0, 500) },
           contacts: {
               connect: [{ id: contact.id }],
           },

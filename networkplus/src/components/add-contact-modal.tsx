@@ -69,7 +69,7 @@ export function AddContactModal({ groups, onSuccess }: AddContactModalProps) {
           Add Contact
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] bg-background/70 backdrop-blur-xl border-border/30">
         <DialogHeader>
           <DialogTitle>Add Contact</DialogTitle>
         </DialogHeader>

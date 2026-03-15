@@ -44,9 +44,13 @@ export default function RootLayout({
         >
           <SessionProvider>
             <FcmInitializer />
-            <Navbar />
+            <div className="flex h-screen flex-col overflow-hidden">
+              <Navbar />
+              <main className="min-h-0 flex-1 overflow-auto overscroll-contain">
+                {children}
+              </main>
+            </div>
             <OnboardingTour />
-            {children}
           </SessionProvider>
           <Analytics />
         </ThemeProvider>

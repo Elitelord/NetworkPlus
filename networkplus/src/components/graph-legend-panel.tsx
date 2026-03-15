@@ -25,6 +25,7 @@ interface GraphLegendPanelProps {
     selectedGroupFilters: string[];
     onGroupFiltersChange: (filters: string[]) => void;
     onFocusNode: (nodeId: string) => void;
+    className?: string;
 }
 
 type TabId = "individual" | "groups" | "types";
@@ -35,6 +36,7 @@ export function GraphLegendPanel({
     selectedGroupFilters,
     onGroupFiltersChange,
     onFocusNode,
+    className,
 }: GraphLegendPanelProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>("individual");
@@ -143,7 +145,7 @@ export function GraphLegendPanel({
     }, {});
 
     return (
-        <div id="tour-legend" className="absolute bottom-6 left-6 z-10 flex flex-col items-start gap-2">
+        <div id="tour-legend" className={cn("absolute bottom-6 left-6 z-10 flex flex-col items-start gap-2", className)}>
             {/* Expanded Panel */}
             <div
                 className={cn(

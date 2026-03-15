@@ -91,7 +91,7 @@ export function AddLinkModal({ nodes, links, onSuccess }: AddLinkModalProps) {
           Add Link
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] bg-background/70 backdrop-blur-xl border-border/30">
         <DialogHeader>
           <DialogTitle>Add Link</DialogTitle>
         </DialogHeader>

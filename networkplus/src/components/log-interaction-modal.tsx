@@ -36,21 +36,7 @@ import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-
-const PLATFORMS = [
-    { value: "SMS", label: "SMS" },
-    { value: "CALL", label: "Call" },
-    { value: "EMAIL", label: "Email" },
-    { value: "INSTAGRAM", label: "Instagram" },
-    { value: "DISCORD", label: "Discord" },
-    { value: "WHATSAPP", label: "WhatsApp" },
-    { value: "FACEBOOK", label: "Facebook" },
-    { value: "LINKEDIN", label: "LinkedIn" },
-    { value: "SNAPCHAT", label: "Snapchat" },
-    { value: "TELEGRAM", label: "Telegram" },
-    { value: "IN_PERSON", label: "In Person" },
-    { value: "OTHER", label: "Other" },
-];
+import { INTERACTION_PLATFORMS } from "@/lib/interaction-platforms";
 
 export interface EditInteractionData {
     id: string;
@@ -64,13 +50,23 @@ export interface EditInteractionData {
 }
 
 interface LogInteractionModalProps {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
     contactId: string;
     onSuccess: (contactIds: string[]) => void;
     defaultDate?: string; // ISO string to pre-fill the date picker
     editInteraction?: EditInteractionData;
     onDelete?: () => void;
+    /** "simple" = all fields, no contact selector when hideContactSelector; "full" = same plus contact selector. */
+    variant?: "simple" | "full";
+    /** When opening from Catch up / ReachOut, pre-select these contacts instead of only contactId. */
+    initialContactIds?: string[];
+    /** When true, render only the form (no Dialog). For embedding in ReachOutModal Other tab. */
+    embedFormOnly?: boolean;
+    /** When embedFormOnly, called when user clicks Cancel. */
+    onCancel?: () => void;
+    /** When true (e.g. embedded in Reach Out), hide the contact selector; parent provides contacts. */
+    hideContactSelector?: boolean;
 }
 
 interface ContactOption {
@@ -79,13 +75,18 @@ interface ContactOption {
 }
 
 export function LogInteractionModal({
-    open,
+    open = true,
     onOpenChange,
     contactId,
     onSuccess,
     defaultDate,
     editInteraction,
     onDelete,
+    variant = "full",
+    initialContactIds,
+    embedFormOnly = false,
+    onCancel,
+    hideContactSelector = false,
 }: LogInteractionModalProps) {
     const isEditing = !!editInteraction;
     const [deleting, setDeleting] = useState(false);
@@ -99,9 +100,10 @@ export function LogInteractionModal({
         content: "",
     });
 
+    const isOpen = open || embedFormOnly;
     // Pre-fill form when editing or when defaultDate changes
     useEffect(() => {
-        if (open && editInteraction) {
+        if (isOpen && editInteraction) {
             const d = new Date(editInteraction.date);
             const offset = d.getTimezoneOffset() * 60000;
             const localISO = new Date(d.getTime() - offset).toISOString().slice(0, 16);
@@ -118,8 +120,14 @@ export function LogInteractionModal({
             const offset = d.getTimezoneOffset() * 60000;
             const localISO = new Date(d.getTime() - offset).toISOString().slice(0, 16);
             setFormData(prev => ({ ...prev, date: localISO }));
+        } else if (isOpen && variant === "simple") {
+            // Simple mode: default date to now when not editing
+            const now = new Date();
+            const offset = now.getTimezoneOffset() * 60000;
+            const localISO = new Date(now.getTime() - offset).toISOString().slice(0, 16);
+            setFormData(prev => ({ ...prev, date: localISO }));
         }
-    }, [open, defaultDate, editInteraction]);
+    }, [isOpen, defaultDate, editInteraction, variant]);
 
     const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
     const [contacts, setContacts] = useState<ContactOption[]>([]);
@@ -137,6 +145,9 @@ export function LogInteractionModal({
     const [syncToCalendar, setSyncToCalendar] = useState(false);
     const [endTime, setEndTime] = useState<string>("");
 
+    // All fields always shown (no more/fewer options toggle)
+    const showFullForm = true;
+
     // Initialize end time when syncing to calendar is toggled
     useEffect(() => {
         if (syncToCalendar && !endTime) {
@@ -149,9 +160,11 @@ export function LogInteractionModal({
     }, [syncToCalendar, formData.date, endTime]);
 
     useEffect(() => {
-        if (open) {
-            // When editing, use the interaction's contact ids; otherwise the current contact
-            if (editInteraction?.contactIds && editInteraction.contactIds.length > 0) {
+        if (isOpen) {
+            // When opening from Catch up / ReachOut, use initialContactIds; when editing use interaction's; else contactId
+            if (initialContactIds && initialContactIds.length > 0) {
+                setSelectedContactIds(initialContactIds);
+            } else if (editInteraction?.contactIds && editInteraction.contactIds.length > 0) {
                 setSelectedContactIds(editInteraction.contactIds);
             } else {
                 setSelectedContactIds([contactId]);
@@ -167,7 +180,7 @@ export function LogInteractionModal({
                 })
                 .catch((err) => console.error("Failed to fetch contacts", err));
         }
-    }, [open, contactId, editInteraction]);
+    }, [isOpen, contactId, editInteraction, initialContactIds]);
 
     const handleChange = (field: string, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -274,7 +287,7 @@ export function LogInteractionModal({
             }
 
             onSuccess(selectedContactIds);
-            onOpenChange(false);
+            if (!embedFormOnly) onOpenChange?.(false);
             setFormData((prev) => ({ ...prev, date: new Date().toISOString().slice(0, 16), content: "", durationMinutes: "", messageCount: "" }));
             setIsRecurring(false);
             setRecurringType("WEEKLY");
@@ -303,7 +316,7 @@ export function LogInteractionModal({
             }
             onDelete?.();
             onSuccess(selectedContactIds);
-            onOpenChange(false);
+            if (!embedFormOnly) onOpenChange?.(false);
         } catch (err) {
             console.error(err);
         } finally {
@@ -311,16 +324,9 @@ export function LogInteractionModal({
         }
     };
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>{isEditing ? "Edit Interaction" : "Log Interaction"}</DialogTitle>
-                    <DialogDescription>
-                        {isEditing ? "Update this interaction." : "Record a new interaction."}
-                    </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+    const formBody = (
+        <>
+                    {!hideContactSelector && (
                     <div className="grid grid-cols-4 items-start gap-4">
                         <Label className="text-right pt-2">
                             Contacts
@@ -333,66 +339,71 @@ export function LogInteractionModal({
                                     // Fallback name if not found yet (e.g. current contact)
                                     const name = contact?.name || (id === contactId ? "Current Contact" : "Unknown");
                                     return (
-                                        <Badge key={id} variant="secondary" className="pr-1 gap-1">
+                                        <Badge key={id} variant="secondary" className={cn("pr-1 gap-1", !showFullForm && "pr-2")}>
                                             {name}
-                                            <button
-                                                type="button"
-                                                onClick={() => removeContact(id)}
-                                                className="hover:bg-muted p-0.5 rounded-full"
-                                            >
-                                                <X className="h-3 w-3" />
-                                            </button>
+                                            {showFullForm && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeContact(id)}
+                                                    className="hover:bg-muted p-0.5 rounded-full"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            )}
                                         </Badge>
                                     );
                                 })}
                             </div>
 
-                            <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={openCombobox}
-                                        className="w-full justify-between"
-                                    >
-                                        Add people...
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[300px] p-0">
-                                    <Command>
-                                        <CommandInput placeholder="Search contacts..." />
-                                        <CommandList>
-                                            <CommandEmpty>No contact found.</CommandEmpty>
-                                            <CommandGroup>
-                                                {contacts.map((contact) => (
-                                                    <CommandItem
-                                                        key={contact.id}
-                                                        value={contact.name}
-                                                        onSelect={() => {
-                                                            toggleContact(contact.id);
-                                                            // Keep open for multi-select
-                                                        }}
-                                                    >
-                                                        <Check
-                                                            className={cn(
-                                                                "mr-2 h-4 w-4",
-                                                                selectedContactIds.includes(contact.id)
-                                                                    ? "opacity-100"
-                                                                    : "opacity-0"
-                                                            )}
-                                                        />
-                                                        {contact.name}
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
+                            {showFullForm && (
+                                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openCombobox}
+                                            className="w-full justify-between"
+                                        >
+                                            Add people...
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[300px] p-0">
+                                        <Command>
+                                            <CommandInput placeholder="Search contacts..." />
+                                            <CommandList>
+                                                <CommandEmpty>No contact found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {contacts.map((contact) => (
+                                                        <CommandItem
+                                                            key={contact.id}
+                                                            value={contact.name}
+                                                            onSelect={() => {
+                                                                toggleContact(contact.id);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    selectedContactIds.includes(contact.id)
+                                                                        ? "opacity-100"
+                                                                        : "opacity-0"
+                                                                )}
+                                                            />
+                                                            {contact.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            )}
                         </div>
                     </div>
+                    )}
 
+                    {showFullForm && (
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="date" className="text-right pt-2">
                             Date
@@ -455,6 +466,9 @@ export function LogInteractionModal({
                             )}
                         </div>
                     </div>
+                    )}
+                    {showFullForm && (
+                    <>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label className="text-right">
                             {syncToCalendar ? "Start Time" : "Time"}
@@ -661,6 +675,10 @@ export function LogInteractionModal({
                             </div>
                         </div>
                     )}
+                    </>
+                    )}
+
+                    {showFullForm && (
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="type" className="text-right">
                             Type
@@ -673,6 +691,7 @@ export function LogInteractionModal({
                             placeholder="e.g. Meeting, Call"
                         />
                     </div>
+                    )}
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="platform" className="text-right">
                             Platform
@@ -683,56 +702,15 @@ export function LogInteractionModal({
                             onChange={(e) => handleChange("platform", e.target.value)}
                             className="col-span-3"
                         >
-                            {PLATFORMS.map((p) => (
+                            {INTERACTION_PLATFORMS.map((p) => (
                                 <NativeSelectOption key={p.value} value={p.value}>
                                     {p.label}
                                 </NativeSelectOption>
                             ))}
                         </NativeSelect>
                     </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="durationMinutes" className="text-right">
-                            Duration (mins)
-                        </Label>
-                        <Input
-                            id="durationMinutes"
-                            type="number"
-                            min="0"
-                            value={formData.durationMinutes}
-                            onChange={(e) => handleChange("durationMinutes", e.target.value)}
-                            className="col-span-3"
-                            placeholder="Optional"
-                        />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="messageCount" className="text-right">
-                            Total Messages
-                        </Label>
-                        <Input
-                            id="messageCount"
-                            type="number"
-                            min="1"
-                            value={formData.messageCount}
-                            onChange={(e) => handleChange("messageCount", e.target.value)}
-                            className="col-span-3"
-                            placeholder="Optional"
-                        />
-                    </div>
-                    <div className="grid grid-cols-4 items-start gap-4">
-                        <Label htmlFor="content" className="text-right pt-2">
-                            Notes
-                        </Label>
-                        <Textarea
-                            id="content"
-                            value={formData.content}
-                            onChange={(e) => handleChange("content", e.target.value)}
-                            className="col-span-3"
-                            placeholder="Optional notes..."
-                        />
-                    </div>
-
                     {/* Recurring toggle — only for new interactions */}
-                    {!isEditing && (
+                    {showFullForm && !isEditing && (
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label className="text-right">Recurring</Label>
                             <div className="col-span-3 space-y-3">
@@ -867,6 +845,46 @@ export function LogInteractionModal({
                             </div>
                         </div>
                     )}
+
+                    {/* Duration, Total Messages, Notes — bottom right above Save */}
+                    <div className="grid grid-cols-4 items-center gap-x-4 gap-y-3 ml-auto w-full max-w-md">
+                        <Label htmlFor="durationMinutes" className="text-right text-muted-foreground text-sm">
+                            Duration (mins)
+                        </Label>
+                        <Input
+                            id="durationMinutes"
+                            type="number"
+                            min="0"
+                            value={formData.durationMinutes}
+                            onChange={(e) => handleChange("durationMinutes", e.target.value)}
+                            className="w-24 justify-self-start"
+                            placeholder="—"
+                        />
+                        <Label htmlFor="messageCount" className="text-right text-muted-foreground text-sm">
+                            Total Messages
+                        </Label>
+                        <Input
+                            id="messageCount"
+                            type="number"
+                            min="1"
+                            value={formData.messageCount}
+                            onChange={(e) => handleChange("messageCount", e.target.value)}
+                            className="w-24 justify-self-start"
+                            placeholder="—"
+                        />
+                        <Label htmlFor="content" className="text-right text-muted-foreground text-sm pt-2 self-start">
+                            Notes
+                        </Label>
+                        <Textarea
+                            id="content"
+                            value={formData.content}
+                            onChange={(e) => handleChange("content", e.target.value)}
+                            className="col-span-3 resize-none justify-self-stretch"
+                            placeholder="Optional notes..."
+                            rows={2}
+                        />
+                    </div>
+
                     <DialogFooter>
                         {isEditing && (
                             <Button
@@ -879,14 +897,29 @@ export function LogInteractionModal({
                                 {deleting ? "Deleting..." : "Delete"}
                             </Button>
                         )}
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        <Button type="button" variant="outline" onClick={() => embedFormOnly ? onCancel?.() : onOpenChange?.(false)}>
                             Cancel
                         </Button>
                         <Button type="submit" disabled={loading}>
                             {loading ? "Saving..." : isEditing ? "Update" : "Save"}
                         </Button>
                     </DialogFooter>
-                </form>
+        </>
+    );
+
+    if (embedFormOnly) {
+        return <form onSubmit={handleSubmit} className="grid gap-4 py-4">{formBody}</form>;
+    }
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange!}>
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-background/70 backdrop-blur-xl border-border/30">
+                <DialogHeader>
+                    <DialogTitle>{isEditing ? "Edit Interaction" : "Log Interaction"}</DialogTitle>
+                    <DialogDescription>
+                        {isEditing ? "Update this interaction." : "Record a new interaction."}
+                    </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="grid gap-4 py-4">{formBody}</form>
             </DialogContent>
         </Dialog>
     );

@@ -51,7 +51,9 @@ interface ContactDetailSheetProps {
     node: NodeData | null;
     groups: string[];
     dueNodeIds: Set<string>; // To show alert
-    onLogInteraction: (contactIds: string[]) => void; // Legacy/Quick action from alert? We might repurpose this or use it to refresh
+    onLogInteraction: (contactIds: string[]) => void;
+    /** Open Reach Out modal on the Other tab with these contact ids (for "Log interaction" / new log). */
+    onOpenReachOutForLog?: (contactIds: string[]) => void;
     onUpdateNode: (id: string, updates: Partial<NodeData>) => Promise<void>;
     onFocusNode: (id: string) => void;
     // Passing "connectedNeighbors" or "links/nodes" to calculate them?
@@ -94,12 +96,12 @@ export function ContactDetailSheet({
     groups,
     dueNodeIds,
     onLogInteraction,
+    onOpenReachOutForLog,
     onUpdateNode,
     onFocusNode,
     connectedNeighbors,
 }: ContactDetailSheetProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-    const [isLogInteractionOpen, setIsLogInteractionOpen] = useState(false);
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [editingInteraction, setEditingInteraction] = useState<EditInteractionData | undefined>(undefined);
@@ -133,12 +135,12 @@ export function ContactDetailSheet({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col h-full">
+            <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col h-full bg-background/70 backdrop-blur-xl border-border/30">
                 <SheetHeader className="shrink-0 mb-4">
                     <div className="flex items-center justify-between">
                         <SheetTitle>{node?.name}</SheetTitle>
                         <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => setIsLogInteractionOpen(true)}>
+                            <Button variant="outline" size="sm" onClick={() => node && onOpenReachOutForLog?.([node.id])}>
                                 Log Interaction
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(true)}>
@@ -146,21 +148,21 @@ export function ContactDetailSheet({
                             </Button>
                         </div>
                     </div>
-                    <SheetDescription>
-                        {node?.description || "No description provided."}
-                        {node?.strengthScore !== undefined && (
-                            <div className="flex items-center gap-2 mt-2">
-                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Relationship Strength</span>
-                                <div className="h-2 w-24 bg-secondary rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-primary"
-                                        style={{ width: `${Math.min(100, Math.max(0, node.strengthScore))}%` }}
-                                    />
-                                </div>
-                                <span className="text-xs font-mono">{node.strengthScore.toFixed(1)}</span>
-                            </div>
-                        )}
+                    <SheetDescription asChild>
+                        <span>{node?.description || "No description provided."}</span>
                     </SheetDescription>
+                    {node?.strengthScore !== undefined && (
+                        <div className="flex items-center gap-2 mt-2" aria-hidden>
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Relationship Strength</span>
+                            <div className="h-2 w-24 bg-secondary rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-primary"
+                                    style={{ width: `${Math.min(100, Math.max(0, node.strengthScore))}%` }}
+                                />
+                            </div>
+                            <span className="text-xs font-mono">{node.strengthScore.toFixed(1)}</span>
+                        </div>
+                    )}
                 </SheetHeader>
 
                 <div className="flex-1 -mx-6 px-6 overflow-y-auto">
@@ -186,10 +188,10 @@ export function ContactDetailSheet({
                                 }}
                             />
 
+                            {/* Only for editing an existing interaction; new log uses Reach Out via onOpenReachOutForLog */}
                             <LogInteractionModal
-                                open={isLogInteractionOpen}
+                                open={!!editingInteraction}
                                 onOpenChange={(open) => {
-                                    setIsLogInteractionOpen(open);
                                     if (!open) setEditingInteraction(undefined);
                                 }}
                                 contactId={node.id}
@@ -205,7 +207,7 @@ export function ContactDetailSheet({
                                             <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Consider catching up</h4>
                                             <p className="text-xs text-red-600/80">Relationship strength is low.</p>
                                         </div>
-                                        <Button size="sm" variant="secondary" onClick={() => setIsLogInteractionOpen(true)}>
+                                        <Button size="sm" variant="secondary" onClick={() => node && onOpenReachOutForLog?.([node.id])}>
                                             Log Interaction
                                         </Button>
                                     </div>
@@ -275,7 +277,6 @@ export function ContactDetailSheet({
                                                                                     messageCount: interaction.messageCount ? String(interaction.messageCount) : undefined,
                                                                                     contactIds: [node.id],
                                                                                 });
-                                                                                setIsLogInteractionOpen(true);
                                                                             }}
                                                                         >
                                                                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
@@ -330,7 +331,6 @@ export function ContactDetailSheet({
                                                                         messageCount: interaction.messageCount ? String(interaction.messageCount) : undefined,
                                                                         contactIds: [node.id],
                                                                     });
-                                                                    setIsLogInteractionOpen(true);
                                                                 }}
                                                             >
                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
@@ -357,9 +357,9 @@ export function ContactDetailSheet({
                                     <p className="text-sm text-muted-foreground">No connections found.</p>
                                 ) : (
                                     <ul className="space-y-2 mb-6">
-                                        {connectedNeighbors.map((neighbor) => (
+                                        {connectedNeighbors.map((neighbor, index) => (
                                             <li
-                                                key={neighbor.id}
+                                                key={`${neighbor.id}-${index}`}
                                                 className="flex flex-col gap-1 p-3 rounded-lg border bg-card text-card-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
                                                 onClick={() => onFocusNode(neighbor.id)}
                                             >

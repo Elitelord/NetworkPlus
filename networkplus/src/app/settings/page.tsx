@@ -36,13 +36,13 @@ export default async function SettingsPage() {
     const hasPassword = !!(user as any).hashedPassword
 
     return (
-        <div className="container mx-auto max-w-2xl py-10 space-y-8 flex flex-col items-center">
+        <div className="container mx-auto max-w-2xl py-8 sm:py-10 px-4 sm:px-6 space-y-8 flex flex-col items-center overflow-x-hidden">
             <div className="text-center">
                 <h1 className="text-3xl font-bold">Settings</h1>
                 <p className="text-muted-foreground">Manage your account settings and preferences.</p>
             </div>
 
-            <div className="space-y-6 w-full max-w-md">
+            <div className="space-y-6 w-full max-w-md min-w-0">
                 <div className="flex flex-col items-center text-center mb-6">
                     <h2 className="text-lg font-medium">Profile</h2>
                     <p className="text-sm text-muted-foreground mb-4">Update your personal information.</p>

@@ -23,7 +23,7 @@ export default function Home() {
         </header>
 
         {/* Features Section */}
-        <section id="features" className="container mx-auto py-12 md:py-24 lg:py-32">
+        <section id="features" className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-24 lg:py-32">
           <div className="mx-auto flex max-w-[58rem] flex-col items-center justify-center gap-4 text-center">
             <h2 className="font-heading text-3xl leading-[1.1] sm:text-3xl md:text-6xl text-center font-bold">
               What makes NetworkPlus different
@@ -119,7 +119,7 @@ export default function Home() {
         </section>
 
         {/* Use Cases Section */}
-        <section className="container mx-auto py-12 md:py-24 lg:py-32">
+        <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-24 lg:py-32">
           <div className="mx-auto flex max-w-[58rem] flex-col items-center justify-center gap-4 text-center mb-12">
             <h2 className="font-heading text-3xl leading-[1.1] sm:text-3xl md:text-6xl font-bold">
               Who this is for
@@ -174,7 +174,7 @@ export default function Home() {
         </section>
 
         {/* Trust & Privacy Section */}
-        <section className="container mx-auto py-12 md:py-24 text-center">
+        <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-24 text-center">
           <div className="mx-auto max-w-2xl space-y-4">
             <div className="flex justify-center mb-4">
               <Shield className="h-16 w-16 text-muted-foreground/50" />
@@ -187,7 +187,7 @@ export default function Home() {
         </section>
 
         <footer className="border-t bg-zinc-100 dark:bg-zinc-900">
-          <div className="container mx-auto flex flex-col gap-4 py-8 md:flex-row md:items-center md:justify-between">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-4 py-8 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-muted-foreground text-center md:text-left">
               © {new Date().getFullYear()} NetworkPlus. All rights reserved.
             </p>

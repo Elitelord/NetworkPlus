@@ -12,11 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Users, Search, Loader2, CheckSquare, Square, Trash2, Calendar as CalendarIcon, Tag, Plus } from "lucide-react";
 import { MultiSelect } from "@/components/ui/multi-select";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
-import { Textarea } from "@/components/ui/textarea";
 
 type Contact = {
     id: string;
@@ -33,9 +29,11 @@ interface BulkEditModalProps {
     allGroups: string[];
     initialGroupFilter?: string[];
     onSuccess: () => void;
+    /** Open Reach Out modal on the Other tab with these contact ids (e.g. from "Log interaction" button). */
+    onOpenReachOutForLog?: (contactIds: string[]) => void;
 }
 
-export function BulkEditModal({ contacts, allGroups, initialGroupFilter, onSuccess }: BulkEditModalProps) {
+export function BulkEditModal({ contacts, allGroups, initialGroupFilter, onSuccess, onOpenReachOutForLog }: BulkEditModalProps) {
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedGroupFilters, setSelectedGroupFilters] = useState<string[]>([]);
@@ -44,13 +42,9 @@ export function BulkEditModal({ contacts, allGroups, initialGroupFilter, onSucce
     // Action states
     const [isUpdating, setIsUpdating] = useState(false);
     const [actionGroups, setActionGroups] = useState<string[]>([]);
-    const [interactionDate, setInteractionDate] = useState<Date>(new Date());
-    const [interactionPlatform, setInteractionPlatform] = useState<string>("LINKEDIN");
-    const [interactionDescription, setInteractionDescription] = useState("");
 
     // Popover states to close after action
     const [groupsPopoverOpen, setGroupsPopoverOpen] = useState(false);
-    const [interactionPopoverOpen, setInteractionPopoverOpen] = useState(false);
     const [deletePopoverOpen, setDeletePopoverOpen] = useState(false);
 
     // Filter contacts
@@ -94,9 +88,6 @@ export function BulkEditModal({ contacts, allGroups, initialGroupFilter, onSucce
         setSelectedGroupFilters([]);
         setSelectedContactIds(new Set());
         setActionGroups([]);
-        setInteractionDate(new Date());
-        setInteractionPlatform("LINKEDIN");
-        setInteractionDescription("");
     };
 
     const applyFiltersAndAutoSelect = (query: string, groupFilters: string[]) => {
@@ -143,34 +134,6 @@ export function BulkEditModal({ contacts, allGroups, initialGroupFilter, onSucce
         } catch (err) {
             console.error(err);
             alert("Failed to update groups");
-        } finally {
-            setIsUpdating(false);
-        }
-    }
-
-    async function handleBulkLogInteraction() {
-        if (selectedContactIds.size === 0) return;
-        setIsUpdating(true);
-        try {
-            const res = await fetch("/api/interactions/bulk", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contactIds: Array.from(selectedContactIds),
-                    date: interactionDate.toISOString(),
-                    platform: interactionPlatform,
-                    description: interactionDescription
-                })
-            });
-            if (!res.ok) throw new Error("Failed to log interactions");
-
-            setInteractionPopoverOpen(false);
-            setInteractionDescription("");
-            setSelectedContactIds(new Set());
-            onSuccess();
-        } catch (err) {
-            console.error(err);
-            alert("Failed to log interactions");
         } finally {
             setIsUpdating(false);
         }
@@ -223,7 +186,7 @@ export function BulkEditModal({ contacts, allGroups, initialGroupFilter, onSucce
                     Bulk Edit Contacts
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[800px] h-[85vh] flex flex-col p-6">
+            <DialogContent className="sm:max-w-[800px] h-[85vh] flex flex-col p-6 bg-background/70 backdrop-blur-xl border-border/30">
                 <DialogHeader className="shrink-0">
                     <DialogTitle>Bulk Edit Contacts</DialogTitle>
                     <DialogDescription>
@@ -304,67 +267,22 @@ export function BulkEditModal({ contacts, allGroups, initialGroupFilter, onSucce
                                 </PopoverContent>
                             </Popover>
 
-                            {/* Log Interaction */}
-                            <Popover open={interactionPopoverOpen} onOpenChange={setInteractionPopoverOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button variant="secondary" size="sm" className="h-8 gap-1.5 border-primary/20">
-                                        <CalendarIcon className="size-3.5" />
-                                        Log Interaction
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80 p-4" align="end">
-                                    <div className="space-y-4">
-                                        <h4 className="font-medium text-sm">Log Bulk Interaction</h4>
-
-                                        <NativeSelect value={interactionPlatform} onChange={(e) => setInteractionPlatform(e.target.value)}>
-                                            <NativeSelectOption value="LINKEDIN">LinkedIn</NativeSelectOption>
-                                            <NativeSelectOption value="WHATSAPP">WhatsApp</NativeSelectOption>
-                                            <NativeSelectOption value="IMESSAGE">iMessage / SMS</NativeSelectOption>
-                                            <NativeSelectOption value="EMAIL">Email</NativeSelectOption>
-                                            <NativeSelectOption value="MEETING">Meeting</NativeSelectOption>
-                                            <NativeSelectOption value="CALL">Call</NativeSelectOption>
-                                            <NativeSelectOption value="SOCIAL_MEDIA">Social Media</NativeSelectOption>
-                                            <NativeSelectOption value="IN_PERSON">In Person</NativeSelectOption>
-                                            <NativeSelectOption value="OTHER">Other</NativeSelectOption>
-                                        </NativeSelect>
-
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button variant="outline" className="w-full justify-start text-left font-normal h-9">
-                                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                                    {interactionDate ? format(interactionDate, "PPP") : <span>Pick a date</span>}
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0" align="start">
-                                                <Calendar
-                                                    mode="single"
-                                                    selected={interactionDate}
-                                                    onSelect={(d) => d && setInteractionDate(d)}
-                                                    initialFocus
-                                                    disabled={(date) => date > new Date()}
-                                                />
-                                            </PopoverContent>
-                                        </Popover>
-
-                                        <Textarea
-                                            placeholder="Notes (optional)"
-                                            value={interactionDescription}
-                                            onChange={e => setInteractionDescription(e.target.value)}
-                                            className="text-sm resize-none"
-                                            rows={2}
-                                        />
-
-                                        <Button
-                                            className="w-full h-8 text-sm"
-                                            onClick={handleBulkLogInteraction}
-                                            disabled={isUpdating}
-                                        >
-                                            {isUpdating ? <Loader2 className="size-3.5 animate-spin mr-2" /> : null}
-                                            Save Interaction
-                                        </Button>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
+                            {/* Log Interaction — opens Reach Out modal Other tab with selected contacts */}
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                className="h-8 gap-1.5 border-primary/20"
+                                disabled={selectedContactIds.size === 0}
+                                onClick={() => {
+                                    if (onOpenReachOutForLog && selectedContactIds.size > 0) {
+                                        onOpenReachOutForLog(Array.from(selectedContactIds));
+                                        setOpen(false);
+                                    }
+                                }}
+                            >
+                                <CalendarIcon className="size-3.5" />
+                                Log Interaction
+                            </Button>
 
                             {/* Delete */}
                             <Popover open={deletePopoverOpen} onOpenChange={setDeletePopoverOpen}>

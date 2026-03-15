@@ -258,7 +258,7 @@ export function LinkedInImportModal({
                 <MessageSquare className="size-4" />
                 Import Messages
             </Button>
-            <DialogContent className="sm:max-w-[650px] max-h-[85vh] overflow-y-auto flex flex-col">
+            <DialogContent className="sm:max-w-[650px] max-h-[85vh] overflow-y-auto flex flex-col bg-background/70 backdrop-blur-xl border-border/30">
                 <DialogHeader>
                     <DialogTitle>Import LinkedIn Messages</DialogTitle>
                     <DialogDescription>

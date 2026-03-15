@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LogInteractionModal, EditInteractionData } from "@/components/log-interaction-modal";
+import { ReachOutModal } from "@/components/reach-out-modal";
 
 type CalendarEvent = {
     id: string;
@@ -82,9 +83,8 @@ export default function CalendarPage() {
     const [syncResult, setSyncResult] = useState<string | null>(null);
     const [loadingInteractions, setLoadingInteractions] = useState(false);
     const [loadingEvents, setLoadingEvents] = useState(false);
-    const [isLogModalOpen, setIsLogModalOpen] = useState(false);
     const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-    const [logModalDate, setLogModalDate] = useState<string | undefined>(undefined);
+    const [reachOutState, setReachOutState] = useState<{ preselectedIds: string[]; defaultDate?: string } | null>(null);
     const [editingInteraction, setEditingInteraction] = useState<EditInteractionData | undefined>(undefined);
 
     /* ── Data fetching ──────────────────────────────── */
@@ -439,8 +439,10 @@ export default function CalendarPage() {
                                         variant="outline"
                                         size="sm"
                                         onClick={() => {
-                                            setLogModalDate(selectedDate.toISOString());
-                                            setIsLogModalOpen(true);
+                                            setReachOutState({
+                                                preselectedIds: contacts.length > 0 ? [contacts[0].id] : [],
+                                                defaultDate: selectedDate.toISOString(),
+                                            });
                                         }}
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -530,7 +532,6 @@ export default function CalendarPage() {
                                                                     messageCount: interaction.messageCount ? String(interaction.messageCount) : undefined,
                                                                     contactIds: interaction.contacts?.map(c => c.id),
                                                                 });
-                                                                setIsLogModalOpen(true);
                                                             }}
                                                         >
                                                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
@@ -602,21 +603,40 @@ export default function CalendarPage() {
                 </div>
             </div>
 
-            {/* Modals */}
+            {/* Reach Out (Other tab) for new log from "Add" */}
+            {contacts.length > 0 && (
+                <ReachOutModal
+                    allContacts={contacts}
+                    initialContact={reachOutState && reachOutState.preselectedIds[0] ? (contacts.find(c => c.id === reachOutState.preselectedIds[0]) ?? null) : null}
+                    open={!!reachOutState}
+                    onOpenChange={(open) => {
+                        if (!open) setReachOutState(null);
+                    }}
+                    onSuccess={() => {
+                        fetchInteractions();
+                        fetchCalendarEvents();
+                        setReachOutState(null);
+                    }}
+                    initialPreselectedIds={reachOutState?.preselectedIds}
+                    initialTab="other"
+                    initialDefaultDate={reachOutState?.defaultDate}
+                />
+            )}
+            {/* LogInteractionModal only for editing an existing interaction */}
             {contacts.length > 0 && (
                 <LogInteractionModal
-                    open={isLogModalOpen}
+                    open={!!editingInteraction}
                     onOpenChange={(open) => {
-                        setIsLogModalOpen(open);
                         if (!open) setEditingInteraction(undefined);
                     }}
                     contactId={contacts[0]?.id || ""}
-                    defaultDate={logModalDate}
+                    defaultDate={editingInteraction?.date}
                     editInteraction={editingInteraction}
                     onDelete={() => fetchInteractions()}
                     onSuccess={() => {
                         fetchInteractions();
                         fetchCalendarEvents();
+                        setEditingInteraction(undefined);
                     }}
                 />
             )}

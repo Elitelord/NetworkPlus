@@ -42,31 +42,59 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const { id } = await params;
+        const existing = await prisma.contact.findFirst({
+            where: { id, ownerId: session.user.id },
+        });
+        if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
         const parsed = await parseJsonBody(req);
         if (!parsed.ok) return parsed.response;
         const body = parsed.data as Record<string, unknown>;
+
+        // Partial update: only override fields present in body; validate when provided
         const { group } = body;
-        const commonPlatform = toPlatform(body.commonPlatform);
-
-        let validGroups = clampGroupsArray(body.groups);
-        if (group && typeof group === "string") {
+        const commonPlatform = body.commonPlatform !== undefined ? toPlatform(body.commonPlatform) : undefined;
+        const groupsFromBody = body.groups !== undefined ? clampGroupsArray(body.groups) : undefined;
+        let validGroups: string[] | undefined = groupsFromBody;
+        if (groupsFromBody !== undefined && group && typeof group === "string") {
             const g = clampString(group, LIMITS.groupItem);
-            if (g && !validGroups.includes(g)) validGroups = [...validGroups, g];
+            if (g && !groupsFromBody.includes(g)) validGroups = [...groupsFromBody, g];
         }
 
-        const name = clampString(body.name, LIMITS.name);
-        const description = clampString(body.description, LIMITS.description) ?? null;
-        const email = clampString(body.email, LIMITS.email) ?? null;
-        const phone = clampString(body.phone, LIMITS.phone) ?? null;
+        const nameFromBody = body.name !== undefined ? clampString(body.name, LIMITS.name) : undefined;
+        if (nameFromBody !== undefined && (nameFromBody === null || nameFromBody.length === 0)) {
+            return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 });
+        }
+
+        const description = body.description !== undefined
+            ? (clampString(body.description, LIMITS.description) ?? null)
+            : undefined;
+        const email = body.email !== undefined
+            ? (clampString(body.email, LIMITS.email) ?? null)
+            : undefined;
+        const phone = body.phone !== undefined
+            ? (clampString(body.phone, LIMITS.phone) ?? null)
+            : undefined;
+
         let monthsKnown: number | undefined;
-        if (typeof body.monthsKnown === "number" && Number.isInteger(body.monthsKnown) && body.monthsKnown >= 0 && body.monthsKnown <= 1200) {
-            monthsKnown = body.monthsKnown;
-        } else if (body.monthsKnown !== undefined) {
-            return NextResponse.json({ error: "monthsKnown must be an integer between 0 and 1200" }, { status: 400 });
+        if (body.monthsKnown !== undefined) {
+            if (typeof body.monthsKnown === "number" && Number.isInteger(body.monthsKnown) && body.monthsKnown >= 0 && body.monthsKnown <= 1200) {
+                monthsKnown = body.monthsKnown;
+            } else {
+                return NextResponse.json({ error: "monthsKnown must be an integer between 0 and 1200" }, { status: 400 });
+            }
         }
 
-        if (name === undefined || name === null || name.length === 0) {
-            return NextResponse.json({ error: "Name is required" }, { status: 400 });
+        const hasUpdates =
+            nameFromBody !== undefined ||
+            description !== undefined ||
+            validGroups !== undefined ||
+            email !== undefined ||
+            phone !== undefined ||
+            commonPlatform !== undefined ||
+            monthsKnown !== undefined;
+        if (!hasUpdates) {
+            return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
         }
 
         const contact = await prisma.contact.update({
@@ -75,12 +103,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ownerId: session.user.id
             },
             data: {
-                name,
-                description,
-                groups: validGroups,
-                email,
-                phone,
-                commonPlatform,
+                ...(nameFromBody !== undefined && { name: nameFromBody }),
+                ...(description !== undefined && { description }),
+                ...(validGroups !== undefined && { groups: validGroups }),
+                ...(email !== undefined && { email }),
+                ...(phone !== undefined && { phone }),
+                ...(commonPlatform !== undefined && { commonPlatform }),
                 ...(monthsKnown !== undefined && { monthsKnown }),
             },
         });

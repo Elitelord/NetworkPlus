@@ -12,6 +12,7 @@ interface GraphZoomControlsProps {
     onSetZoom: (zoom: number) => void;
     isFullscreen?: boolean;
     onToggleFullscreen?: () => void;
+    className?: string;
 }
 
 export function GraphZoomControls({
@@ -22,6 +23,7 @@ export function GraphZoomControls({
     onSetZoom,
     isFullscreen,
     onToggleFullscreen,
+    className,
 }: GraphZoomControlsProps) {
     const [isOpen, setIsOpen] = useState(false);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,7 +47,7 @@ export function GraphZoomControls({
     return (
         <div
             id="tour-zoom-controls"
-            className="absolute bottom-6 right-6 z-10 flex flex-col items-end gap-2"
+            className={cn("absolute bottom-6 right-6 z-10 flex flex-col items-end gap-2", className)}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
         >

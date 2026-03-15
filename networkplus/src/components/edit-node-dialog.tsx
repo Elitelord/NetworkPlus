@@ -111,7 +111,7 @@ export function EditNodeDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] bg-background/70 backdrop-blur-xl border-border/30">
                 <DialogHeader>
                     <DialogTitle>Edit Contact</DialogTitle>
                     <DialogDescription>

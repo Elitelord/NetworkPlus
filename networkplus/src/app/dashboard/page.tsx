@@ -70,6 +70,8 @@ export default function Home() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedLink, setSelectedLink] = useState<{ id: string; label?: string; fromName?: string; toName?: string } | null>(null);
   const [reachOutContact, setReachOutContact] = useState<Contact | null>(null);
+  const [reachOutPreselectedIds, setReachOutPreselectedIds] = useState<string[] | null>(null);
+  const [reachOutInitialTab, setReachOutInitialTab] = useState<"email" | "meeting" | "other" | null>(null);
 
   // Zoom Controls
   const [currentZoom, setCurrentZoom] = useState(1);
@@ -760,6 +762,10 @@ export default function Home() {
             allGroups={groups}
             initialGroupFilter={selectedGroupFilters}
             onSuccess={() => loadData()}
+            onOpenReachOutForLog={(ids) => {
+              setReachOutPreselectedIds(ids);
+              setReachOutInitialTab("other");
+            }}
           />
         </div>
       </div>
@@ -795,15 +801,25 @@ export default function Home() {
   );
 
   // Match zoom/legend: same glass on buttons; stronger blur on overlay panels so they match bottom FABs
-  const overlayPanelGlass = "bg-background/60 backdrop-blur-xl border shadow-lg rounded-xl";
+  const overlayPanelGlass = "bg-background/70 backdrop-blur-xl border border-border/30 shadow-lg rounded-xl";
   const overlayButtonBase =
     "rounded-xl shadow-lg border hover:bg-accent/80 transition-all duration-300 flex items-center justify-center gap-2 text-foreground px-3 py-2.5 text-sm font-medium bg-background/60 backdrop-blur-xl";
 
   return (
-    <div className="flex h-[calc(100vh-57px)] overflow-hidden bg-zinc-50 dark:bg-black font-sans">
-      {/* Left Sidebar — only when desktop and not in overlay mode */}
+    <div className="relative flex h-full min-h-0 overflow-hidden bg-zinc-50 dark:bg-black font-sans">
+      {/* Fixed full-viewport graph layer: sits behind navbar; receives drag/pan when UI layer passes events through */}
+      <div className="fixed inset-0 z-0 bg-zinc-100 dark:bg-zinc-900/50" aria-hidden>
+        <div
+          id="graph"
+          ref={graphRef}
+          className="h-full w-full touch-none"
+        />
+      </div>
+
+      {/* UI layer: pointer-events-none so graph gets drag/pan; re-enable on sidebars and controls */}
+      <div className="pointer-events-none relative z-10 flex h-full min-h-0 w-full overflow-hidden">
       {!overlayMode && (
-        <aside id="tour-sidebar" className="hidden md:flex w-80 border-r bg-background p-6 flex-col gap-6 shrink-0 overflow-y-auto">
+        <aside id="tour-sidebar" className="pointer-events-auto hidden md:flex w-80 border-r border-border/30 bg-background/70 backdrop-blur-xl p-6 flex-col gap-6 shrink-0 overflow-y-auto">
           <div className="flex items-center gap-2">
             <img src="/logo.svg" alt="Network+" className="size-8 rounded-lg" />
             <h1 className="font-bold text-xl tracking-tight">Network+</h1>
@@ -812,11 +828,10 @@ export default function Home() {
         </aside>
       )}
 
-      {/* Main Content - Graph */}
-      <main className="flex-1 relative overflow-hidden flex flex-col min-w-0 min-h-0">
-        {/* Overlay mode: only the top bar overlays — graph stays fully interactive for touch drag/pan */}
+      {/* Main: transparent over graph; pointer-events-none so drag/pan hits the graph layer */}
+      <main className="pointer-events-none flex-1 relative overflow-hidden min-w-0 min-h-0">
         {overlayMode && (
-          <div className="absolute top-0 left-0 right-0 z-20 flex items-start justify-between p-4 gap-2">
+          <div className="pointer-events-auto absolute top-0 left-0 right-0 z-20 flex items-start justify-between p-4 gap-2">
               <Dialog>
                 <DialogTrigger asChild>
                   <button
@@ -872,12 +887,8 @@ export default function Home() {
               </Popover>
           </div>
         )}
-        <div
-          id="graph"
-          ref={graphRef}
-          className="flex-1 w-full min-h-0 bg-zinc-100 dark:bg-zinc-900/50 touch-none"
-        />
         <GraphZoomControls
+          className="pointer-events-auto"
           currentZoom={currentZoom}
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
@@ -887,6 +898,7 @@ export default function Home() {
           onToggleFullscreen={() => setIsFullscreen(f => !f)}
         />
         <GraphLegendPanel
+          className="pointer-events-auto"
           nodes={nodes}
           groups={groups}
           selectedGroupFilters={selectedGroupFilters}
@@ -895,27 +907,34 @@ export default function Home() {
         />
         {
           error && (
-            <div className="absolute top-4 left-4 right-4 z-20 p-3 rounded-xl text-sm text-destructive bg-destructive/10 backdrop-blur-lg border border-destructive/30 shadow-lg">
+            <div className="pointer-events-auto absolute top-4 left-4 right-4 z-20 p-3 rounded-xl text-sm text-destructive bg-destructive/10 backdrop-blur-lg border border-destructive/30 shadow-lg">
               {error}
             </div>
           )
         }
         <ReachOutModal 
           allContacts={nodes}
-          initialContact={reachOutContact} 
-          open={!!reachOutContact} 
-          onOpenChange={(open) => !open && setReachOutContact(null)} 
-          onSuccess={handleInteractionLogged} 
+          initialContact={reachOutContact ?? (reachOutPreselectedIds?.[0] ? (nodes.find(n => n.id === reachOutPreselectedIds[0]) ?? null) : null)} 
+          open={!!reachOutContact || !!(reachOutPreselectedIds && reachOutPreselectedIds.length > 0)} 
+          onOpenChange={(open) => {
+            if (!open) {
+              setReachOutContact(null);
+              setReachOutPreselectedIds(null);
+              setReachOutInitialTab(null);
+            }
+          }} 
+          onSuccess={handleInteractionLogged}
+          initialPreselectedIds={reachOutPreselectedIds ?? undefined}
+          initialTab={reachOutInitialTab ?? undefined}
         />
       </main>
 
-      {/* Right Sidebar - Tools (desktop only, hidden in overlay mode) */}
       {!overlayMode && (
-        <aside className="hidden md:flex w-80 border-l bg-background p-6 flex-col gap-6 shrink-0 h-[calc(100vh-57px)] sticky top-0 overflow-y-auto">
+        <aside className="pointer-events-auto hidden md:flex w-80 border-l border-border/30 bg-background/70 backdrop-blur-xl p-6 flex-col gap-6 shrink-0 overflow-y-auto">
           {toolsContent}
         </aside>
       )}
-
+      </div>
 
       <ContactDetailSheet
         open={!!selectedNode}
@@ -936,6 +955,10 @@ export default function Home() {
         groups={groups}
         dueNodeIds={dueNodeIds}
         onLogInteraction={handleInteractionLogged}
+        onOpenReachOutForLog={(ids) => {
+          setReachOutPreselectedIds(ids);
+          setReachOutInitialTab("other");
+        }}
         onUpdateNode={updateNode}
         onFocusNode={focusNode}
         connectedNeighbors={connectedNeighbors}
