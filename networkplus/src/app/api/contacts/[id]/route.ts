@@ -2,7 +2,16 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
+import { Platform } from "@prisma/client";
 import { parseJsonBody, apiError, LIMITS, clampString, clampGroupsArray } from "@/lib/api-utils";
+
+const PLATFORM_VALUES = new Set<string>(Object.values(Platform));
+function toPlatform(value: unknown): Platform | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === "" || value === null) return null;
+  const s = String(value).trim().toUpperCase();
+  return PLATFORM_VALUES.has(s) ? (s as Platform) : undefined;
+}
 
 export async function GET(
     _req: Request,
@@ -36,7 +45,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const parsed = await parseJsonBody(req);
         if (!parsed.ok) return parsed.response;
         const body = parsed.data as Record<string, unknown>;
-        const { group, commonPlatform } = body;
+        const { group } = body;
+        const commonPlatform = toPlatform(body.commonPlatform);
 
         let validGroups = clampGroupsArray(body.groups);
         if (group && typeof group === "string") {
@@ -70,7 +80,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 groups: validGroups,
                 email,
                 phone,
-                commonPlatform: commonPlatform === "" ? null : (commonPlatform as string | null) ?? undefined,
+                commonPlatform,
                 ...(monthsKnown !== undefined && { monthsKnown }),
             },
         });
