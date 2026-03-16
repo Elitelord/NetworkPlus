@@ -25,7 +25,10 @@ export async function POST(req: Request) {
     });
 
     if (!account) {
-        return new NextResponse("No Google account linked", { status: 400 });
+        return NextResponse.json(
+            { error: "Sign in with Google to send emails from here." },
+            { status: 400 }
+        );
     }
 
     const contact = await prisma.contact.findFirst({
@@ -38,7 +41,10 @@ export async function POST(req: Request) {
 
     const accessToken = await getValidGoogleAccessToken(account, prisma);
     if (!accessToken) {
-        return new NextResponse("Google authentication expired", { status: 401 });
+        return NextResponse.json(
+            { error: "Your Google sign-in has expired. Please sign in again to continue." },
+            { status: 401 }
+        );
     }
 
     // Construct raw email

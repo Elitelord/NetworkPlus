@@ -20,7 +20,12 @@ export async function POST(req: Request) {
     }
 
     const contact = await prisma.contact.findFirst({
-      where: { id: contactId, ownerId: session.user.id }
+      where: { id: contactId, ownerId: session.user.id },
+      select: {
+        name: true,
+        description: true,
+        groups: true,
+      },
     });
 
     if (!contact) {
@@ -29,6 +34,7 @@ export async function POST(req: Request) {
 
     const prompt = `You are a helpful assistant writing a ${platform === 'email' ? 'professional but friendly email' : 'short and casual check-in message'} to a contact named ${contact.name}. 
 Their description/notes are: ${contact.description || 'No description provided.'}
+Their groups/tags are: ${(contact.groups && contact.groups.length > 0) ? contact.groups.join(', ') : 'No groups specified.'}
 Write a short, engaging message to check-in or catch up. 
 
 Output your response as a raw JSON object string (no markdown formatting, no \`\`\`json blocks) with strictly this structure:

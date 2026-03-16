@@ -48,7 +48,7 @@ export function LoginForm({
         window.location.href = "/dashboard"
       }
     } catch {
-      setError("Something went wrong. Please try again.")
+      setError("Something went wrong while signing you in. Please try again.")
     } finally {
       setLoading(false)
     }

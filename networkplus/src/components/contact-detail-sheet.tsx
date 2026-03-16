@@ -135,7 +135,10 @@ export function ContactDetailSheet({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col h-full bg-background/70 backdrop-blur-xl border-border/30">
+            <SheetContent
+                side="right"
+                className="w-[400px] sm:w-[540px] flex flex-col h-full bg-white border border-border shadow-xl dark:bg-background/70 dark:backdrop-blur-xl dark:border-border/30"
+            >
                 <SheetHeader className="shrink-0 mb-4">
                     <div className="flex items-center justify-between">
                         <SheetTitle>{node?.name}</SheetTitle>

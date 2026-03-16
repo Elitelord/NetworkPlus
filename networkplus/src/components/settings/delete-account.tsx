@@ -32,7 +32,7 @@ export function DeleteAccount() {
                 // No need to set loading false as page will unload
             }
         } catch (err) {
-            setError("Something went wrong. Please try again.")
+            setError("Something went wrong while deleting your account. Please try again.")
             setLoading(false)
         }
     }

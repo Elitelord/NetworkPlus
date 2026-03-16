@@ -72,7 +72,7 @@ export function SignupForm({ ...props }: React.ComponentProps<typeof Card>) {
         window.location.href = "/dashboard"
       }
     } catch {
-      setError("Something went wrong. Please try again.")
+      setError("Something went wrong while creating your account. Please try again.")
     } finally {
       setLoading(false)
     }

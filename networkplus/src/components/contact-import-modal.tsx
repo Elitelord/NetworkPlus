@@ -184,7 +184,7 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                     Import Contacts
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto flex flex-col bg-background/70 backdrop-blur-xl border-border/30">
+            <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto flex flex-col border border-border dark:border-border/30">
                 <DialogHeader>
                     <DialogTitle>Import Contacts</DialogTitle>
                     <DialogDescription>

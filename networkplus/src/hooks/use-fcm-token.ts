@@ -63,7 +63,6 @@ export function useFcmToken() {
             if (!messaging) return;
 
             const unsubscribe = onMessage(messaging, (payload) => {
-                console.log("Foreground message received:", payload);
                 if (payload.notification) {
                     new Notification(payload.notification.title || "New Notification", {
                         body: payload.notification.body,

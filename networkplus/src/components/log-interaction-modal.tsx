@@ -239,7 +239,8 @@ export function LogInteractionModal({
 
                 if (!res.ok) {
                     const data = await res.json().catch(() => null);
-                    throw new Error(data?.error || "Failed to create Google Calendar Event");
+                    const message = data?.error || "Please sign in with Google to add events to your calendar.";
+                    throw new Error(message);
                 }
             } else {
                 // Standard log interaction
@@ -912,7 +913,7 @@ export function LogInteractionModal({
     }
     return (
         <Dialog open={open} onOpenChange={onOpenChange!}>
-            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-background/70 backdrop-blur-xl border-border/30">
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto border border-border dark:border-border/30">
                 <DialogHeader>
                     <DialogTitle>{isEditing ? "Edit Interaction" : "Log Interaction"}</DialogTitle>
                     <DialogDescription>

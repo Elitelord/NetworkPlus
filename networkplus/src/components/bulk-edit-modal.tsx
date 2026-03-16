@@ -186,7 +186,7 @@ export function BulkEditModal({ contacts, allGroups, initialGroupFilter, onSucce
                     Bulk Edit Contacts
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[800px] h-[85vh] flex flex-col p-6 bg-background/70 backdrop-blur-xl border-border/30">
+            <DialogContent className="sm:max-w-[800px] h-[85vh] flex flex-col p-6 border border-border dark:border-border/30">
                 <DialogHeader className="shrink-0">
                     <DialogTitle>Bulk Edit Contacts</DialogTitle>
                     <DialogDescription>

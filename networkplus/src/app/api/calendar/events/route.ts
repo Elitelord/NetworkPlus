@@ -17,12 +17,18 @@ export async function GET(req: Request) {
         });
 
         if (!account) {
-            return NextResponse.json({ events: [], error: "No Google account linked" });
+            return NextResponse.json(
+                { events: [], error: "Sign in with Google to view your calendar events." },
+                { status: 400 }
+            );
         }
 
         const accessToken = await getValidGoogleAccessToken(account, prisma);
         if (!accessToken) {
-            return NextResponse.json({ events: [], error: "Google authentication expired" });
+            return NextResponse.json(
+                { events: [], error: "Your Google sign-in has expired. Please sign in again to continue." },
+                { status: 401 }
+            );
         }
 
         const now = new Date();
@@ -84,12 +90,18 @@ export async function POST(req: Request) {
         });
 
         if (!account) {
-            return new NextResponse("No Google account linked", { status: 400 });
+            return NextResponse.json(
+                { error: "Sign in with Google to add events to your calendar." },
+                { status: 400 }
+            );
         }
 
         const accessToken = await getValidGoogleAccessToken(account, prisma);
         if (!accessToken) {
-            return new NextResponse("Google authentication expired", { status: 401 });
+            return NextResponse.json(
+                { error: "Your Google sign-in has expired. Please sign in again to continue." },
+                { status: 401 }
+            );
         }
 
         // The startTime and endTime from the frontend are in the user's local timezone (e.g. "2026-03-06T13:00")

@@ -748,7 +748,7 @@ export default function Home() {
 
   const toolsContentBody = (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 p-4 border rounded-xl bg-card/50 shadow-sm">
+      <div className="flex flex-col gap-3 p-4 border border-border rounded-xl bg-card/50 shadow-sm">
         <h3 className="font-semibold text-sm px-1 flex items-center gap-2">Data Tools</h3>
         <div className="flex flex-col gap-2">
           <div id="tour-import-contacts">

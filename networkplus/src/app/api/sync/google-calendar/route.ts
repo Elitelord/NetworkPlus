@@ -19,12 +19,18 @@ export async function POST(req: Request) {
         });
 
         if (!account) {
-            return new NextResponse("No Google account linked", { status: 400 });
+            return NextResponse.json(
+                { error: "Sign in with Google to sync your calendar." },
+                { status: 400 }
+            );
         }
 
         const accessToken = await getValidGoogleAccessToken(account, prisma);
         if (!accessToken) {
-            return new NextResponse("Google authentication expired. Please sign in again.", { status: 401 });
+            return NextResponse.json(
+                { error: "Your Google sign-in has expired. Please sign in again to continue." },
+                { status: 401 }
+            );
         }
 
         // Fetch contacts for matching

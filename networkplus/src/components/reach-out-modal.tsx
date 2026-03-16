@@ -117,8 +117,7 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
         setSubject(data.subject);
       }
     } catch (err: any) {
-      console.warn("AI Generation failed, using fallback:", err);
-      setError(`AI Error: ${err.message}. Using template instead.`);
+      setError("We couldn't generate a message automatically. Using a standard template instead.");
       useFallback();
     } finally {
       setIsGenerating(false);
@@ -171,8 +170,11 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
       });
 
       if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || "Failed to submit");
+        const data = await res.json().catch(() => null);
+        const message = data?.error || (res.status === 400 || res.status === 401
+          ? "Please sign in with Google to use this feature."
+          : "Something went wrong. Please try again.");
+        throw new Error(message);
       }
 
       onSuccess(selectedContactIds);
@@ -190,7 +192,7 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-[525px] flex flex-col max-h-[85dvh] sm:max-h-[90vh] overflow-hidden bg-background border border-border shadow-xl dark:bg-background/70 dark:backdrop-blur-xl dark:border-border/30">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[525px] flex flex-col max-h-[85dvh] sm:max-h-[90vh] overflow-hidden border border-border shadow-xl dark:border-border/30">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Reach Out to Contacts</DialogTitle>
           <DialogDescription>
