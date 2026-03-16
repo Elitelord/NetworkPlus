@@ -96,6 +96,12 @@ export default function Home() {
   const CLUSTER_EXIT_ZOOM = settings.clusterThreshold + 1.0;   // expand groups only when zoomed in to here (added hysteresis gap)
   const CLUSTER_MIN_SIZE = 3;      // min group members to form a cluster
   const CLUSTER_DEBOUNCE_MS = 400;
+  const spacingRatio = Math.min(1, Math.max(0, (settings.contactSpacing ?? 50) / 100));
+  const chargeStrength = -86 - (60 * spacingRatio);
+  const sharedGroupLinkDistance = 67 + (60 * spacingRatio);
+  const defaultLinkDistance = 52 + (30 * spacingRatio);
+  const sharedGroupLinkStrength = Math.max(0.008, 0.058 - (0.05 * spacingRatio));
+  const defaultLinkStrength = Math.max(0.02, 0.105 - (0.06 * spacingRatio));
 
   const [isClusterMode, setIsClusterMode] = useState(false);
   const clusterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -236,6 +242,9 @@ export default function Home() {
 
     const clusterGroups = new Map<string, Set<string>>();
     groupMembers.forEach((members, g) => {
+      // Do not cluster groups that are currently used as filters;
+      // when a user is focusing on a group, they should see individual contacts.
+      if (selectedGroupFilters.includes(g)) return;
       if (members.size >= CLUSTER_MIN_SIZE) clusterGroups.set(g, members);
     });
 
@@ -336,7 +345,7 @@ export default function Home() {
         };
       }),
     };
-  }, [visibleNodes, nodeLinks, isClusterMode]);
+  }, [visibleNodes, nodeLinks, isClusterMode, selectedGroupFilters]);
 
   // ── Create / rebuild ForceGraph when core deps change ──────────────
   // (NOT triggered by isClusterMode — that uses data-swap below)
@@ -484,6 +493,26 @@ export default function Home() {
         })
         .graphData(graphData as any);
 
+      // Contact spacing is controlled from Graph Settings via a single slider.
+      const chargeForce = myGraph.d3Force("charge");
+      if (chargeForce && typeof chargeForce.strength === "function") {
+        chargeForce.strength(chargeStrength);
+      }
+      const linkForce = myGraph.d3Force("link");
+      if (linkForce) {
+        if (typeof linkForce.distance === "function") {
+          linkForce.distance((link: any) =>
+            link?.metadata?.rule === "shared_group" ? sharedGroupLinkDistance : defaultLinkDistance
+          );
+        }
+        if (typeof linkForce.strength === "function") {
+          linkForce.strength((link: any) =>
+            link?.metadata?.rule === "shared_group" ? sharedGroupLinkStrength : defaultLinkStrength
+          );
+        }
+      }
+      myGraph.d3ReheatSimulation();
+
       graphInstanceRef.current = myGraph;
 
       // Resize graph when container size changes (e.g. mobile layout, orientation, window resize)
@@ -515,7 +544,20 @@ export default function Home() {
       }
       graphInstanceRef.current = null;
     };
-  }, [nodes, links, selectedGroupFilters, highlightNodes, showDueNodes, dueNodeIds, resolvedTheme]);
+  }, [
+    nodes,
+    links,
+    selectedGroupFilters,
+    highlightNodes,
+    showDueNodes,
+    dueNodeIds,
+    resolvedTheme,
+    chargeStrength,
+    sharedGroupLinkDistance,
+    defaultLinkDistance,
+    sharedGroupLinkStrength,
+    defaultLinkStrength,
+  ]);
 
   // ── Swap graph data in-place when cluster mode changes ─────────────
   // This avoids destroying/rebuilding the ForceGraph (which resets zoom).

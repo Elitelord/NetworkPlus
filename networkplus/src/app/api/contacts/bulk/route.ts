@@ -66,11 +66,11 @@ export async function PATCH(req: Request) {
 
             if (action === "add_group") {
                 // Add new groups, avoiding duplicates
-                const set = new Set([...currentGroups, ...groups]);
+                const set = new Set([...currentGroups, ...validGroups]);
                 newGroups = Array.from(set);
             } else if (action === "remove_group") {
                 // Remove specified groups
-                newGroups = currentGroups.filter(g => !groups.includes(g));
+                newGroups = currentGroups.filter(g => !validGroups.includes(g));
             }
 
             return prisma.contact.update({

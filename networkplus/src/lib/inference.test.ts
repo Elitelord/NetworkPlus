@@ -185,10 +185,42 @@ describe("updateInferredLinksBulk", () => {
     });
   });
 
+  it("preserves full group names when they contain colons", async () => {
+    mockPrisma.contact.findMany
+      .mockResolvedValueOnce([
+        { id: "a", groups: ["Team:Alpha"], ownerId: "user1" },
+        { id: "b", groups: ["Team:Alpha"], ownerId: "user1" },
+      ])
+      .mockResolvedValueOnce([
+        { id: "a", groups: ["Team:Alpha"] },
+        { id: "b", groups: ["Team:Alpha"] },
+      ]);
+    mockPrisma.link.findMany.mockResolvedValueOnce([]);
+    mockPrisma.link.deleteMany.mockResolvedValue({ count: 0 });
+
+    const createdLinks: any[] = [];
+    mockPrisma.link.create.mockImplementation(({ data }) => {
+      createdLinks.push(data);
+      return Promise.resolve(data);
+    });
+    mockPrisma.$transaction.mockImplementation(async (ops: any[]) => {
+      for (const op of ops) await op;
+    });
+
+    await updateInferredLinksBulk(["a", "b"]);
+
+    expect(createdLinks).toHaveLength(1);
+    expect(createdLinks[0]).toMatchObject({
+      fromId: "a",
+      toId: "b",
+      label: "Team:Alpha",
+      metadata: { rule: "shared_group", group: "Team:Alpha", source: "inferred" },
+    });
+  });
+
   it("creates no links when contact has no groups", async () => {
     mockPrisma.contact.findMany
-      .mockResolvedValueOnce([{ id: "solo", groups: [], ownerId: "user1" }])
-      .mockResolvedValueOnce([{ id: "solo", groups: [] }]);
+      .mockResolvedValueOnce([{ id: "solo", groups: [], ownerId: "user1" }]);
     mockPrisma.link.findMany.mockResolvedValueOnce([]);
 
     await updateInferredLinksBulk(["solo"]);

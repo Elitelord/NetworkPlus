@@ -9,6 +9,16 @@ export async function updateInferredLinks(contactId: string) {
 }
 
 const INFERENCE_CHUNK_SIZE = 200;
+const INFERENCE_CREATE_BATCH_SIZE = 1000;
+
+function makeLinkKey(a: string, b: string, group: string): string {
+    // JSON tuples avoid delimiter collisions in user-defined group names (e.g. "Team:Alpha").
+    return JSON.stringify([a, b, group]);
+}
+
+function parseLinkKey(linkKey: string): [string, string, string] {
+    return JSON.parse(linkKey) as [string, string, string];
+}
 
 /**
  * Updates inferred links for multiple contacts efficiently.
@@ -55,13 +65,16 @@ async function updateInferredLinksBulkChunk(contactIds: string[]) {
 
     // 3. Find ALL contacts in the database that share ANY of these groups
     // This is much faster than doing it per-contact.
-    const potentialTargets = await prisma.contact.findMany({
-        where: {
-            ownerId: ownerId,
-            groups: { hasSome: Array.from(allGroupsInvolved) }
-        },
-        select: { id: true, groups: true }
-    });
+    const allGroupsArray = Array.from(allGroupsInvolved);
+    const potentialTargets = allGroupsArray.length === 0
+        ? []
+        : await prisma.contact.findMany({
+            where: {
+                ownerId: ownerId,
+                groups: { hasSome: allGroupsArray }
+            },
+            select: { id: true, groups: true }
+        });
 
     // 4. Determine valid links that SHOULD exist
     // Link key format: "LowID:HighID:GroupName"
@@ -78,7 +91,7 @@ async function updateInferredLinksBulkChunk(contactIds: string[]) {
             const shared = sourceGroups.filter(g => target.groups.includes(g));
             for (const g of shared) {
                 const [a, b] = [source.id, target.id].sort();
-                validLinkKeys.add(`${a}:${b}:${g}`);
+                validLinkKeys.add(makeLinkKey(a, b, g));
             }
         }
     }
@@ -102,7 +115,7 @@ async function updateInferredLinksBulkChunk(contactIds: string[]) {
         const meta = link.metadata as any;
         const group = meta?.group;
         const [a, b] = [link.fromId, link.toId].sort();
-        const key = `${a}:${b}:${group}`;
+        const key = typeof group === "string" ? makeLinkKey(a, b, group) : "";
 
         // If one of the contacts is in our updated list, we must validate it
         const isAffected = allAffectedContactIds.has(link.fromId) || allAffectedContactIds.has(link.toId);
@@ -128,7 +141,7 @@ async function updateInferredLinksBulkChunk(contactIds: string[]) {
     for (const linkKey of validLinkKeys) {
         if (existingLinkMap.has(linkKey)) continue;
 
-        const [fromId, toId, groupName] = linkKey.split(":");
+        const [fromId, toId, groupName] = parseLinkKey(linkKey);
 
         linksToCreate.push({
             fromId,
@@ -140,8 +153,11 @@ async function updateInferredLinksBulkChunk(contactIds: string[]) {
     }
 
     if (linksToCreate.length > 0) {
-        await prisma.$transaction(
-            linksToCreate.map(data => prisma.link.create({ data }))
-        );
+        for (let i = 0; i < linksToCreate.length; i += INFERENCE_CREATE_BATCH_SIZE) {
+            const batch = linksToCreate.slice(i, i + INFERENCE_CREATE_BATCH_SIZE);
+            await prisma.$transaction(
+                batch.map(data => prisma.link.create({ data }))
+            );
+        }
     }
 }

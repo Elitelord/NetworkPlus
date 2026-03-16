@@ -1,14 +1,14 @@
 Name,Email,Phone,Group,Description,LinkedIn,Twitter,Website,Instagram
-Sarah Jenkins,sarah.j0@example.com,555-5201,Mentors,Met at Tech Conference 2023,https://linkedin.com/in/sarahjenkins,https://twitter.com/sarahj,https://sarahjenkins.dev,
-David Chen,david.c1@example.com,555-1202,Investors,Introduced by mutual friend,https://linkedin.com/in/davidchen,,,
-Maya Patel,maya.p2@example.com,555-3203,Colleagues,Worked together at PreviousCompany,https://linkedin.com/in/mayapatel,https://twitter.com/mayadesigns,,https://instagram.com/mayapixel
-James Wilson,james.w3@example.com,555-4204,Friends,Potential angel investor,https://linkedin.com/in/jameswilson,,,
-Elena Rodriguez,elena.r4@example.com,555-5205,Alumni,University alumni network,https://linkedin.com/in/elenarodriguez,https://twitter.com/elenar,,
-Michael Chang,michael.c5@example.com,555-6206,Freelancers,Design freelancer,https://linkedin.com/in/michaelchang,https://twitter.com/mchangUI,,
-Jessica Taylor,jessica.t6@example.com,555-7207,Clients,Met at local meetup,https://linkedin.com/in/jessicataylor,https://twitter.com/jessicataylor,https://jessicataylor.io,https://instagram.com/jessicat
-Robert Silva,robert.s7@example.com,555-8208,Mentors,Follow up next month,https://linkedin.com/in/robertsilva,,,
-Emily Davis,emily.d8@example.com,555-9209,Investors,Discussed partnership,https://linkedin.com/in/emilydavis,https://twitter.com/emilyd,,
-William Moore,william.m9@example.com,555-0210,Colleagues,Key contact for Project X,https://linkedin.com/in/williammoore,https://twitter.com/willmoore,,
+Sarah Jenkins,sarah.j0@example.com,555-5201,"Mentors, Investors",Met at Tech Conference 2023,https://linkedin.com/in/sarahjenkins,https://twitter.com/sarahj,https://sarahjenkins.dev,
+David Chen,david.c1@example.com,555-1202,"Investors, Clients",Introduced by mutual friend,https://linkedin.com/in/davidchen,,,
+Maya Patel,maya.p2@example.com,555-3203,"Colleagues, Mentors",Worked together at PreviousCompany,https://linkedin.com/in/mayapatel,https://twitter.com/mayadesigns,,https://instagram.com/mayapixel
+James Wilson,james.w3@example.com,555-4204,"Friends, Investors",Potential angel investor,https://linkedin.com/in/jameswilson,,,
+Elena Rodriguez,elena.r4@example.com,555-5205,"Alumni, Mentors",University alumni network,https://linkedin.com/in/elenarodriguez,https://twitter.com/elenar,,
+Michael Chang,michael.c5@example.com,555-6206,"Freelancers, Colleagues",Design freelancer,https://linkedin.com/in/michaelchang,https://twitter.com/mchangUI,,
+Jessica Taylor,jessica.t6@example.com,555-7207,"Clients, Friends",Met at local meetup,https://linkedin.com/in/jessicataylor,https://twitter.com/jessicataylor,https://jessicataylor.io,https://instagram.com/jessicat
+Robert Silva,robert.s7@example.com,555-8208,"Mentors, Friends",Follow up next month,https://linkedin.com/in/robertsilva,,,
+Emily Davis,emily.d8@example.com,555-9209,"Investors, Colleagues",Discussed partnership,https://linkedin.com/in/emilydavis,https://twitter.com/emilyd,,
+William Moore,william.m9@example.com,555-0210,"Colleagues, Clients",Key contact for Project X,https://linkedin.com/in/williammoore,https://twitter.com/willmoore,,
 Sophia Martinez,sophia.m10@example.com,555-1211,Friends,Met at Tech Conference 2023,https://linkedin.com/in/sophiamartinez,https://twitter.com/sophiam,,
 Alexander Taylor,alexander.t11@example.com,555-2212,Alumni,Introduced by mutual friend,https://linkedin.com/in/alexandertaylor,https://twitter.com/alextaylor,,
 Isabella Anderson,isabella.a12@example.com,555-3213,Freelancers,Worked together at PreviousCompany,https://linkedin.com/in/isabellaanderson,https://twitter.com/isabellaa,,https://instagram.com/isabellaanderson
