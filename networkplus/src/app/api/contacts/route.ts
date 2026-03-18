@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
+import { Platform } from "@prisma/client";
 import { parseJsonBody, apiError, LIMITS, clampString, clampGroupsArray } from "@/lib/api-utils";
+import { getDefaultEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
+
+const VALID_CADENCES = new Set(["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"]);
+const VALID_PLATFORMS = new Set<string>(Object.values(Platform));
 
 export async function GET(req: Request) {
     try {
@@ -59,6 +64,33 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Name is required" }, { status: 400 });
         }
 
+        // Parse explicit estimated frequency fields from body
+        let estCount = body.estimatedFrequencyCount !== undefined
+            ? (typeof body.estimatedFrequencyCount === "number" ? body.estimatedFrequencyCount : null)
+            : undefined;
+        let estCadence = body.estimatedFrequencyCadence !== undefined
+            ? (typeof body.estimatedFrequencyCadence === "string" && VALID_CADENCES.has(body.estimatedFrequencyCadence) ? body.estimatedFrequencyCadence : null)
+            : undefined;
+        let estPlatform = body.estimatedFrequencyPlatform !== undefined
+            ? (typeof body.estimatedFrequencyPlatform === "string" && VALID_PLATFORMS.has(body.estimatedFrequencyPlatform) ? body.estimatedFrequencyPlatform as Platform : null)
+            : undefined;
+
+        // Auto-fill from group type if not explicitly provided
+        const explicitlyProvided = estCount !== undefined || estCadence !== undefined || estPlatform !== undefined;
+        if (!explicitlyProvided && validGroups.length > 0) {
+            const user = await prisma.user.findUnique({
+                where: { id: session.user.id },
+                select: { groupTypeOverrides: true },
+            });
+            const overrides = (user?.groupTypeOverrides as Record<string, string> | null) ?? undefined;
+            const defaults = getDefaultEstimatedFrequency(validGroups, overrides as any);
+            if (defaults) {
+                estCount = defaults.count;
+                estCadence = defaults.cadence;
+                estPlatform = defaults.platform;
+            }
+        }
+
         const newContact = await prisma.contact.create({
             data: {
                 ownerId: session.user.id,
@@ -67,14 +99,25 @@ export async function POST(req: Request) {
                 groups: validGroups,
                 email: email ?? null,
                 phone: phone ?? null,
+                ...(estCount !== undefined && { estimatedFrequencyCount: estCount }),
+                ...(estCadence !== undefined && { estimatedFrequencyCadence: estCadence }),
+                ...(estPlatform !== undefined && { estimatedFrequencyPlatform: estPlatform }),
             },
         });
+
+        // Recalculate score if estimated frequency was set
+        if (newContact.estimatedFrequencyCount) {
+            const { recalculateContactScore } = await import("@/lib/strength-scoring");
+            await recalculateContactScore(newContact.id);
+        }
 
         // Trigger inference
         const { updateInferredLinks } = await import("@/lib/inference");
         await updateInferredLinks(newContact.id);
 
-        return NextResponse.json(newContact);
+        // Re-fetch to get updated score
+        const finalContact = await prisma.contact.findUnique({ where: { id: newContact.id } });
+        return NextResponse.json(finalContact ?? newContact);
     } catch (err) {
         console.error("Create contact failed:", err);
         return apiError(err);

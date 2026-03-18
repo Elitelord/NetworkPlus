@@ -265,16 +265,16 @@ export default function CalendarPage() {
     return (
         <div className="flex min-h-[calc(100vh-3.5rem)] bg-zinc-50 dark:bg-black font-sans">
             {/* Main content */}
-            <div className="flex-1 max-w-6xl mx-auto px-6 py-8">
+            <div className="flex-1 max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Calendar</h1>
-                        <p className="text-muted-foreground text-sm mt-1">
+                <div className="flex items-center justify-between mb-4 sm:mb-8 gap-3">
+                    <div className="min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Calendar</h1>
+                        <p className="text-muted-foreground text-sm mt-1 hidden sm:block">
                             View and manage your interactions and events
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                         <Button
                             variant="default"
                             size="sm"
@@ -321,7 +321,7 @@ export default function CalendarPage() {
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
                                         </button>
-                                        <CardTitle className="text-lg min-w-[180px] text-center">
+                                        <CardTitle className="text-base sm:text-lg min-w-[140px] sm:min-w-[180px] text-center">
                                             {MONTH_NAMES[currentMonth]} {currentYear}
                                         </CardTitle>
                                         <button
@@ -351,7 +351,7 @@ export default function CalendarPage() {
                                     {calendarCells.map((day, idx) => {
                                         if (day === null) {
                                             return (
-                                                <div key={`empty-${idx}`} className="border-b border-r min-h-[80px] bg-muted/30" />
+                                                <div key={`empty-${idx}`} className="border-b border-r min-h-[52px] sm:min-h-[80px] bg-muted/30" />
                                             );
                                         }
 
@@ -368,7 +368,7 @@ export default function CalendarPage() {
                                             <button
                                                 key={`day-${day}`}
                                                 onClick={() => setSelectedDate(cellDate)}
-                                                className={`border-b border-r min-h-[80px] p-1.5 text-left transition-colors relative
+                                                className={`border-b border-r min-h-[52px] sm:min-h-[80px] p-1 sm:p-1.5 text-left transition-colors relative
                                                     ${isSelected ? "bg-primary/5 ring-2 ring-primary/30 ring-inset" : "hover:bg-accent/50"}
                                                     ${isToday ? "bg-accent/30" : ""}
                                                 `}
@@ -382,7 +382,7 @@ export default function CalendarPage() {
 
                                                 {/* Event dots */}
                                                 {hasContent && (
-                                                    <div className="mt-1 space-y-0.5">
+                                                    <div className="mt-0.5 sm:mt-1 space-y-0.5">
                                                         {dayInteractions.slice(0, 2).map((interaction, i) => (
                                                             <div
                                                                 key={i}

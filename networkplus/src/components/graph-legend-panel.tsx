@@ -7,11 +7,17 @@ import { Search, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
     classifyGroupType,
+    classifyGroupTypeWithOverrides,
     GROUP_TYPE_LABELS,
     GROUP_TYPE_COLORS,
     groupsByType,
+    ALL_GROUP_TYPES,
     type GroupType,
 } from "@/lib/group-type-classifier";
+import {
+    NativeSelect,
+    NativeSelectOption,
+} from "@/components/ui/native-select";
 
 interface NodeType {
     id: string;
@@ -26,6 +32,8 @@ interface GraphLegendPanelProps {
     onGroupFiltersChange: (filters: string[]) => void;
     onFocusNode: (nodeId: string) => void;
     className?: string;
+    groupTypeOverrides?: Record<string, GroupType> | null;
+    onUpdateGroupTypeOverrides?: (overrides: Record<string, GroupType>) => void;
 }
 
 type TabId = "individual" | "groups" | "types";
@@ -37,6 +45,8 @@ export function GraphLegendPanel({
     onGroupFiltersChange,
     onFocusNode,
     className,
+    groupTypeOverrides,
+    onUpdateGroupTypeOverrides,
 }: GraphLegendPanelProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>("individual");
@@ -60,8 +70,8 @@ export function GraphLegendPanel({
         )
         : groups;
 
-    // Group type classification
-    const typeMap = useMemo(() => groupsByType(groups), [groups]);
+    // Group type classification (uses overrides when available)
+    const typeMap = useMemo(() => groupsByType(groups, groupTypeOverrides), [groups, groupTypeOverrides]);
 
     // All group types present in the data + their groups
     const presentTypes = useMemo(() => {
@@ -145,11 +155,11 @@ export function GraphLegendPanel({
     }, {});
 
     return (
-        <div id="tour-legend" className={cn("absolute bottom-6 left-6 z-10 flex flex-col items-start gap-2", className)}>
+        <div id="tour-legend" className={cn("absolute bottom-4 left-3 sm:bottom-6 sm:left-6 z-10 flex flex-col items-start gap-2", className)}>
             {/* Expanded Panel */}
             <div
                 className={cn(
-                    "bg-background/60 backdrop-blur-xl border shadow-lg rounded-xl overflow-hidden transition-all duration-300 origin-bottom-left w-[320px] max-w-[calc(100vw-3rem)]",
+                    "bg-background/60 backdrop-blur-xl border shadow-lg rounded-xl overflow-hidden transition-all duration-300 origin-bottom-left w-[320px] max-w-[calc(100vw-1.5rem)] sm:max-w-[calc(100vw-3rem)]",
                     isOpen
                         ? "opacity-100 scale-100 mb-2 translate-y-0"
                         : "opacity-0 scale-95 translate-y-4 pointer-events-none absolute bottom-14"
@@ -360,7 +370,10 @@ export function GraphLegendPanel({
                             {/* Type list */}
                             <div className="max-h-64 overflow-y-auto rounded-lg border bg-background/60">
                                 {presentTypes.length > 0 ? (
-                                    presentTypes.map((pt) => (
+                                    presentTypes.map((pt) => {
+                                        const preview = pt.groups.slice(0, 3);
+                                        const remaining = pt.groups.length - preview.length;
+                                        return (
                                         <button
                                             key={pt.type}
                                             className={cn(
@@ -386,14 +399,18 @@ export function GraphLegendPanel({
                                                 className="w-2.5 h-2.5 rounded-full shrink-0"
                                                 style={{ backgroundColor: pt.color }}
                                             />
-                                            <div className="flex-1 text-left">
-                                                <span className="truncate">{pt.label}</span>
+                                            <div className="flex-1 text-left min-w-0">
+                                                <div className="truncate">{pt.label}</div>
+                                                <div className="text-[10px] text-muted-foreground truncate">
+                                                    {preview.join(", ")}
+                                                    {remaining > 0 ? ` +${remaining} more` : ""}
+                                                </div>
                                             </div>
                                             <span className="text-xs text-muted-foreground tabular-nums shrink-0">
                                                 {pt.groups.length} {pt.groups.length === 1 ? "group" : "groups"}
                                             </span>
                                         </button>
-                                    ))
+                                    )})
                                 ) : (
                                     <div className="px-3 py-3 text-sm text-muted-foreground text-center">
                                         No groups to classify
@@ -418,6 +435,15 @@ export function GraphLegendPanel({
                                     })}
                                 </div>
                             )}
+
+                            {/* Group type reassignment editor */}
+                            {onUpdateGroupTypeOverrides && (
+                                <div className="mt-3 pt-3 border-t">
+                                    <p className="text-xs text-muted-foreground">
+                                        Manage group type assignments in <span className="font-medium">Settings</span>.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -429,7 +455,7 @@ export function GraphLegendPanel({
                 variant="outline"
                 size="icon"
                 className={cn(
-                    "w-12 h-12 rounded-full shadow-lg bg-background/60 backdrop-blur-xl border hover:bg-accent/80 transition-all duration-300",
+                    "w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg bg-background/60 backdrop-blur-xl border hover:bg-accent/80 transition-all duration-300",
                     isOpen
                         ? "rotate-90 bg-accent text-accent-foreground border-primary/50"
                         : ""

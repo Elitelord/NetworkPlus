@@ -13,6 +13,8 @@ import {
     clampString,
     clampMetadata,
 } from "@/lib/api-utils";
+import { getDefaultEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
+import type { GroupType } from "@/lib/group-type-classifier";
 
 // Helper to validate and parse date
 function parseDate(dateStr: string | null | undefined): Date | null {
@@ -88,11 +90,14 @@ export async function POST(req: Request) {
 
         const importedContacts: any[] = [];
         const errors: string[] = [];
+        let autoFrequencyCount = 0;
 
-        // Fetch existing contacts for efficient logical dedup
-        // Or just check one by one. For 1000 rows, fetching all might be better if user has small db, 
-        // but if user has 10k contacts, fetching all is bad.
-        // Let's do batch queries or sequential checks. Sequential is safer logic wise.
+        // Fetch user's group type overrides once for the entire import
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { groupTypeOverrides: true },
+        });
+        const groupTypeOverrides = (user?.groupTypeOverrides as Record<string, GroupType> | null) ?? undefined;
 
         for (const item of uniqueIncoming.values()) {
             const { category, lastInteractionAt, originalIndex } = item;
@@ -145,6 +150,11 @@ export async function POST(req: Request) {
                     .slice(0, LIMITS.groupsArrayLength)
                     .map(g => (g.length > LIMITS.groupItem ? g.slice(0, LIMITS.groupItem) : g));
 
+                // Auto-fill estimated frequency from groups
+                const freqDefaults = groups.length > 0
+                    ? getDefaultEstimatedFrequency(groups, groupTypeOverrides)
+                    : null;
+
                 const newContact = await prisma.contact.create({
                     data: {
                         ownerId: userId!,
@@ -156,9 +166,15 @@ export async function POST(req: Request) {
                         category: normalizeEnum<Category>(category, Category) || Category.FRIEND,
                         metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
                         lastInteractionAt: parseDate(lastInteractionAt),
+                        ...(freqDefaults && {
+                            estimatedFrequencyCount: freqDefaults.count,
+                            estimatedFrequencyCadence: freqDefaults.cadence,
+                            estimatedFrequencyPlatform: freqDefaults.platform,
+                        }),
                     },
                 });
 
+                if (freqDefaults) autoFrequencyCount++;
                 importedContacts.push(newContact);
 
             } catch (err) {
@@ -178,6 +194,7 @@ export async function POST(req: Request) {
             importedCount: importedContacts.length,
             skippedCount: skippedRows.length,
             duplicateCount,
+            autoFrequencyCount,
             errors,
             skippedRows,
         });

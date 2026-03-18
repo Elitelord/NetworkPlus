@@ -32,6 +32,8 @@ interface MultiSelectProps {
     creatable?: boolean;
     renderOption?: (option: Option) => React.ReactNode;
     renderSelectedItem?: (option: Option) => React.ReactNode;
+    /** Control how selected chips are laid out inside the trigger. Default is wrapping rows. */
+    selectedLayout?: "wrap" | "scroll-x";
 }
 
 export function MultiSelect({
@@ -43,6 +45,7 @@ export function MultiSelect({
     creatable = true,
     renderOption,
     renderSelectedItem,
+    selectedLayout = "wrap",
 }: MultiSelectProps) {
     const [open, setOpen] = React.useState(false);
     const [inputValue, setInputValue] = React.useState("");
@@ -64,6 +67,11 @@ export function MultiSelect({
     // Filter options based on input if Command doesn't do it automatically or for custom "Create" logic
     const filteredOptions = availableOptions.filter(opt => opt.toLowerCase().includes(inputValue.toLowerCase()));
 
+    const selectedContainerClass =
+        selectedLayout === "scroll-x"
+            ? "flex-nowrap overflow-x-auto max-w-full"
+            : "flex-wrap";
+
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -73,7 +81,7 @@ export function MultiSelect({
                     aria-expanded={open}
                     className={cn("w-full justify-between h-auto min-h-10", className)}
                 >
-                    <div className="flex flex-wrap gap-1 items-center">
+                    <div className={cn("flex gap-1 items-center", selectedContainerClass)}>
                         {selected.length === 0 && (
                             <span className="text-muted-foreground font-normal">{placeholder}</span>
                         )}

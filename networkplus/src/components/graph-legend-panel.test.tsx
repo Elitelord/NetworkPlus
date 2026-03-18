@@ -252,7 +252,7 @@ describe('GraphLegendPanel', () => {
             // "Stanford University" → school, "Google Inc" → employment, "Family" → family
             expect(screen.getByText('School / Education')).toBeTruthy();
             expect(screen.getByText('Employment')).toBeTruthy();
-            expect(screen.getByText('Family')).toBeTruthy();
+            expect(screen.getAllByText('Family').length).toBeGreaterThan(0);
         });
 
         it('shows group count per type', () => {

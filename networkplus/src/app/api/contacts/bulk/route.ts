@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
+import { Platform } from "@prisma/client";
 import { parseJsonBody, apiError, checkRateLimit, getRateLimitId, RATE_LIMITS, LIMITS, clampGroupsArray } from "@/lib/api-utils";
+import { getDefaultEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
+import type { GroupType } from "@/lib/group-type-classifier";
+
+const VALID_CADENCES = new Set(["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"]);
+const VALID_PLATFORMS = new Set<string>(Object.values(Platform));
 
 export async function PATCH(req: Request) {
     try {
@@ -16,7 +22,7 @@ export async function PATCH(req: Request) {
 
         const parsed = await parseJsonBody(req);
         if (!parsed.ok) return parsed.response;
-        const body = parsed.data as { contactIds?: unknown; action?: string; groups?: unknown };
+        const body = parsed.data as Record<string, unknown>;
         const { contactIds, action, groups } = body;
 
         if (!Array.isArray(contactIds) || contactIds.length === 0) {
@@ -31,11 +37,111 @@ export async function PATCH(req: Request) {
             );
         }
 
-        if (action !== "add_group" && action !== "remove_group") {
+        const validActions = ["add_group", "remove_group", "set_estimated_frequency", "clear_estimated_frequency", "backfill_estimated_frequency"];
+        if (typeof action !== "string" || !validActions.includes(action)) {
             return NextResponse.json({ error: "Invalid action" }, { status: 400 });
         }
 
-        if (!Array.isArray(groups) || groups.length === 0) {
+        const userId = session.user.id;
+
+        // ─── Estimated frequency actions ─────────────────────────────────
+        if (action === "set_estimated_frequency") {
+            const count = body.estimatedFrequencyCount;
+            const cadence = body.estimatedFrequencyCadence;
+            const platform = body.estimatedFrequencyPlatform;
+
+            if (typeof count !== "number" || count < 1) {
+                return NextResponse.json({ error: "estimatedFrequencyCount must be a positive number" }, { status: 400 });
+            }
+            if (typeof cadence !== "string" || !VALID_CADENCES.has(cadence)) {
+                return NextResponse.json({ error: "estimatedFrequencyCadence must be DAILY, WEEKLY, BIWEEKLY, or MONTHLY" }, { status: 400 });
+            }
+            if (typeof platform !== "string" || !VALID_PLATFORMS.has(platform)) {
+                return NextResponse.json({ error: "estimatedFrequencyPlatform must be a valid platform" }, { status: 400 });
+            }
+
+            await prisma.contact.updateMany({
+                where: { id: { in: contactIds as string[] }, ownerId: userId },
+                data: {
+                    estimatedFrequencyCount: count,
+                    estimatedFrequencyCadence: cadence,
+                    estimatedFrequencyPlatform: platform as Platform,
+                },
+            });
+
+            // Recalculate scores
+            const { recalculateContactScore } = await import("@/lib/strength-scoring");
+            for (const cid of contactIds as string[]) {
+                await recalculateContactScore(cid);
+            }
+
+            return NextResponse.json({ success: true, updatedCount: (contactIds as string[]).length });
+        }
+
+        if (action === "clear_estimated_frequency") {
+            await prisma.contact.updateMany({
+                where: { id: { in: contactIds as string[] }, ownerId: userId },
+                data: {
+                    estimatedFrequencyCount: null,
+                    estimatedFrequencyCadence: null,
+                    estimatedFrequencyPlatform: null,
+                },
+            });
+
+            const { recalculateContactScore } = await import("@/lib/strength-scoring");
+            for (const cid of contactIds as string[]) {
+                await recalculateContactScore(cid);
+            }
+
+            return NextResponse.json({ success: true, updatedCount: (contactIds as string[]).length });
+        }
+
+        // ─── Backfill estimated frequency from group types ───────────────
+        if (action === "backfill_estimated_frequency") {
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { groupTypeOverrides: true },
+            });
+            const overrides = (user?.groupTypeOverrides as Record<string, GroupType> | null) ?? undefined;
+
+            const contactsToBackfill = await prisma.contact.findMany({
+                where: {
+                    id: { in: contactIds as string[] },
+                    ownerId: userId,
+                    estimatedFrequencyCount: null,
+                },
+                select: { id: true, groups: true },
+            });
+
+            let updatedCount = 0;
+            const { recalculateContactScore } = await import("@/lib/strength-scoring");
+
+            for (const c of contactsToBackfill) {
+                if (!c.groups || c.groups.length === 0) continue;
+                const defaults = getDefaultEstimatedFrequency(c.groups, overrides);
+                if (!defaults) continue;
+
+                await prisma.contact.update({
+                    where: { id: c.id },
+                    data: {
+                        estimatedFrequencyCount: defaults.count,
+                        estimatedFrequencyCadence: defaults.cadence,
+                        estimatedFrequencyPlatform: defaults.platform,
+                    },
+                });
+                await recalculateContactScore(c.id);
+                updatedCount++;
+            }
+
+            return NextResponse.json({
+                success: true,
+                updatedCount,
+                skippedCount: (contactIds as string[]).length - updatedCount,
+            });
+        }
+
+        // ─── Group actions ───────────────────────────────────────────────
+        if (!Array.isArray(groups) || (groups as unknown[]).length === 0) {
             return NextResponse.json({ error: "Groups array is required" }, { status: 400 });
         }
 
@@ -44,12 +150,10 @@ export async function PATCH(req: Request) {
             return NextResponse.json({ error: "At least one valid group name is required" }, { status: 400 });
         }
 
-        const userId = session.user.id;
-
         // Fetch contacts to make sure they belong to the user and get their current groups
         const contacts = await prisma.contact.findMany({
             where: {
-                id: { in: contactIds },
+                id: { in: contactIds as string[] },
                 ownerId: userId,
             },
             select: { id: true, groups: true },
@@ -59,17 +163,14 @@ export async function PATCH(req: Request) {
             return NextResponse.json({ error: "No valid contacts found" }, { status: 404 });
         }
 
-        // Perform updates sequentially or via transaction
         const updatePromises = contacts.map(contact => {
             const currentGroups = contact.groups || [];
             let newGroups: string[] = [];
 
             if (action === "add_group") {
-                // Add new groups, avoiding duplicates
                 const set = new Set([...currentGroups, ...validGroups]);
                 newGroups = Array.from(set);
             } else if (action === "remove_group") {
-                // Remove specified groups
                 newGroups = currentGroups.filter(g => !validGroups.includes(g));
             }
 

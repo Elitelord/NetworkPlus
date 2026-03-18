@@ -4,8 +4,10 @@ import { auth } from "@/auth";
 import prisma from "@lib/prisma";
 import { Platform } from "@prisma/client";
 import { parseJsonBody, apiError, LIMITS, clampString, clampGroupsArray } from "@/lib/api-utils";
+import { getDefaultEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
 
 const PLATFORM_VALUES = new Set<string>(Object.values(Platform));
+const VALID_CADENCES = new Set(["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"]);
 function toPlatform(value: unknown): Platform | null | undefined {
   if (value === undefined) return undefined;
   if (value === "" || value === null) return null;
@@ -85,6 +87,44 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
+        // Estimated frequency fields
+        let estCount: number | null | undefined = undefined;
+        let estCadence: string | null | undefined = undefined;
+        let estPlatform: Platform | null | undefined = undefined;
+
+        if (body.estimatedFrequencyCount !== undefined) {
+            estCount = (typeof body.estimatedFrequencyCount === "number" && body.estimatedFrequencyCount >= 0)
+                ? body.estimatedFrequencyCount : null;
+        }
+        if (body.estimatedFrequencyCadence !== undefined) {
+            estCadence = (typeof body.estimatedFrequencyCadence === "string" && VALID_CADENCES.has(body.estimatedFrequencyCadence))
+                ? body.estimatedFrequencyCadence : null;
+        }
+        if (body.estimatedFrequencyPlatform !== undefined) {
+            estPlatform = (typeof body.estimatedFrequencyPlatform === "string" && PLATFORM_VALUES.has(body.estimatedFrequencyPlatform.toUpperCase()))
+                ? body.estimatedFrequencyPlatform.toUpperCase() as Platform : null;
+        }
+
+        const frequencyExplicitlyProvided = estCount !== undefined || estCadence !== undefined || estPlatform !== undefined;
+
+        // If groups changed and user didn't explicitly set frequency, auto-fill from new groups
+        if (validGroups !== undefined && !frequencyExplicitlyProvided) {
+            const existingHasFrequency = existing.estimatedFrequencyCount !== null;
+            if (!existingHasFrequency) {
+                const user = await prisma.user.findUnique({
+                    where: { id: session.user.id },
+                    select: { groupTypeOverrides: true },
+                });
+                const overrides = (user?.groupTypeOverrides as Record<string, string> | null) ?? undefined;
+                const defaults = getDefaultEstimatedFrequency(validGroups, overrides as any);
+                if (defaults) {
+                    estCount = defaults.count;
+                    estCadence = defaults.cadence;
+                    estPlatform = defaults.platform;
+                }
+            }
+        }
+
         const hasUpdates =
             nameFromBody !== undefined ||
             description !== undefined ||
@@ -92,7 +132,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             email !== undefined ||
             phone !== undefined ||
             commonPlatform !== undefined ||
-            monthsKnown !== undefined;
+            monthsKnown !== undefined ||
+            estCount !== undefined ||
+            estCadence !== undefined ||
+            estPlatform !== undefined;
         if (!hasUpdates) {
             return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
         }
@@ -110,6 +153,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(phone !== undefined && { phone }),
                 ...(commonPlatform !== undefined && { commonPlatform }),
                 ...(monthsKnown !== undefined && { monthsKnown }),
+                ...(estCount !== undefined && { estimatedFrequencyCount: estCount }),
+                ...(estCadence !== undefined && { estimatedFrequencyCadence: estCadence }),
+                ...(estPlatform !== undefined && { estimatedFrequencyPlatform: estPlatform }),
             },
         });
 
@@ -117,18 +163,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const { updateInferredLinks } = await import("@/lib/inference");
         await updateInferredLinks(contact.id);
 
-        // Recalculate score if monthsKnown changed (affects timeKnownModifier)
-        if (monthsKnown !== undefined) {
-            console.log("Recalculating score for contact:", contact.id);
+        // Recalculate score if monthsKnown or estimated frequency changed
+        const needsScoreRecalc = monthsKnown !== undefined || estCount !== undefined || estCadence !== undefined || estPlatform !== undefined;
+        if (needsScoreRecalc) {
             try {
                 const { recalculateContactScore } = await import("@/lib/strength-scoring");
                 await recalculateContactScore(contact.id);
-                console.log("Score recalculation successful");
             } catch (scoreErr) {
                 console.error("Score recalculation failed:", scoreErr);
-                throw scoreErr; // Re-throw to be caught by outer catch
+                throw scoreErr;
             }
-            // Re-fetch contact to get the updated score
             const updatedContact = await prisma.contact.findUnique({ where: { id } });
             return NextResponse.json(updatedContact);
         }

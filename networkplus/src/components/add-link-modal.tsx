@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { LinkIcon } from "lucide-react";
+import { MultiSelect } from "@/components/ui/multi-select";
 
 interface AddLinkModalProps {
   nodes: { id: string; name: string }[];
@@ -103,29 +104,32 @@ export function AddLinkModal({ nodes, links, onSuccess }: AddLinkModalProps) {
           )}
           
           <div className="flex flex-col gap-3">
-            <select 
-              value={fromId} 
-              onChange={(e) => setFromId(e.target.value)} 
-              className="w-full p-2 border rounded-md text-sm bg-background"
-              required
-            >
-              <option value="">Select source</option>
-              {nodes.map((n) => (
-                <option key={n.id} value={n.id}>{n.name}</option>
-              ))}
-            </select>
-
-            <select 
-              value={toId} 
-              onChange={(e) => setToId(e.target.value)} 
-              className="w-full p-2 border rounded-md text-sm bg-background"
-              required
-            >
-              <option value="">Select target</option>
-              {nodes.map((n) => (
-                <option key={n.id} value={n.id}>{n.name}</option>
-              ))}
-            </select>
+            <div className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">Contact 1</span>
+              <MultiSelect
+                options={nodes.map((n) => n.id)}
+                selected={fromId ? [fromId] : []}
+                onChange={(ids) => setFromId(ids[ids.length - 1] ?? "")}
+                placeholder="Search contacts..."
+                renderOption={(id: string) => nodes.find((n) => n.id === id)?.name ?? id}
+                renderSelectedItem={(id: string) => nodes.find((n) => n.id === id)?.name ?? id}
+                creatable={false}
+                maxSelected={1}
+              />
+            </div>
+            <div className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">Contact 2</span>
+              <MultiSelect
+                options={nodes.map((n) => n.id)}
+                selected={toId ? [toId] : []}
+                onChange={(ids) => setToId(ids[ids.length - 1] ?? "")}
+                placeholder="Search contacts..."
+                renderOption={(id: string) => nodes.find((n) => n.id === id)?.name ?? id}
+                renderSelectedItem={(id: string) => nodes.find((n) => n.id === id)?.name ?? id}
+                creatable={false}
+                maxSelected={1}
+              />
+            </div>
 
             <input 
               value={linkLabel} 

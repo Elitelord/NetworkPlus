@@ -5,11 +5,13 @@ import { useState, useEffect } from "react"
 export interface GraphSettings {
     clusterThreshold: number
     contactSpacing: number
+    sizeNodesByStrength: boolean
 }
 
 const DEFAULT_SETTINGS: GraphSettings = {
     clusterThreshold: 2.0,
     contactSpacing: 50,
+    sizeNodesByStrength: true,
 }
 
 const SETTINGS_KEY = "networkplus-graph-settings"

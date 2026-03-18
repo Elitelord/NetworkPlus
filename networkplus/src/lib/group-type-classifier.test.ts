@@ -12,7 +12,7 @@ describe("classifyGroupType", () => {
     // ── School ───────────────────────────────────────────────────────────
     it.each([
         ["Stanford University", "school"],
-        ["MIT", "other"],  // No keyword match — just an abbreviation
+        ["MIT", "employment"],  // No keyword match — falls back to employment
         ["Harvard Alumni", "school"],
         ["Class of 2024", "school"],
         ["class of '22", "school"],
@@ -94,11 +94,11 @@ describe("classifyGroupType", () => {
         }
     );
 
-    // ── Other (fallback) ─────────────────────────────────────────────────
+    // ── Other / Fallback ──────────────────────────────────────────────────
     it.each([
-        ["Random Group", "other"],
-        ["XYZ", "other"],
-        ["", "other"],
+        ["Random Group", "employment"],  // Unrecognized names default to employment (LinkedIn imports)
+        ["XYZ", "employment"],
+        ["", "other"],                   // Empty/blank → other
         ["   ", "other"],
     ] as [string, GroupType][])(
         "classifies %s as %s",
@@ -129,7 +129,7 @@ describe("classifyGroups", () => {
         const result = classifyGroups(["Google Inc", "Stanford University", "Random"]);
         expect(result.get("Google Inc")).toBe("employment");
         expect(result.get("Stanford University")).toBe("school");
-        expect(result.get("Random")).toBe("other");
+        expect(result.get("Random")).toBe("employment");
     });
 
     it("handles empty array", () => {

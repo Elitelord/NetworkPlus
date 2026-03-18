@@ -222,14 +222,14 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="email" className="flex items-center gap-2">
-                <Send className="w-4 h-4" /> Email
+              <TabsTrigger value="email" className="flex items-center gap-1.5 text-xs sm:text-sm sm:gap-2">
+                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> Email
               </TabsTrigger>
-              <TabsTrigger value="meeting" className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" /> Meeting
+              <TabsTrigger value="meeting" className="flex items-center gap-1.5 text-xs sm:text-sm sm:gap-2">
+                <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> Meeting
               </TabsTrigger>
-              <TabsTrigger value="other" className="flex items-center gap-2">
-                <FileText className="w-4 h-4" /> Other
+              <TabsTrigger value="other" className="flex items-center gap-1.5 text-xs sm:text-sm sm:gap-2">
+                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> Other
               </TabsTrigger>
             </TabsList>
 
@@ -300,13 +300,14 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
         </div>
 
         {activeTab !== "other" && (
-          <div className="flex justify-end gap-3 mt-2 flex-shrink-0">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting || selectedContactIds.length === 0 || (activeTab === "meeting" && !meetingTime)}>
+          <div className="flex justify-end gap-2 sm:gap-3 mt-2 flex-shrink-0">
+            <Button variant="outline" size="sm" className="sm:size-default" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button size="sm" className="sm:size-default" onClick={handleSubmit} disabled={isSubmitting || selectedContactIds.length === 0 || (activeTab === "meeting" && !meetingTime)}>
               {isSubmitting ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : null}
-              {activeTab === "email" ? "Send Email & Log" : "Schedule & add to calendar"}
+              <span className="hidden sm:inline">{activeTab === "email" ? "Send Email & Log" : "Schedule & add to calendar"}</span>
+              <span className="sm:hidden">{activeTab === "email" ? "Send & Log" : "Schedule"}</span>
             </Button>
           </div>
         )}

@@ -3,6 +3,7 @@
 import { useGraphSettings } from "@/hooks/use-graph-settings"
 import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Loader2 } from "lucide-react"
 
 export function GraphSettingsForm() {
@@ -18,6 +19,7 @@ export function GraphSettingsForm() {
 
     const clusterValue = settings.clusterThreshold
     const spacingValue = settings.contactSpacing
+    const sizeNodesByStrength = settings.sizeNodesByStrength
 
     // Helper text describing the threshold
     let description = "Automatically collapses large groups at certain zoom levels."
@@ -60,6 +62,21 @@ export function GraphSettingsForm() {
                 <p className="text-sm text-muted-foreground min-h-10">
                     {description}
                 </p>
+            </div>
+
+            <div className="space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                        <Label className="text-base font-medium">Node size reflects strength</Label>
+                        <p className="text-sm text-muted-foreground">
+                            When off, all contact nodes use a normalized size.
+                        </p>
+                    </div>
+                    <Switch
+                        checked={sizeNodesByStrength}
+                        onCheckedChange={(checked) => updateSettings({ sizeNodesByStrength: checked })}
+                    />
+                </div>
             </div>
 
             <div className="space-y-4">

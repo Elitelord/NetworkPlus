@@ -59,16 +59,67 @@ function getTimeKnownModifier(monthsKnown: number): number {
     return Math.min(1.8, Math.max(1, modifier));
 }
 
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+/**
+ * Generates virtual interaction dates for the last 365 days based on
+ * estimated frequency settings. Returns dates in descending order (newest first).
+ */
+function generateVirtualDates(
+    count: number,
+    cadence: string,
+    now: Date,
+): Date[] {
+    if (count <= 0) return [];
+
+    let intervalDays: number;
+    switch (cadence) {
+        case "DAILY":    intervalDays = 1 / count; break;
+        case "WEEKLY":   intervalDays = 7 / count; break;
+        case "BIWEEKLY": intervalDays = 14 / count; break;
+        case "MONTHLY":  intervalDays = 30 / count; break;
+        default:         intervalDays = 7 / count; break;
+    }
+
+    const dates: Date[] = [];
+    const oneYearMs = 365 * MS_PER_DAY;
+
+    for (let offset = intervalDays; offset * MS_PER_DAY <= oneYearMs; offset += intervalDays) {
+        dates.push(new Date(now.getTime() - offset * MS_PER_DAY));
+    }
+
+    return dates;
+}
+
+/**
+ * Checks if a virtual date is "covered" by a real interaction within ±1 day.
+ */
+function isDateCoveredByReal(
+    virtualDate: Date,
+    realDatesMs: number[],
+): boolean {
+    const vMs = virtualDate.getTime();
+    const threshold = MS_PER_DAY;
+    for (const rMs of realDatesMs) {
+        if (Math.abs(vMs - rMs) <= threshold) return true;
+    }
+    return false;
+}
+
 /**
  * Recalculates and updates the strengthScore for a given contact.
  * It sums up weighted interaction scores from the last 365 days
  * and applies the timeKnownModifier based on monthsKnown.
  *
+ * When estimatedFrequency fields are set, virtual interactions are generated
+ * and scored. Real interactions within ±1 day of a virtual one replace it
+ * (no double-counting).
+ *
  * Clamped between 0 and 100.
  */
 export async function recalculateContactScore(
     contactId: string,
-    tx?: any // Optional transaction client
+    tx?: any
 ) {
     const db = tx || prisma;
 
@@ -78,7 +129,12 @@ export async function recalculateContactScore(
 
     const contact = await db.contact.findUnique({
         where: { id: contactId },
-        select: { monthsKnown: true },
+        select: {
+            monthsKnown: true,
+            estimatedFrequencyCount: true,
+            estimatedFrequencyCadence: true,
+            estimatedFrequencyPlatform: true,
+        },
     });
 
     if (!contact) return;
@@ -90,18 +146,41 @@ export async function recalculateContactScore(
         },
         select: { platform: true, date: true },
     });
-    console.log(`Found ${interactions.length} interactions for scoring`);
 
     let rawScore = 0;
     for (const interaction of interactions) {
         rawScore += calculateInteractionScore(interaction.platform, interaction.date);
     }
 
-    // Apply time-known modifier
+    // Add virtual interaction score from estimated frequency
+    if (
+        contact.estimatedFrequencyCount &&
+        contact.estimatedFrequencyCadence &&
+        contact.estimatedFrequencyPlatform
+    ) {
+        const virtualDates = generateVirtualDates(
+            contact.estimatedFrequencyCount,
+            contact.estimatedFrequencyCadence,
+            now,
+        );
+
+        const realDatesMs = interactions.map(
+            (i: { date: Date }) => i.date.getTime(),
+        );
+
+        for (const vDate of virtualDates) {
+            if (!isDateCoveredByReal(vDate, realDatesMs)) {
+                rawScore += calculateInteractionScore(
+                    contact.estimatedFrequencyPlatform,
+                    vDate,
+                );
+            }
+        }
+    }
+
     const modifier = getTimeKnownModifier(contact.monthsKnown || 0);
     let finalScore = rawScore * modifier;
 
-    // Clamp to 0-100
     finalScore = Math.min(100, Math.max(0, finalScore));
 
     await db.contact.update({

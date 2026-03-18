@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/sheet";
 import { EditNodeDialog, EditContactData } from "@/components/edit-node-dialog";
 import { LogInteractionModal, EditInteractionData } from "@/components/log-interaction-modal";
+import { formatEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
+import type { GroupType } from "@/lib/group-type-classifier";
 // import { ScrollArea } from "@/components/ui/scroll-area";
 
 // We need to redefine or import types used in the Sheet. 
@@ -31,6 +33,9 @@ type NodeData = {
     interactions?: { date: string }[];
     strengthScore?: number;
     monthsKnown?: number;
+    estimatedFrequencyCount?: number | null;
+    estimatedFrequencyCadence?: string | null;
+    estimatedFrequencyPlatform?: string | null;
 };
 
 type Interaction = {
@@ -59,6 +64,7 @@ interface ContactDetailSheetProps {
     // Passing "connectedNeighbors" or "links/nodes" to calculate them?
     // It's cleaner to pass computed neighbors.
     connectedNeighbors: NodeData[];
+    groupTypeOverrides?: Record<string, GroupType> | null;
 }
 
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -100,6 +106,7 @@ export function ContactDetailSheet({
     onUpdateNode,
     onFocusNode,
     connectedNeighbors,
+    groupTypeOverrides,
 }: ContactDetailSheetProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [interactions, setInteractions] = useState<Interaction[]>([]);
@@ -137,14 +144,15 @@ export function ContactDetailSheet({
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent
                 side="right"
-                className="w-[400px] sm:w-[540px] flex flex-col h-full bg-white border border-border shadow-xl dark:bg-background/70 dark:backdrop-blur-xl dark:border-border/30"
+                className="!w-full sm:!w-[400px] md:!w-[540px] flex flex-col h-full bg-white border border-border shadow-xl dark:bg-background/70 dark:backdrop-blur-xl dark:border-border/30"
             >
                 <SheetHeader className="shrink-0 mb-4">
-                    <div className="flex items-center justify-between">
-                        <SheetTitle>{node?.name}</SheetTitle>
-                        <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => node && onOpenReachOutForLog?.([node.id])}>
-                                Log Interaction
+                    <div className="flex items-start justify-between gap-2">
+                        <SheetTitle className="truncate min-w-0">{node?.name}</SheetTitle>
+                        <div className="flex gap-2 shrink-0">
+                            <Button variant="outline" size="sm" className="text-xs sm:text-sm" onClick={() => node && onOpenReachOutForLog?.([node.id])}>
+                                <span className="hidden sm:inline">Log Interaction</span>
+                                <span className="sm:hidden">Log</span>
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(true)}>
                                 Edit
@@ -166,6 +174,16 @@ export function ContactDetailSheet({
                             <span className="text-xs font-mono">{node.strengthScore.toFixed(1)}</span>
                         </div>
                     )}
+                    {node?.estimatedFrequencyCount != null && node.estimatedFrequencyCount > 0 && node.estimatedFrequencyCadence && node.estimatedFrequencyPlatform && (
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                            <span className="text-xs text-muted-foreground">
+                                {formatEstimatedFrequency(node.estimatedFrequencyCount, node.estimatedFrequencyCadence, node.estimatedFrequencyPlatform)}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium">
+                                auto
+                            </span>
+                        </div>
+                    )}
                 </SheetHeader>
 
                 <div className="flex-1 -mx-6 px-6 overflow-y-auto">
@@ -184,11 +202,15 @@ export function ContactDetailSheet({
                                     commonPlatform: node.commonPlatform || "",
                                     strengthScore: node.strengthScore,
                                     monthsKnown: node.monthsKnown,
+                                    estimatedFrequencyCount: node.estimatedFrequencyCount,
+                                    estimatedFrequencyCadence: node.estimatedFrequencyCadence,
+                                    estimatedFrequencyPlatform: node.estimatedFrequencyPlatform,
                                 }}
                                 groups={groups}
                                 onSave={async (id, updates) => {
                                     await onUpdateNode(id, updates);
                                 }}
+                                groupTypeOverrides={groupTypeOverrides}
                             />
 
                             {/* Only for editing an existing interaction; new log uses Reach Out via onOpenReachOutForLog */}
@@ -205,7 +227,7 @@ export function ContactDetailSheet({
 
                             <div className="mt-2">
                                 {dueNodeIds.has(node.id) && (
-                                    <div className="mb-6 p-4 border border-red-200 bg-red-50 dark:bg-red-900/10 rounded-lg flex items-center justify-between">
+                                    <div className="mb-6 p-3 sm:p-4 border border-red-200 bg-red-50 dark:bg-red-900/10 rounded-lg flex items-center justify-between gap-3">
                                         <div>
                                             <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Consider catching up</h4>
                                             <p className="text-xs text-red-600/80">Relationship strength is low.</p>
@@ -227,7 +249,7 @@ export function ContactDetailSheet({
                                 </div>
 
                                 {/* Contact Details Section (Email, Phone, Platform) */}
-                                <div className="grid grid-cols-2 gap-4 mb-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                                     {node?.email && (
                                         <div className="text-sm">
                                             <span className="block text-muted-foreground text-xs">Email</span>

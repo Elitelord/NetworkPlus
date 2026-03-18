@@ -24,6 +24,7 @@ type ImportSummary = {
     imported: number;
     skipped: number;
     duplicates: number;
+    autoFrequencyCount: number;
 };
 
 export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
@@ -135,6 +136,7 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                 imported: data.importedCount,
                 skipped: data.skippedCount + skippedRows.length,
                 duplicates: data.duplicateCount || 0,
+                autoFrequencyCount: data.autoFrequencyCount || 0,
             });
 
             // Merge backend skipped rows with frontend skipped rows
@@ -307,6 +309,13 @@ export function ContactImportModal({ onSuccess }: { onSuccess: () => void }) {
                                 <p className="text-xs text-amber-600">
                                     {summary.skipped} row{summary.skipped !== 1 ? "s" : ""} skipped (invalid or missing name).
                                 </p>
+                            )}
+                            {summary.autoFrequencyCount > 0 && (
+                                <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-900/10 p-3 mt-2 w-full text-left">
+                                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                                        Estimated interaction frequency was auto-assigned to <span className="font-semibold">{summary.autoFrequencyCount}</span> contact{summary.autoFrequencyCount !== 1 ? "s" : ""} based on their groups. You can adjust these in bulk via the Bulk Edit tool.
+                                    </p>
+                                </div>
                             )}
                             {skippedRows.length > 0 && (
                                 <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-900/10 p-3 mt-4 w-full text-left">

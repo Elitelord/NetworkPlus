@@ -328,11 +328,11 @@ export function LogInteractionModal({
     const formBody = (
         <>
                     {!hideContactSelector && (
-                    <div className="grid grid-cols-4 items-start gap-4">
-                        <Label className="text-right pt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-4">
+                        <Label className="sm:text-right pt-0 sm:pt-2">
                             Contacts
                         </Label>
-                        <div className="col-span-3 space-y-2">
+                        <div className="sm:col-span-3 space-y-2">
                             <div className="flex flex-wrap gap-2 mb-2">
                                 {selectedContactIds.map(id => {
                                     const contact = contacts.find(c => c.id === id);
@@ -405,11 +405,11 @@ export function LogInteractionModal({
                     )}
 
                     {showFullForm && (
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="date" className="text-right pt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-4">
+                        <Label htmlFor="date" className="sm:text-right pt-0 sm:pt-2">
                             Date
                         </Label>
-                        <div className="col-span-3">
+                        <div className="sm:col-span-3">
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Button
@@ -470,11 +470,11 @@ export function LogInteractionModal({
                     )}
                     {showFullForm && (
                     <>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label className="text-right">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                        <Label className="sm:text-right">
                             {syncToCalendar ? "Start Time" : "Time"}
                         </Label>
-                        <div className="col-span-3 flex gap-1 items-center">
+                        <div className="sm:col-span-3 flex gap-1 items-center">
                             {/* Hour */}
                             <NativeSelect
                                 value={(() => {
@@ -579,11 +579,11 @@ export function LogInteractionModal({
                     </div>
 
                     {syncToCalendar && (
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right">
+                        <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                            <Label className="sm:text-right">
                                 End Time
                             </Label>
-                            <div className="col-span-3 flex gap-1 items-center">
+                            <div className="sm:col-span-3 flex gap-1 items-center">
                                 {/* Hour */}
                                 <NativeSelect
                                     value={(() => {
@@ -680,28 +680,28 @@ export function LogInteractionModal({
                     )}
 
                     {showFullForm && (
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="type" className="text-right">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                        <Label htmlFor="type" className="sm:text-right">
                             Type
                         </Label>
                         <Input
                             id="type"
                             value={formData.type}
                             onChange={(e) => handleChange("type", e.target.value)}
-                            className="col-span-3"
+                            className="sm:col-span-3"
                             placeholder="e.g. Meeting, Call"
                         />
                     </div>
                     )}
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="platform" className="text-right">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                        <Label htmlFor="platform" className="sm:text-right">
                             Platform
                         </Label>
                         <NativeSelect
                             id="platform"
                             value={formData.platform}
                             onChange={(e) => handleChange("platform", e.target.value)}
-                            className="col-span-3"
+                            className="sm:col-span-3"
                         >
                             {INTERACTION_PLATFORMS.map((p) => (
                                 <NativeSelectOption key={p.value} value={p.value}>
@@ -712,9 +712,9 @@ export function LogInteractionModal({
                     </div>
                     {/* Recurring toggle — only for new interactions */}
                     {showFullForm && !isEditing && (
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right">Recurring</Label>
-                            <div className="col-span-3 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-4">
+                            <Label className="sm:text-right">Recurring</Label>
+                            <div className="sm:col-span-3 space-y-3">
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
                                         type="checkbox"
@@ -848,8 +848,8 @@ export function LogInteractionModal({
                     )}
 
                     {/* Duration, Total Messages, Notes — bottom right above Save */}
-                    <div className="grid grid-cols-4 items-center gap-x-4 gap-y-3 ml-auto w-full max-w-md">
-                        <Label htmlFor="durationMinutes" className="text-right text-muted-foreground text-sm">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 items-center gap-x-3 sm:gap-x-4 gap-y-3 w-full">
+                        <Label htmlFor="durationMinutes" className="sm:text-right text-muted-foreground text-sm">
                             Duration (mins)
                         </Label>
                         <Input
@@ -858,10 +858,10 @@ export function LogInteractionModal({
                             min="0"
                             value={formData.durationMinutes}
                             onChange={(e) => handleChange("durationMinutes", e.target.value)}
-                            className="w-24 justify-self-start"
+                            className="w-full sm:w-24 justify-self-start"
                             placeholder="—"
                         />
-                        <Label htmlFor="messageCount" className="text-right text-muted-foreground text-sm">
+                        <Label htmlFor="messageCount" className="sm:text-right text-muted-foreground text-sm">
                             Total Messages
                         </Label>
                         <Input
@@ -870,17 +870,17 @@ export function LogInteractionModal({
                             min="1"
                             value={formData.messageCount}
                             onChange={(e) => handleChange("messageCount", e.target.value)}
-                            className="w-24 justify-self-start"
+                            className="w-full sm:w-24 justify-self-start"
                             placeholder="—"
                         />
-                        <Label htmlFor="content" className="text-right text-muted-foreground text-sm pt-2 self-start">
+                        <Label htmlFor="content" className="sm:text-right text-muted-foreground text-sm pt-2 self-start">
                             Notes
                         </Label>
                         <Textarea
                             id="content"
                             value={formData.content}
                             onChange={(e) => handleChange("content", e.target.value)}
-                            className="col-span-3 resize-none justify-self-stretch"
+                            className="col-span-1 sm:col-span-3 resize-none justify-self-stretch"
                             placeholder="Optional notes..."
                             rows={2}
                         />

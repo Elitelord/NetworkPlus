@@ -47,7 +47,7 @@ export function GraphZoomControls({
     return (
         <div
             id="tour-zoom-controls"
-            className={cn("absolute bottom-6 right-6 z-10 flex flex-col items-end gap-2", className)}
+            className={cn("absolute bottom-4 right-3 sm:bottom-6 sm:right-6 z-10 flex flex-col items-end gap-2", className)}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
         >
@@ -141,12 +141,12 @@ export function GraphZoomControls({
                 variant="outline"
                 size="icon"
                 className={cn(
-                    "w-12 h-12 rounded-full shadow-lg bg-background/60 backdrop-blur-xl border hover:bg-accent/80 transition-all duration-300",
+                    "w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg bg-background/60 backdrop-blur-xl border hover:bg-accent/80 transition-all duration-300",
                     isOpen ? "rotate-90 bg-accent text-accent-foreground border-primary/50" : ""
                 )}
                 onClick={() => setIsOpen(!isOpen)}
             >
-                <Maximize className="w-5 h-5" />
+                <Maximize className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
         </div>
     );

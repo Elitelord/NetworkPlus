@@ -24,7 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTheme } from "next-themes";
-import { classifyGroupType, GROUP_TYPE_COLORS, type GroupType } from "@/lib/group-type-classifier";
+import { classifyGroupType, classifyGroupTypeWithOverrides, GROUP_TYPE_COLORS, type GroupType } from "@/lib/group-type-classifier";
+import { updateGroupTypeOverrides as saveGroupTypeOverrides, getGroupTypeOverrides } from "@/app/settings/actions";
 import { useGraphSettings } from "@/hooks/use-graph-settings";
 import { ListTodo, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,9 @@ type Contact = {
   interactions?: { date: string }[];
   strengthScore?: number;
   monthsKnown?: number;
+  estimatedFrequencyCount?: number | null;
+  estimatedFrequencyCadence?: string | null;
+  estimatedFrequencyPlatform?: string | null;
 };
 
 type NodeType = Contact; // Alias for graph compatibility if needed, or just use Contact
@@ -72,6 +76,7 @@ export default function Home() {
   const [reachOutContact, setReachOutContact] = useState<Contact | null>(null);
   const [reachOutPreselectedIds, setReachOutPreselectedIds] = useState<string[] | null>(null);
   const [reachOutInitialTab, setReachOutInitialTab] = useState<"email" | "meeting" | "other" | null>(null);
+  const [groupTypeOverrides, setGroupTypeOverrides] = useState<Record<string, GroupType> | null>(null);
 
   // Zoom Controls
   const [currentZoom, setCurrentZoom] = useState(1);
@@ -188,6 +193,7 @@ export default function Home() {
 
   useEffect(() => {
     loadData();
+    getGroupTypeOverrides().then(o => setGroupTypeOverrides(o as Record<string, GroupType>));
   }, []);
 
   const groups = useMemo(() => {
@@ -267,7 +273,7 @@ export default function Home() {
 
       clusterGroups.forEach((members, g) => {
         const clusterId = `cluster:${g}`;
-        const gType = classifyGroupType(g);
+        const gType = classifyGroupTypeWithOverrides(g, groupTypeOverrides);
         clusterNodesArr.push({
           id: clusterId,
           name: g,
@@ -345,7 +351,7 @@ export default function Home() {
         };
       }),
     };
-  }, [visibleNodes, nodeLinks, isClusterMode, selectedGroupFilters]);
+  }, [visibleNodes, nodeLinks, isClusterMode, selectedGroupFilters, groupTypeOverrides]);
 
   // ── Create / rebuild ForceGraph when core deps change ──────────────
   // (NOT triggered by isClusterMode — that uses data-swap below)
@@ -383,6 +389,7 @@ export default function Home() {
         .linkCurvature((link: any) => getCurvature(link))
         .nodeVal((node: any) => {
           if (node.isCluster) return Math.max(15, Math.min(node.clusterSize * 3, 50));
+          if (settings.sizeNodesByStrength === false) return 8;
           return Math.max(3, Math.min((node.strengthScore || 0) / 4, 15));
         })
         .nodeCanvasObject((node: any, ctx) => {
@@ -428,7 +435,9 @@ export default function Home() {
           }
 
           const score = node.strengthScore || 0;
-          const size = 3 + (score / 100) * 12;
+          const size = (settings.sizeNodesByStrength === false)
+            ? 6.5
+            : (3 + (score / 100) * 12);
           const isHighlighted = highlightNodes.has(node.id);
 
           ctx.beginPath();
@@ -808,6 +817,7 @@ export default function Home() {
               setReachOutPreselectedIds(ids);
               setReachOutInitialTab("other");
             }}
+            groupTypeOverrides={groupTypeOverrides}
           />
         </div>
       </div>
@@ -946,6 +956,11 @@ export default function Home() {
           selectedGroupFilters={selectedGroupFilters}
           onGroupFiltersChange={setSelectedGroupFilters}
           onFocusNode={focusNode}
+          groupTypeOverrides={groupTypeOverrides}
+          onUpdateGroupTypeOverrides={async (overrides) => {
+            setGroupTypeOverrides(overrides);
+            await saveGroupTypeOverrides(overrides);
+          }}
         />
         {
           error && (
@@ -993,6 +1008,9 @@ export default function Home() {
           lastInteractionAt: selectedNode.lastInteractionAt,
           strengthScore: selectedNode.strengthScore,
           monthsKnown: selectedNode.monthsKnown,
+          estimatedFrequencyCount: selectedNode.estimatedFrequencyCount,
+          estimatedFrequencyCadence: selectedNode.estimatedFrequencyCadence,
+          estimatedFrequencyPlatform: selectedNode.estimatedFrequencyPlatform,
         } : null}
         groups={groups}
         dueNodeIds={dueNodeIds}
@@ -1004,6 +1022,7 @@ export default function Home() {
         onUpdateNode={updateNode}
         onFocusNode={focusNode}
         connectedNeighbors={connectedNeighbors}
+        groupTypeOverrides={groupTypeOverrides}
       />
 
       <EditLinkDialog

@@ -146,6 +146,109 @@ export async function deleteAccount() {
     }
 }
 
+// ── Group type overrides ─────────────────────────────────────────────────
+
+const VALID_GROUP_TYPES = new Set(["school", "employment", "social", "family", "community", "other"]);
+
+export async function updateGroupTypeOverrides(overrides: Record<string, string>) {
+    const session = await auth() as Session | null
+    if (!session?.user?.id) {
+        return { error: "Not authenticated" }
+    }
+
+    // Validate every value is a valid GroupType
+    for (const [key, value] of Object.entries(overrides)) {
+        if (typeof key !== "string" || key.length === 0 || key.length > 200) {
+            return { error: `Invalid group name: ${key}` }
+        }
+        if (!VALID_GROUP_TYPES.has(value)) {
+            return { error: `Invalid group type "${value}" for group "${key}"` }
+        }
+    }
+
+    try {
+        await prisma.user.update({
+            where: { id: session.user.id },
+            data: { groupTypeOverrides: overrides },
+        })
+        revalidatePath("/settings")
+        return { success: "Group type overrides updated" }
+    } catch (error) {
+        return { error: "Failed to update group type overrides" }
+    }
+}
+
+export async function getGroupTypeOverrides(): Promise<Record<string, string>> {
+    const session = await auth() as Session | null
+    if (!session?.user?.id) return {}
+
+    const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { groupTypeOverrides: true },
+    })
+
+    return (user?.groupTypeOverrides as Record<string, string> | null) ?? {}
+}
+
+// ── Backfill estimated frequency ─────────────────────────────────────────
+
+export async function backfillEstimatedFrequency() {
+    const session = await auth() as Session | null
+    if (!session?.user?.id) {
+        return { error: "Not authenticated" }
+    }
+
+    try {
+        const { getDefaultEstimatedFrequency } = await import("@/lib/estimated-frequency-defaults")
+        type GroupTypeImport = import("@/lib/group-type-classifier").GroupType
+
+        const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { groupTypeOverrides: true },
+        })
+        const overrides = (user?.groupTypeOverrides as Record<string, GroupTypeImport> | null) ?? undefined
+
+        const contacts = await prisma.contact.findMany({
+            where: {
+                ownerId: session.user.id,
+                estimatedFrequencyCount: null,
+                NOT: { groups: { isEmpty: true } },
+            },
+            select: { id: true, groups: true },
+        })
+
+        const { recalculateContactScore } = await import("@/lib/strength-scoring")
+        let updatedCount = 0
+
+        for (const c of contacts) {
+            const defaults = getDefaultEstimatedFrequency(c.groups, overrides)
+            if (!defaults) continue
+
+            await prisma.contact.update({
+                where: { id: c.id },
+                data: {
+                    estimatedFrequencyCount: defaults.count,
+                    estimatedFrequencyCadence: defaults.cadence,
+                    estimatedFrequencyPlatform: defaults.platform,
+                },
+            })
+            await recalculateContactScore(c.id)
+            updatedCount++
+        }
+
+        return {
+            success: `Auto-estimated frequency for ${updatedCount} contacts`,
+            updatedCount,
+            skippedCount: contacts.length - updatedCount,
+        }
+    } catch (error) {
+        console.error("Backfill estimated frequency failed:", error)
+        return { error: "Failed to backfill estimated frequency" }
+    }
+}
+
+// ── Notification preferences ─────────────────────────────────────────────
+
 const notificationPreferencesSchema = z.object({
     notificationsEnabled: z.boolean(),
     notificationTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format"),

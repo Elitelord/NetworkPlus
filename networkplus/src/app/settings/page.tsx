@@ -8,6 +8,8 @@ import { DeleteAccount } from "../../components/settings/delete-account"
 import { Separator } from "@/components/ui/separator"
 import { NotificationForm } from "@/components/settings/notification-form"
 import { GraphSettingsForm } from "@/components/settings/graph-settings-form"
+import { EstimatedFrequencyBackfill } from "@/components/settings/estimated-frequency-backfill"
+import { GroupTypeOverridesEditor } from "@/components/settings/group-type-overrides-editor"
 
 export default async function SettingsPage() {
     const session = await auth() as Session | null
@@ -26,7 +28,7 @@ export default async function SettingsPage() {
 
     const contacts = await prisma.contact.findMany({
         where: { ownerId: session.user.id },
-        select: { id: true, name: true, category: true, groups: true }
+        select: { id: true, name: true, category: true, groups: true, estimatedFrequencyCount: true }
     })
 
     const allGroups = Array.from(new Set(contacts.flatMap(c => c.groups))).sort()
@@ -79,6 +81,32 @@ export default async function SettingsPage() {
                             availableGroups={allGroups}
                             availableCategories={allCategories}
                             availableContacts={contactOptions}
+                        />
+                    </div>
+                </div>
+
+                <Separator />
+
+                <div id="group-types" className="flex flex-col items-center text-center my-6 scroll-mt-[100px]">
+                    <h2 className="text-lg font-medium">Group Types</h2>
+                    <p className="text-sm text-muted-foreground mb-4">Review and override how groups are categorized.</p>
+                    <div className="w-full text-left">
+                        <GroupTypeOverridesEditor
+                            groups={allGroups}
+                            initialOverrides={((user as any).groupTypeOverrides ?? null)}
+                        />
+                    </div>
+                </div>
+
+                <Separator />
+
+                <div className="flex flex-col items-center text-center my-6">
+                    <h2 className="text-lg font-medium">Estimated Frequency</h2>
+                    <p className="text-sm text-muted-foreground mb-4">Auto-fill estimated interaction frequency for existing contacts.</p>
+                    <div className="w-full text-left">
+                        <EstimatedFrequencyBackfill
+                            contactsWithoutFrequency={contacts.filter(c => c.estimatedFrequencyCount === null && c.groups.length > 0).length}
+                            totalContacts={contacts.length}
                         />
                     </div>
                 </div>

@@ -31,6 +31,7 @@ model User {
   catchUpContactIds    String[]   @default([])
   filterReachOutByPreferences Boolean @default(false)
   lastCatchUpSentAt    DateTime?
+  groupTypeOverrides   Json?      // { "groupName": "employment" | "school" | ... }
 }
 
 model Account {
@@ -86,6 +87,9 @@ model Contact {
   commonPlatform    Platform?
   strengthScore     Float         @default(0)
   monthsKnown       Int           @default(0)
+  estimatedFrequencyCount    Int?
+  estimatedFrequencyCadence  String?    // DAILY, WEEKLY, BIWEEKLY, MONTHLY
+  estimatedFrequencyPlatform Platform?
   owner             User          @relation("UserContacts", fields: [ownerId], references: [id])
   relationship      Relationship? @relation(fields: [relationshipId], references: [id])
   interactions      Interaction[]
