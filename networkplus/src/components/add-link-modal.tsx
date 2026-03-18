@@ -114,7 +114,6 @@ export function AddLinkModal({ nodes, links, onSuccess }: AddLinkModalProps) {
                 renderOption={(id: string) => nodes.find((n) => n.id === id)?.name ?? id}
                 renderSelectedItem={(id: string) => nodes.find((n) => n.id === id)?.name ?? id}
                 creatable={false}
-                maxSelected={1}
               />
             </div>
             <div className="flex flex-col gap-1 text-sm">
@@ -127,7 +126,6 @@ export function AddLinkModal({ nodes, links, onSuccess }: AddLinkModalProps) {
                 renderOption={(id: string) => nodes.find((n) => n.id === id)?.name ?? id}
                 renderSelectedItem={(id: string) => nodes.find((n) => n.id === id)?.name ?? id}
                 creatable={false}
-                maxSelected={1}
               />
             </div>
 

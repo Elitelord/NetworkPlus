@@ -4,7 +4,9 @@ type ContactLike = {
   id: string;
   name: string;
   email?: string | null;
+  phone?: string | null;
   groups?: string[];
+  strengthScore?: number;
 };
 
 interface UseContactSelectionWorkspaceOptions {
