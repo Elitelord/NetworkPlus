@@ -1,4 +1,3 @@
-/** Triggering hot reload to debug layout issue */
 import { auth } from "@/auth"
 import { Session } from "next-auth"
 import { redirect } from "next/navigation"
@@ -30,19 +29,19 @@ export default async function SettingsPage() {
         redirect("/signin")
     }
 
-    const contacts = await prisma.contact.findMany({
-        where: { ownerId: session.user.id },
-        select: { id: true, name: true, category: true, groups: true, estimatedFrequencyCount: true }
+    const contacts = await (prisma.contact as any).findMany({
+        where: { ownerId: (session as any).user.id },
+        select: { id: true, name: true, category: true, groups: true, estimatedFrequencyCount: true, estimatedFrequencyIsAuto: true }
     })
 
-    const allGroups = Array.from(new Set(contacts.flatMap(c => c.groups))).sort()
-    const allCategories = Array.from(new Set(contacts.map(c => c.category))).sort()
-    const contactOptions = contacts.map(c => ({ id: c.id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name))
+    const allGroups: string[] = Array.from(new Set((contacts as any[]).flatMap((c: any) => (c.groups || []) as string[]))).sort() as string[]
+    const allCategories: string[] = Array.from(new Set((contacts as any[]).map((c: any) => (c.category || "") as string))).sort() as string[]
+    const contactOptions: { id: string; name: string }[] = ((contacts as any[]).map((c: any) => ({ id: (c.id || "") as string, name: (c.name || "") as string })) as any[]).sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""))
 
     const overrides = ((user as any).groupTypeOverrides ?? {}) as Record<string, any>
     const groupsWithType = allGroups.map(name => ({
-        name,
-        type: classifyGroupTypeWithOverrides(name, overrides)
+        name: name as string,
+        type: classifyGroupTypeWithOverrides(name as string, overrides)
     }))
 
     const hasPassword = !!(user as any).hashedPassword
@@ -97,13 +96,13 @@ export default async function SettingsPage() {
                                         notificationsEnabled: (user as any).notificationsEnabled ?? false,
                                         notificationTime: (user as any).notificationTime ?? "09:00",
                                         catchUpDays: (user as any).catchUpDays ?? [],
-                                        catchUpGroups: (user as any).catchUpGroups ?? [],
-                                        catchUpCategories: (user as any).catchUpCategories ?? [],
-                                        catchUpContactIds: (user as any).catchUpContactIds ?? [],
+                                        catchUpGroups: ((user as any).catchUpGroups || []) as any,
+                                        catchUpCategories: ((user as any).catchUpCategories || []) as any,
+                                        catchUpContactIds: ((user as any).catchUpContactIds || []) as any,
                                     }}
-                                    availableGroups={allGroups}
-                                    availableCategories={allCategories}
-                                    availableContacts={contactOptions}
+                                    availableGroups={allGroups as any}
+                                    availableCategories={allCategories as any}
+                                    availableContacts={contactOptions as any}
                                 />
                             </div>
                             <Separator />
@@ -132,7 +131,7 @@ export default async function SettingsPage() {
                             </div>
                             <div className="max-w-2xl w-full">
                                 <EstimatedFrequencyBackfill
-                                    contactsToBackfill={contacts.filter(c => (c.estimatedFrequencyCount === null || (c as any).estimatedFrequencyIsAuto) && c.groups.length > 0).length}
+                                    contactsToBackfill={contacts.filter((c: any) => (c.estimatedFrequencyCount === null || (c as any).estimatedFrequencyIsAuto !== false) && c.groups.length > 0).length}
                                     totalContacts={contacts.length}
                                 />
                             </div>
@@ -162,8 +161,8 @@ export default async function SettingsPage() {
                             </div>
                             <div className="max-w-3xl w-full">
                                 <UserGroupsEditor
-                                    initialGroups={(user as any).groups || []}
-                                    availableGroupsWithType={groupsWithType}
+                                    initialGroups={((user as any).groups as string[]) || []}
+                                    availableGroupsWithType={groupsWithType as any}
                                 />
                             </div>
                             <Separator />

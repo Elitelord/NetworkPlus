@@ -865,7 +865,7 @@ export default function Home() {
     "rounded-xl shadow-lg border hover:bg-accent/80 transition-all duration-300 flex items-center justify-center gap-2 text-foreground px-3 py-2.5 text-sm font-medium bg-background/60 backdrop-blur-xl";
 
   return (
-    <div className="relative flex h-full min-h-0 overflow-hidden bg-zinc-50 dark:bg-black font-sans">
+    <div className="relative flex h-full min-h-0 overflow-hidden bg-zinc-50 dark:bg-black font-sans touch-none">
       {/* Fixed full-viewport graph layer: sits behind navbar; receives drag/pan when UI layer passes events through */}
       <div className="fixed inset-0 z-0 bg-zinc-100 dark:bg-zinc-900/50" aria-hidden>
         <div

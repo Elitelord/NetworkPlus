@@ -49,7 +49,14 @@ export function SettingsSidebar() {
 
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);
-    if (el) {
+    if (!el) return;
+    // Find the scrollable <main> ancestor (overflow-auto container)
+    const scrollableMain = el.closest("main");
+    if (scrollableMain) {
+      const offset = 24; // small buffer
+      const top = el.offsetTop - offset;
+      scrollableMain.scrollTo({ top, behavior: "smooth" });
+    } else {
       el.scrollIntoView({ behavior: "smooth" });
     }
   };

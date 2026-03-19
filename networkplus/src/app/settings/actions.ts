@@ -210,7 +210,7 @@ export async function getGroupTypeOverrides(): Promise<Record<string, string>> {
 
 // ── Backfill estimated frequency ─────────────────────────────────────────
 
-export async function backfillEstimatedFrequency() {
+export async function backfillEstimatedFrequency(force = false) {
     const session = await auth() as Session | null
     if (!session?.user?.id) {
         return { error: "Not authenticated" }
@@ -227,27 +227,38 @@ export async function backfillEstimatedFrequency() {
         const overrides = (user?.groupTypeOverrides as unknown as Record<string, GroupTypeImport> | null) ?? undefined
         const userGroups = (user as any)?.groups || []
 
+        // Force mode: re-estimate all contacts EXCEPT those with explicit manual overrides (isAuto === false)
+        // Normal mode: only contacts with null frequency or already-auto frequency
         const contacts = await prisma.contact.findMany({
             where: {
                 ownerId: session.user.id,
-                OR: [
-                    { estimatedFrequencyCount: null },
-                    { estimatedFrequencyIsAuto: true } as any,
+                NOT: [
+                    { groups: { isEmpty: true } },
+                    // Never touch contacts where user explicitly set frequency manually
+                    ...(force ? [{ estimatedFrequencyIsAuto: false } as any] : []),
                 ],
-                NOT: { groups: { isEmpty: true } },
+                ...(force ? {} : {
+                    OR: [
+                        { estimatedFrequencyCount: null },
+                        { estimatedFrequencyIsAuto: true } as any,
+                    ],
+                }),
             },
-            select: { id: true, groups: true },
+            select: { id: true, groups: true, estimatedFrequencyIsAuto: true } as any,
         })
 
         const { recalculateContactScore } = await import("@/lib/strength-scoring")
         let updatedCount = 0
 
         for (const c of contacts) {
-            const defaults = getDefaultEstimatedFrequency(c.groups, overrides, userGroups)
+            // Double-check: never overwrite manually-set frequencies
+            if ((c as any).estimatedFrequencyIsAuto === false) continue
+
+            const defaults = getDefaultEstimatedFrequency((c as any).groups as string[], overrides, userGroups)
             if (!defaults) continue
 
             await prisma.contact.update({
-                where: { id: c.id },
+                where: { id: (c as any).id as string },
                 data: {
                     estimatedFrequencyCount: defaults.count,
                     estimatedFrequencyCadence: defaults.cadence,
@@ -255,7 +266,7 @@ export async function backfillEstimatedFrequency() {
                     estimatedFrequencyIsAuto: true,
                 } as any,
             })
-            await recalculateContactScore(c.id)
+            await recalculateContactScore((c as any).id as string)
             updatedCount++
         }
 

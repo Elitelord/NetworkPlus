@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Zap } from "lucide-react";
 import { backfillEstimatedFrequency } from "@/app/settings/actions";
@@ -21,22 +21,24 @@ export function EstimatedFrequencyBackfill({
         updatedCount?: number;
     } | null>(null);
     const [remaining, setRemaining] = useState(contactsToBackfill);
+    const [, startTransition] = useTransition();
 
-    const handleBackfill = async () => {
+    const handleBackfill = () => {
         setIsRunning(true);
         setResult(null);
-        try {
-            const res = await backfillEstimatedFrequency();
-            setResult(res);
-            if (res.updatedCount !== undefined) {
-                // Approximate remaining after update
-                setRemaining(prev => Math.max(0, prev - res.updatedCount!));
+        startTransition(async () => {
+            try {
+                const res = await backfillEstimatedFrequency(remaining === 0);
+                setResult(res);
+                if (res.updatedCount !== undefined) {
+                    setRemaining(prev => Math.max(0, prev - res.updatedCount!));
+                }
+            } catch {
+                setResult({ error: "Something went wrong" });
+            } finally {
+                setIsRunning(false);
             }
-        } catch {
-            setResult({ error: "Something went wrong" });
-        } finally {
-            setIsRunning(false);
-        }
+        });
     };
 
     return (
@@ -59,7 +61,7 @@ export function EstimatedFrequencyBackfill({
 
             <Button
                 onClick={handleBackfill}
-                disabled={isRunning || remaining === 0}
+                disabled={isRunning || totalContacts === 0}
                 className="w-full"
                 variant={remaining > 0 ? "default" : "outline"}
             >
@@ -68,7 +70,7 @@ export function EstimatedFrequencyBackfill({
                 ) : remaining > 0 ? (
                     <><Zap className="size-4 mr-2" /> {contactsToBackfill === remaining ? 'Auto-estimate' : 'Refresh estimates'} for {remaining} contacts</>
                 ) : (
-                    "All contacts up to date"
+                    <><Zap className="size-4 mr-2" /> Refresh all estimates</>
                 )}
             </Button>
 
@@ -81,8 +83,8 @@ export function EstimatedFrequencyBackfill({
 
             <p className="text-xs text-muted-foreground">
                 This uses each contact&apos;s group classification to auto-assign a default frequency.
-                Manual overrides you&apos;ve set elsewhere are <strong>preserved</strong>. You can refresh
-                this anytime if you change your group categorization rules.
+                Contacts where you&apos;ve manually set a frequency are <strong>never</strong> overwritten.
+                You can refresh this anytime if you change your group categorization rules.
             </p>
         </div>
     );
