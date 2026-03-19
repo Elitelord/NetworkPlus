@@ -58,6 +58,7 @@ interface EditNodeDialogProps {
     groups: string[];
     onSave: (id: string, updates: Partial<EditContactData>) => Promise<void>;
     groupTypeOverrides?: Record<string, GroupType> | null;
+    userGroups?: string[];
 }
 
 export function EditNodeDialog({
@@ -67,6 +68,7 @@ export function EditNodeDialog({
     groups,
     onSave,
     groupTypeOverrides,
+    userGroups = [],
 }: EditNodeDialogProps) {
     const [formData, setFormData] = useState<Partial<EditContactData>>({});
     const [monthsKnownInput, setMonthsKnownInput] = useState("0");
@@ -110,7 +112,7 @@ export function EditNodeDialog({
 
         // If frequency is not manually enabled, suggest defaults from groups
         if (!freqEnabled && newGroups.length > 0) {
-            const defaults = getDefaultEstimatedFrequency(newGroups, groupTypeOverrides);
+            const defaults = getDefaultEstimatedFrequency(newGroups, groupTypeOverrides, userGroups);
             if (defaults) {
                 setFreqEnabled(true);
                 setFreqCount(String(defaults.count));

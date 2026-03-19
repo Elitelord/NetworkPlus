@@ -65,6 +65,7 @@ interface ContactDetailSheetProps {
     // It's cleaner to pass computed neighbors.
     connectedNeighbors: NodeData[];
     groupTypeOverrides?: Record<string, GroupType> | null;
+    userGroups?: string[];
 }
 
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -107,6 +108,7 @@ export function ContactDetailSheet({
     onFocusNode,
     connectedNeighbors,
     groupTypeOverrides,
+    userGroups = [],
 }: ContactDetailSheetProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [interactions, setInteractions] = useState<Interaction[]>([]);
@@ -211,6 +213,7 @@ export function ContactDetailSheet({
                                     await onUpdateNode(id, updates);
                                 }}
                                 groupTypeOverrides={groupTypeOverrides}
+                                userGroups={userGroups}
                             />
 
                             {/* Only for editing an existing interaction; new log uses Reach Out via onOpenReachOutForLog */}

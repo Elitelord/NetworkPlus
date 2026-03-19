@@ -93,11 +93,12 @@ export async function POST(req: Request) {
         let autoFrequencyCount = 0;
 
         // Fetch user's group type overrides once for the entire import
-        const user = await prisma.user.findUnique({
+        const user = await (prisma.user as any).findUnique({
             where: { id: userId },
-            select: { groupTypeOverrides: true },
+            select: { groupTypeOverrides: true, groups: true },
         });
-        const groupTypeOverrides = (user?.groupTypeOverrides as Record<string, GroupType> | null) ?? undefined;
+        const groupTypeOverrides = (user as any)?.groupTypeOverrides as Record<string, GroupType> | null;
+        const userGroups = (user as any)?.groups || [];
 
         for (const item of uniqueIncoming.values()) {
             const { category, lastInteractionAt, originalIndex } = item;
@@ -152,7 +153,7 @@ export async function POST(req: Request) {
 
                 // Auto-fill estimated frequency from groups
                 const freqDefaults = groups.length > 0
-                    ? getDefaultEstimatedFrequency(groups, groupTypeOverrides)
+                    ? getDefaultEstimatedFrequency(groups, groupTypeOverrides, userGroups)
                     : null;
 
                 const newContact = await prisma.contact.create({
@@ -170,6 +171,7 @@ export async function POST(req: Request) {
                             estimatedFrequencyCount: freqDefaults.count,
                             estimatedFrequencyCadence: freqDefaults.cadence,
                             estimatedFrequencyPlatform: freqDefaults.platform,
+                            estimatedFrequencyIsAuto: true as any,
                         }),
                     },
                 });

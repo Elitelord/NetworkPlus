@@ -3,18 +3,18 @@ import { Platform } from "@prisma/client";
 
 // Platform weights
 const PLATFORM_WEIGHTS: Record<Platform, number> = {
-    IN_PERSON: 5.0,
-    CALL: 4.0,
-    WHATSAPP: 3.0,
-    TELEGRAM: 3.0,
-    DISCORD: 2.8,
-    SMS: 2.5,
-    EMAIL: 2.0,
-    LINKEDIN: 1.8,
-    INSTAGRAM: 1.5,
-    FACEBOOK: 1.3,
-    SNAPCHAT: 1.2,
-    OTHER: 1.0,
+    IN_PERSON: 4.5,
+    CALL: 3.5,
+    WHATSAPP: 2.5,
+    TELEGRAM: 2.5,
+    DISCORD: 2.3,
+    SMS: 2.0,
+    EMAIL: 1.5,
+    LINKEDIN: 1.3,
+    INSTAGRAM: 1.0,
+    FACEBOOK: 0.8,
+    SNAPCHAT: 0.7,
+    OTHER: 0.5,
 };
 
 // Strength threshold for catch-up list.
@@ -23,12 +23,13 @@ export const STRENGTH_THRESHOLD = 10;
 
 // Time decay stepped multipliers
 function getTimeDecayMultiplier(daysAgo: number): number {
-    if (daysAgo <= 7) return 1.0;
-    if (daysAgo <= 30) return 0.7;
-    if (daysAgo <= 90) return 0.4;
-    if (daysAgo <= 180) return 0.2;
-    if (daysAgo <= 365) return 0.1;
-    return 0.05; // > 365 days
+    if (daysAgo <= 3) return 1.0;
+    if (daysAgo <= 7) return 0.8;
+    if (daysAgo <= 14) return 0.6;
+    if (daysAgo <= 30) return 0.4;
+    if (daysAgo <= 90) return 0.15;
+    if (daysAgo <= 180) return 0.05;
+    return 0.01; // > 180 days
 }
 
 /**

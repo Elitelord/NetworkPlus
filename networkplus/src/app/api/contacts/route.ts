@@ -78,12 +78,13 @@ export async function POST(req: Request) {
         // Auto-fill from group type if not explicitly provided
         const explicitlyProvided = estCount !== undefined || estCadence !== undefined || estPlatform !== undefined;
         if (!explicitlyProvided && validGroups.length > 0) {
-            const user = await prisma.user.findUnique({
-                where: { id: session.user.id },
-                select: { groupTypeOverrides: true },
+            const user = await (prisma.user as any).findUnique({
+                where: { id: (session as any).user.id },
+                select: { groupTypeOverrides: true, groups: true },
             });
-            const overrides = (user?.groupTypeOverrides as Record<string, string> | null) ?? undefined;
-            const defaults = getDefaultEstimatedFrequency(validGroups, overrides as any);
+            const overrides = (user as any)?.groupTypeOverrides as Record<string, string> | null;
+            const userGroups = (user as any)?.groups || [];
+            const defaults = getDefaultEstimatedFrequency(validGroups, overrides as any, userGroups);
             if (defaults) {
                 estCount = defaults.count;
                 estCadence = defaults.cadence;
@@ -102,6 +103,7 @@ export async function POST(req: Request) {
                 ...(estCount !== undefined && { estimatedFrequencyCount: estCount }),
                 ...(estCadence !== undefined && { estimatedFrequencyCadence: estCadence }),
                 ...(estPlatform !== undefined && { estimatedFrequencyPlatform: estPlatform }),
+                estimatedFrequencyIsAuto: (!explicitlyProvided && estCount !== undefined) as any,
             },
         });
 

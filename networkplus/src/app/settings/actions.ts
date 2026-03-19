@@ -45,6 +45,24 @@ export async function updateProfile(prevState: any, formData: FormData) {
     }
 }
 
+export async function updateUserGroups(groups: string[]) {
+    const session = await auth() as Session | null
+    if (!session?.user?.id) {
+        return { error: "Not authenticated" }
+    }
+
+    try {
+        await prisma.user.update({
+            where: { id: session.user.id },
+            data: { groups } as any,
+        })
+        revalidatePath("/settings")
+        return { success: "Groups updated successfully" }
+    } catch (error) {
+        return { error: "Failed to update groups" }
+    }
+}
+
 export async function updatePassword(prevState: any, formData: FormData) {
     const session = await auth() as Session | null
     if (!session?.user?.id) {
@@ -204,14 +222,18 @@ export async function backfillEstimatedFrequency() {
 
         const user = await prisma.user.findUnique({
             where: { id: session.user.id },
-            select: { groupTypeOverrides: true },
+            select: { groupTypeOverrides: true, groups: true } as any,
         })
-        const overrides = (user?.groupTypeOverrides as Record<string, GroupTypeImport> | null) ?? undefined
+        const overrides = (user?.groupTypeOverrides as unknown as Record<string, GroupTypeImport> | null) ?? undefined
+        const userGroups = (user as any)?.groups || []
 
         const contacts = await prisma.contact.findMany({
             where: {
                 ownerId: session.user.id,
-                estimatedFrequencyCount: null,
+                OR: [
+                    { estimatedFrequencyCount: null },
+                    { estimatedFrequencyIsAuto: true } as any,
+                ],
                 NOT: { groups: { isEmpty: true } },
             },
             select: { id: true, groups: true },
@@ -221,7 +243,7 @@ export async function backfillEstimatedFrequency() {
         let updatedCount = 0
 
         for (const c of contacts) {
-            const defaults = getDefaultEstimatedFrequency(c.groups, overrides)
+            const defaults = getDefaultEstimatedFrequency(c.groups, overrides, userGroups)
             if (!defaults) continue
 
             await prisma.contact.update({
@@ -230,7 +252,8 @@ export async function backfillEstimatedFrequency() {
                     estimatedFrequencyCount: defaults.count,
                     estimatedFrequencyCadence: defaults.cadence,
                     estimatedFrequencyPlatform: defaults.platform,
-                },
+                    estimatedFrequencyIsAuto: true,
+                } as any,
             })
             await recalculateContactScore(c.id)
             updatedCount++

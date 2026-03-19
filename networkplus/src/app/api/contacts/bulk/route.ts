@@ -66,6 +66,7 @@ export async function PATCH(req: Request) {
                     estimatedFrequencyCount: count,
                     estimatedFrequencyCadence: cadence,
                     estimatedFrequencyPlatform: platform as Platform,
+                    estimatedFrequencyIsAuto: false as any, // Explicitly set by user
                 },
             });
 
@@ -85,7 +86,8 @@ export async function PATCH(req: Request) {
                     estimatedFrequencyCount: null,
                     estimatedFrequencyCadence: null,
                     estimatedFrequencyPlatform: null,
-                },
+                    estimatedFrequencyIsAuto: false,
+                } as any
             });
 
             const { recalculateContactScore } = await import("@/lib/strength-scoring");
@@ -98,17 +100,21 @@ export async function PATCH(req: Request) {
 
         // ─── Backfill estimated frequency from group types ───────────────
         if (action === "backfill_estimated_frequency") {
-            const user = await prisma.user.findUnique({
+            const user = await (prisma.user as any).findUnique({
                 where: { id: userId },
-                select: { groupTypeOverrides: true },
+                select: { groupTypeOverrides: true, groups: true },
             });
-            const overrides = (user?.groupTypeOverrides as Record<string, GroupType> | null) ?? undefined;
+            const overrides = (user as any)?.groupTypeOverrides as Record<string, GroupType> | null;
+            const userGroups = (user as any)?.groups || [];
 
             const contactsToBackfill = await prisma.contact.findMany({
                 where: {
                     id: { in: contactIds as string[] },
                     ownerId: userId,
-                    estimatedFrequencyCount: null,
+                    OR: [
+                        { estimatedFrequencyCount: null },
+                        { estimatedFrequencyIsAuto: true } as any,
+                    ],
                 },
                 select: { id: true, groups: true },
             });
@@ -118,7 +124,7 @@ export async function PATCH(req: Request) {
 
             for (const c of contactsToBackfill) {
                 if (!c.groups || c.groups.length === 0) continue;
-                const defaults = getDefaultEstimatedFrequency(c.groups, overrides);
+                const defaults = getDefaultEstimatedFrequency(c.groups, overrides, userGroups);
                 if (!defaults) continue;
 
                 await prisma.contact.update({
@@ -127,7 +133,8 @@ export async function PATCH(req: Request) {
                         estimatedFrequencyCount: defaults.count,
                         estimatedFrequencyCadence: defaults.cadence,
                         estimatedFrequencyPlatform: defaults.platform,
-                    },
+                        estimatedFrequencyIsAuto: true,
+                    } as any
                 });
                 await recalculateContactScore(c.id);
                 updatedCount++;

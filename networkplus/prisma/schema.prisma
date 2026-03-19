@@ -10,28 +10,29 @@ datasource db {
 }
 
 model User {
-  id                   String     @id @default(cuid())
-  name                 String
-  email                String     @unique
-  hashedPassword       String?
-  image                String?
-  emailVerified        DateTime?
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
-  contacts             Contact[]  @relation("UserContacts")
-  reminders            Reminder[]
-  accounts             Account[]
-  sessions             Session[]
-  fcmToken             String?
-  notificationsEnabled Boolean    @default(false)
-  notificationTime     String? // Format: "HH:mm" (24h) in UTC
-  catchUpDays          Int[]      @default([]) // 0=Sun, 6=Sat
-  catchUpGroups        String[]   @default([])
-  catchUpCategories    String[]   @default([])
-  catchUpContactIds    String[]   @default([])
-  filterReachOutByPreferences Boolean @default(false)
-  lastCatchUpSentAt    DateTime?
-  groupTypeOverrides   Json?      // { "groupName": "employment" | "school" | ... }
+  id                          String     @id @default(cuid())
+  name                        String
+  email                       String     @unique
+  image                       String?
+  createdAt                   DateTime   @default(now())
+  updatedAt                   DateTime   @updatedAt
+  groups                      String[]   @default([])
+  emailVerified               DateTime?
+  hashedPassword              String?
+  fcmToken                    String?
+  notificationTime            String?
+  notificationsEnabled        Boolean    @default(false)
+  catchUpCategories           String[]   @default([])
+  catchUpContactIds           String[]   @default([])
+  catchUpDays                 Int[]      @default([])
+  catchUpGroups               String[]   @default([])
+  lastCatchUpSentAt           DateTime?
+  filterReachOutByPreferences Boolean    @default(false)
+  groupTypeOverrides          Json?
+  accounts                    Account[]
+  contacts                    Contact[]  @relation("UserContacts")
+  reminders                   Reminder[]
+  sessions                    Session[]
 }
 
 model Account {
@@ -40,15 +41,14 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -70,32 +70,33 @@ model VerificationToken {
 }
 
 model Contact {
-  id                String        @id @default(cuid())
-  ownerId           String
-  name              String
-  category          Category      @default(FRIEND)
-  phone             String?
-  email             String?
-  description       String? // Merged from Node
-  groups            String[]      @default([]) // Merged from Node
-  metadata          Json? // Merged from Node
-  relationshipId    String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @default(now()) @updatedAt // Added default to handle existing rows if any, though usually @updatedAt handles updates. Using @default(now()) for new rows.
-  lastInteractionAt DateTime?
-  lastPlatform      Platform?
-  commonPlatform    Platform?
-  strengthScore     Float         @default(0)
-  monthsKnown       Int           @default(0)
+  id                         String        @id @default(cuid())
+  ownerId                    String
+  name                       String
+  category                   Category      @default(FRIEND)
+  phone                      String?
+  email                      String?
+  relationshipId             String?
+  createdAt                  DateTime      @default(now())
+  lastInteractionAt          DateTime?
+  lastPlatform               Platform?
+  commonPlatform             Platform?
+  description                String?
+  groups                     String[]      @default([])
+  metadata                   Json?
+  updatedAt                  DateTime      @default(now()) @updatedAt
+  strengthScore              Float         @default(0)
+  monthsKnown                Int           @default(0)
+  estimatedFrequencyCadence  String?
   estimatedFrequencyCount    Int?
-  estimatedFrequencyCadence  String?    // DAILY, WEEKLY, BIWEEKLY, MONTHLY
   estimatedFrequencyPlatform Platform?
-  owner             User          @relation("UserContacts", fields: [ownerId], references: [id])
-  relationship      Relationship? @relation(fields: [relationshipId], references: [id])
-  interactions      Interaction[]
-  Reminder          Reminder[]
-  outgoing          Link[]        @relation("from")
-  incoming          Link[]        @relation("to")
+  estimatedFrequencyIsAuto   Boolean       @default(true)
+  owner                      User          @relation("UserContacts", fields: [ownerId], references: [id])
+  relationship               Relationship? @relation(fields: [relationshipId], references: [id])
+  outgoing                   Link[]        @relation("from")
+  incoming                   Link[]        @relation("to")
+  Reminder                   Reminder[]
+  interactions               Interaction[] @relation("ContactToInteraction")
 }
 
 model Relationship {
@@ -109,31 +110,29 @@ model Relationship {
 }
 
 model Interaction {
-  id               String    @id @default(cuid())
-  type             String
-  content          String?
-  platform         Platform  @default(OTHER)
-  date             DateTime  @default(now())
-  startTime        DateTime  @default(now())
-  endTime          DateTime  @default(now())
-  durationSeconds  Int?
-  messageCount     Int?
-  directionSummary String? // INBOUND, OUTBOUND, MIXED
-  rawMessageCount  Int?
-  metadata         Json?
-  threadId         String?
-  calendarEventId  String?   // Google Calendar event ID for dedup
-  contacts         Contact[]
-
-  // Recurring interaction fields
-  isRecurring          Boolean       @default(false)
-  recurringType        String?       // DAILY, WEEKLY, BIWEEKLY, MONTHLY, CUSTOM
-  recurringInterval    Int?          @default(1)
-  recurringDaysOfWeek  Int[]         @default([]) // 0=Sun, 6=Sat
-  recurringEndDate     DateTime?
-  parentInteractionId  String?
-  parentInteraction    Interaction?  @relation("RecurringInstances", fields: [parentInteractionId], references: [id])
-  recurringInstances   Interaction[] @relation("RecurringInstances")
+  id                  String        @id @default(cuid())
+  type                String
+  content             String?
+  platform            Platform      @default(OTHER)
+  date                DateTime      @default(now())
+  directionSummary    String?
+  durationSeconds     Int?
+  endTime             DateTime      @default(now())
+  messageCount        Int?
+  metadata            Json?
+  rawMessageCount     Int?
+  startTime           DateTime      @default(now())
+  threadId            String?
+  calendarEventId     String?
+  isRecurring         Boolean       @default(false)
+  parentInteractionId String?
+  recurringDaysOfWeek Int[]         @default([])
+  recurringEndDate    DateTime?
+  recurringType       String?
+  recurringInterval   Int?          @default(1)
+  parentInteraction   Interaction?  @relation("RecurringInstances", fields: [parentInteractionId], references: [id])
+  recurringInstances  Interaction[] @relation("RecurringInstances")
+  contacts            Contact[]     @relation("ContactToInteraction")
 }
 
 model Reminder {
@@ -146,6 +145,19 @@ model Reminder {
   createdAt   DateTime @default(now())
   contact     Contact? @relation(fields: [contactId], references: [id])
   user        User     @relation(fields: [userId], references: [id])
+}
+
+model Link {
+  id        String   @id @default(cuid())
+  fromId    String
+  toId      String
+  label     String?
+  weight    Float?   @default(1.0)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  from      Contact  @relation("from", fields: [fromId], references: [id])
+  to        Contact  @relation("to", fields: [toId], references: [id])
 }
 
 enum Category {
@@ -169,20 +181,4 @@ enum Platform {
   TELEGRAM
   IN_PERSON
   OTHER
-}
-
-// Node / Link graph models for network visualization and relationships
-// Node model removed. Merged into Contact.
-
-model Link {
-  id        String   @id @default(cuid())
-  fromId    String
-  toId      String
-  from      Contact  @relation("from", fields: [fromId], references: [id])
-  to        Contact  @relation("to", fields: [toId], references: [id])
-  label     String?
-  weight    Float?   @default(1.0)
-  metadata  Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }

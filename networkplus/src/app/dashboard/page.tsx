@@ -77,6 +77,7 @@ export default function Home() {
   const [reachOutPreselectedIds, setReachOutPreselectedIds] = useState<string[] | null>(null);
   const [reachOutInitialTab, setReachOutInitialTab] = useState<"email" | "meeting" | "other" | null>(null);
   const [groupTypeOverrides, setGroupTypeOverrides] = useState<Record<string, GroupType> | null>(null);
+  const [userGroups, setUserGroups] = useState<string[]>([]);
 
   // Zoom Controls
   const [currentZoom, setCurrentZoom] = useState(1);
@@ -166,6 +167,12 @@ export default function Home() {
       const [nJson, lJson] = await Promise.all([parseResponse(nRes), parseResponse(lRes)]);
       setNodes(Array.isArray(nJson) ? nJson : []);
       setLinks(Array.isArray(lJson) ? lJson : []);
+
+      // Fetch user groups
+      fetch("/api/user/profile")
+        .then(res => res.ok ? res.json() : {})
+        .then((data: any) => setUserGroups(data.groups || []))
+        .catch(err => console.error("Failed to fetch user groups:", err));
 
       // Fetch due nodes
       // Fetch due nodes
@@ -1023,6 +1030,7 @@ export default function Home() {
         onFocusNode={focusNode}
         connectedNeighbors={connectedNeighbors}
         groupTypeOverrides={groupTypeOverrides}
+        userGroups={userGroups}
       />
 
       <EditLinkDialog

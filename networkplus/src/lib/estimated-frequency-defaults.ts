@@ -8,11 +8,11 @@ export type EstimatedFrequencyPreset = {
 };
 
 const GROUP_TYPE_FREQUENCY_DEFAULTS: Record<GroupType, EstimatedFrequencyPreset> = {
-    employment: { count: 5, cadence: "WEEKLY", platform: Platform.IN_PERSON },
-    school:     { count: 3, cadence: "WEEKLY", platform: Platform.IN_PERSON },
+    employment: { count: 1, cadence: "MONTHLY", platform: Platform.OTHER },
+    school:     { count: 1, cadence: "MONTHLY", platform: Platform.OTHER },
     family:     { count: 2, cadence: "WEEKLY", platform: Platform.CALL },
     social:     { count: 1, cadence: "WEEKLY", platform: Platform.OTHER },
-    community:  { count: 2, cadence: "MONTHLY", platform: Platform.IN_PERSON },
+    community:  { count: 1, cadence: "MONTHLY", platform: Platform.IN_PERSON },
     other:      { count: 1, cadence: "WEEKLY", platform: Platform.SMS },
 };
 
@@ -36,9 +36,39 @@ export function getPresetForGroupType(type: GroupType): EstimatedFrequencyPreset
 export function getDefaultEstimatedFrequency(
     groups: string[],
     overrides?: Record<string, GroupType> | null,
+    userGroups?: string[],
 ): EstimatedFrequencyPreset | null {
     if (!groups || groups.length === 0) return null;
 
+    // 1. Shared Group Logic (High Priority)
+    if (userGroups && userGroups.length > 0) {
+        // Collect all shared groups
+        const sharedGroups = groups.filter(g => userGroups.includes(g));
+        if (sharedGroups.length > 0) {
+            // Find the highest priority shared group type
+            let bestSharedType: GroupType | null = null;
+            let bestSharedPriority = Infinity;
+
+            for (const g of sharedGroups) {
+                const type = classifyGroupTypeWithOverrides(g, overrides);
+                const priority = GROUP_TYPE_PRIORITY.indexOf(type);
+                if (priority < bestSharedPriority) {
+                    bestSharedPriority = priority;
+                    bestSharedType = type;
+                }
+            }
+
+            if (bestSharedType === "employment") {
+                return { count: 5, cadence: "WEEKLY", platform: Platform.IN_PERSON };
+            }
+            if (bestSharedType === "school") {
+                return { count: 2, cadence: "MONTHLY", platform: Platform.IN_PERSON };
+            }
+            // For other shared groups, we could add more specific logic here if needed.
+        }
+    }
+
+    // 2. Normal Classification Logic (Fallback)
     let bestType: GroupType | null = null;
     let bestPriority = Infinity;
 

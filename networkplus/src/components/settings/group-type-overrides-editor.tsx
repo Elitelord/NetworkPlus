@@ -91,39 +91,42 @@ export function GroupTypeOverridesEditor({ groups, initialOverrides }: GroupType
             const current = classifyGroupTypeWithOverrides(g, overrides);
             const isOverridden = g in overrides;
             return (
-              <div key={g} className="flex items-center gap-2 px-3 py-2 border-b last:border-b-0">
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: GROUP_TYPE_COLORS[current] }}
-                  title={GROUP_TYPE_LABELS[current]}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm truncate" title={g}>{g}</div>
-                  <div className="text-[10px] text-muted-foreground">
-                    Auto: {GROUP_TYPE_LABELS[classifyGroupType(g)]}
-                    {isOverridden ? " • overridden" : ""}
+              <div key={g} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 px-3 py-3 border-b last:border-b-0 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1 w-full">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: GROUP_TYPE_COLORS[current] }}
+                    title={GROUP_TYPE_LABELS[current]}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium truncate" title={g}>{g}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Auto: {GROUP_TYPE_LABELS[classifyGroupType(g)]}
+                      {isOverridden ? " • overridden" : ""}
+                    </div>
                   </div>
+
+                  {isOverridden && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[10px] shrink-0"
+                      disabled={saving}
+                      onClick={() => resetGroup(g)}
+                    >
+                      Reset
+                    </Button>
+                  )}
                 </div>
 
-                {isOverridden && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 text-xs"
-                    disabled={saving}
-                    onClick={() => resetGroup(g)}
-                  >
-                    Reset
-                  </Button>
-                )}
-
-                <div className="w-[170px] shrink-0">
+                <div className="w-full sm:w-[160px] shrink-0">
                   <NativeSelect
                     value={current}
                     onChange={(e) => setGroupType(g, e.target.value as GroupType)}
                     size="sm"
                     disabled={saving}
+                    className="h-8 text-xs w-full"
                   >
                     {ALL_GROUP_TYPES.map((t) => (
                       <NativeSelectOption key={t} value={t}>
