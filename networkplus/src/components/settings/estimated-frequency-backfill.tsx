@@ -6,12 +6,12 @@ import { Loader2, Zap } from "lucide-react";
 import { backfillEstimatedFrequency } from "@/app/settings/actions";
 
 interface EstimatedFrequencyBackfillProps {
-    contactsWithoutFrequency: number;
+    contactsToBackfill: number;
     totalContacts: number;
 }
 
 export function EstimatedFrequencyBackfill({
-    contactsWithoutFrequency,
+    contactsToBackfill,
     totalContacts,
 }: EstimatedFrequencyBackfillProps) {
     const [isRunning, setIsRunning] = useState(false);
@@ -20,7 +20,7 @@ export function EstimatedFrequencyBackfill({
         error?: string;
         updatedCount?: number;
     } | null>(null);
-    const [remaining, setRemaining] = useState(contactsWithoutFrequency);
+    const [remaining, setRemaining] = useState(contactsToBackfill);
 
     const handleBackfill = async () => {
         setIsRunning(true);
@@ -29,6 +29,7 @@ export function EstimatedFrequencyBackfill({
             const res = await backfillEstimatedFrequency();
             setResult(res);
             if (res.updatedCount !== undefined) {
+                // Approximate remaining after update
                 setRemaining(prev => Math.max(0, prev - res.updatedCount!));
             }
         } catch {
@@ -51,29 +52,25 @@ export function EstimatedFrequencyBackfill({
                     <span className="font-medium">{totalContacts}</span>
                 </div>
                 <div className="flex justify-between">
-                    <span>Without estimated frequency</span>
+                    <span>Eligible for auto-estimation</span>
                     <span className="font-medium">{remaining}</span>
                 </div>
             </div>
 
-            {remaining > 0 ? (
-                <Button
-                    onClick={handleBackfill}
-                    disabled={isRunning}
-                    className="w-full"
-                    variant="outline"
-                >
-                    {isRunning ? (
-                        <><Loader2 className="size-4 animate-spin mr-2" /> Backfilling...</>
-                    ) : (
-                        <><Zap className="size-4 mr-2" /> Auto-estimate for {remaining} contacts</>
-                    )}
-                </Button>
-            ) : (
-                <p className="text-sm text-emerald-600 dark:text-emerald-400">
-                    All contacts with groups have estimated frequency set.
-                </p>
-            )}
+            <Button
+                onClick={handleBackfill}
+                disabled={isRunning || remaining === 0}
+                className="w-full"
+                variant={remaining > 0 ? "default" : "outline"}
+            >
+                {isRunning ? (
+                    <><Loader2 className="size-4 animate-spin mr-2" /> Processing...</>
+                ) : remaining > 0 ? (
+                    <><Zap className="size-4 mr-2" /> {contactsToBackfill === remaining ? 'Auto-estimate' : 'Refresh estimates'} for {remaining} contacts</>
+                ) : (
+                    "All contacts up to date"
+                )}
+            </Button>
 
             {result?.success && (
                 <p className="text-sm text-emerald-600 dark:text-emerald-400">{result.success}</p>
@@ -84,8 +81,8 @@ export function EstimatedFrequencyBackfill({
 
             <p className="text-xs text-muted-foreground">
                 This uses each contact&apos;s group classification to auto-assign a default frequency.
-                Contacts that already have an estimated frequency will not be changed. You can
-                always adjust individual contacts from the edit dialog or use the bulk editor.
+                Manual overrides you&apos;ve set elsewhere are <strong>preserved</strong>. You can refresh
+                this anytime if you change your group categorization rules.
             </p>
         </div>
     );

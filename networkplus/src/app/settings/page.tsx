@@ -132,7 +132,7 @@ export default async function SettingsPage() {
                             </div>
                             <div className="max-w-2xl w-full">
                                 <EstimatedFrequencyBackfill
-                                    contactsWithoutFrequency={contacts.filter(c => c.estimatedFrequencyCount === null && c.groups.length > 0).length}
+                                    contactsToBackfill={contacts.filter(c => (c.estimatedFrequencyCount === null || (c as any).estimatedFrequencyIsAuto) && c.groups.length > 0).length}
                                     totalContacts={contacts.length}
                                 />
                             </div>
