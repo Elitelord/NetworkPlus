@@ -4,6 +4,7 @@ import { useState, useMemo, type FormEvent } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -95,6 +96,9 @@ export function AddLinkModal({ nodes, links, onSuccess }: AddLinkModalProps) {
       <DialogContent className="sm:max-w-[425px] border border-border dark:border-border/30">
         <DialogHeader>
           <DialogTitle>Add Link</DialogTitle>
+          <DialogDescription className="sr-only">
+            Select two contacts and optionally enter a label for the link between them.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={createLink} className="flex flex-col gap-4 py-4">
           {error && (

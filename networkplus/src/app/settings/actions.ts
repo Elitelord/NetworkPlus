@@ -323,3 +323,44 @@ export async function updateNotificationPreferences(data: z.infer<typeof notific
         return { error: "Failed to update preferences" }
     }
 }
+
+export async function updateInferenceIncludePriorAffiliations(enabled: boolean) {
+    const session = await auth() as Session | null
+    if (!session?.user?.id) {
+        return { error: "Not authenticated" }
+    }
+    try {
+        await prisma.user.update({
+            where: { id: session.user.id },
+            data: { inferenceIncludePriorAffiliations: enabled },
+        })
+        const { updateInferredLinksForOwner } = await import("@/lib/inference")
+        await updateInferredLinksForOwner(session.user.id)
+        revalidatePath("/settings")
+        revalidatePath("/dashboard")
+        return { success: true as const }
+    } catch (error) {
+        console.error("updateInferenceIncludePriorAffiliations:", error)
+        return { error: "Failed to update graph inference setting" }
+    }
+}
+
+export async function runContactProfileBackfillFromGroups() {
+    const session = await auth() as Session | null
+    if (!session?.user?.id) {
+        return { error: "Not authenticated" }
+    }
+    try {
+        const { backfillContactProfilesForUser } = await import("@/lib/contact-profile-backfill")
+        const result = await backfillContactProfilesForUser(session.user.id)
+        revalidatePath("/dashboard")
+        return {
+            success: true as const,
+            updated: result.updated,
+            skipped: result.skipped,
+        }
+    } catch (error) {
+        console.error("runContactProfileBackfillFromGroups:", error)
+        return { error: "Profile backfill failed" }
+    }
+}

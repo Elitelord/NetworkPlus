@@ -22,6 +22,10 @@ export function AddContactModal({ groups, onSuccess }: AddContactModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [city, setCity] = useState("");
+  const [currentCompany, setCurrentCompany] = useState("");
+  const [currentSchool, setCurrentSchool] = useState("");
+  const [showProfileFields, setShowProfileFields] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -35,10 +39,20 @@ export function AddContactModal({ groups, onSuccess }: AddContactModalProps) {
     setLoading(true);
 
     try {
+      const profile: Record<string, string> = {};
+      if (city.trim()) profile.city = city.trim();
+      if (currentCompany.trim()) profile.currentCompany = currentCompany.trim();
+      if (currentSchool.trim()) profile.currentSchool = currentSchool.trim();
+
       const res = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: title, description, groups: selectedGroups }),
+        body: JSON.stringify({
+          name: title,
+          description,
+          groups: selectedGroups,
+          ...(Object.keys(profile).length > 0 ? { profile } : {}),
+        }),
       });
       if (!res.ok) {
         const txt = await res.text();
@@ -50,7 +64,11 @@ export function AddContactModal({ groups, onSuccess }: AddContactModalProps) {
       setTitle("");
       setDescription("");
       setSelectedGroups([]);
-      
+      setCity("");
+      setCurrentCompany("");
+      setCurrentSchool("");
+      setShowProfileFields(false);
+
       setOpen(false);
       onSuccess();
     } catch (err: any) {
@@ -103,6 +121,36 @@ export function AddContactModal({ groups, onSuccess }: AddContactModalProps) {
                 placeholder="Select groups..."
               />
             </div>
+
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline text-left"
+              onClick={() => setShowProfileFields((v) => !v)}
+            >
+              {showProfileFields ? "Hide" : "Add"} city / company / school
+            </button>
+            {showProfileFields && (
+              <div className="flex flex-col gap-2 border rounded-md p-3 bg-muted/30">
+                <input
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="City (optional)"
+                  className="w-full p-2 border rounded-md text-sm bg-background"
+                />
+                <input
+                  value={currentCompany}
+                  onChange={(e) => setCurrentCompany(e.target.value)}
+                  placeholder="Current company (optional)"
+                  className="w-full p-2 border rounded-md text-sm bg-background"
+                />
+                <input
+                  value={currentSchool}
+                  onChange={(e) => setCurrentSchool(e.target.value)}
+                  placeholder="Current school (optional)"
+                  className="w-full p-2 border rounded-md text-sm bg-background"
+                />
+              </div>
+            )}
           </div>
 
           <Button type="submit" className="w-full mt-2" disabled={isNodeNameEmpty || loading}>

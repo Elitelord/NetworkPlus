@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
-import { Platform } from "@prisma/client";
+import { Platform, Prisma } from "@prisma/client";
 import { parseJsonBody, apiError, LIMITS, clampString, clampGroupsArray } from "@/lib/api-utils";
 import { getDefaultEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
+import { mergeContactProfile } from "@/lib/contact-profile";
 
 const VALID_CADENCES = new Set(["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"]);
 const VALID_PLATFORMS = new Set<string>(Object.values(Platform));
@@ -92,6 +93,15 @@ export async function POST(req: Request) {
             }
         }
 
+        let profileJson: Prisma.InputJsonValue | undefined = undefined;
+        if (body.profile !== undefined && body.profile !== null) {
+            const merged = mergeContactProfile(null, body.profile);
+            if (!merged.ok) {
+                return NextResponse.json({ error: merged.error }, { status: 400 });
+            }
+            profileJson = merged.profile as Prisma.InputJsonValue;
+        }
+
         const newContact = await prisma.contact.create({
             data: {
                 ownerId: session.user.id,
@@ -100,6 +110,7 @@ export async function POST(req: Request) {
                 groups: validGroups,
                 email: email ?? null,
                 phone: phone ?? null,
+                ...(profileJson !== undefined && { profile: profileJson }),
                 ...(estCount !== undefined && { estimatedFrequencyCount: estCount }),
                 ...(estCadence !== undefined && { estimatedFrequencyCadence: estCadence }),
                 ...(estPlatform !== undefined && { estimatedFrequencyPlatform: estPlatform }),

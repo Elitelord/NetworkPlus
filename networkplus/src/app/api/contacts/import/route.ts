@@ -15,6 +15,7 @@ import {
 } from "@/lib/api-utils";
 import { getDefaultEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
 import type { GroupType } from "@/lib/group-type-classifier";
+import { mergeContactProfile } from "@/lib/contact-profile";
 
 // Helper to validate and parse date
 function parseDate(dateStr: string | null | undefined): Date | null {
@@ -156,6 +157,28 @@ export async function POST(req: Request) {
                     ? getDefaultEstimatedFrequency(groups, groupTypeOverrides, userGroups)
                     : null;
 
+                const profilePatch: Record<string, unknown> = {};
+                if (item.city && typeof item.city === "string" && item.city.trim()) {
+                    profilePatch.city = item.city.trim().slice(0, 500);
+                }
+                if (item.currentCompany && typeof item.currentCompany === "string" && item.currentCompany.trim()) {
+                    profilePatch.currentCompany = item.currentCompany.trim().slice(0, 500);
+                }
+                if (item.currentSchool && typeof item.currentSchool === "string" && item.currentSchool.trim()) {
+                    profilePatch.currentSchool = item.currentSchool.trim().slice(0, 500);
+                }
+                if (item.profile && typeof item.profile === "object" && !Array.isArray(item.profile)) {
+                    Object.assign(profilePatch, item.profile as object);
+                }
+
+                let profileJson: Prisma.InputJsonValue | undefined = undefined;
+                if (Object.keys(profilePatch).length > 0) {
+                    const merged = mergeContactProfile(null, profilePatch);
+                    if (merged.ok) {
+                        profileJson = merged.profile as Prisma.InputJsonValue;
+                    }
+                }
+
                 const newContact = await prisma.contact.create({
                     data: {
                         ownerId: userId!,
@@ -166,6 +189,7 @@ export async function POST(req: Request) {
                         groups,
                         category: normalizeEnum<Category>(category, Category) || Category.FRIEND,
                         metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+                        profile: profileJson,
                         lastInteractionAt: parseDate(lastInteractionAt),
                         ...(freqDefaults && {
                             estimatedFrequencyCount: freqDefaults.count,

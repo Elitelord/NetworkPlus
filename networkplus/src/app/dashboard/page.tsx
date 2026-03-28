@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useMemo, useCallback, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 
 import { DueSoonList } from "@/components/DueSoonList";
@@ -26,17 +26,27 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useTheme } from "next-themes";
 import { classifyGroupType, classifyGroupTypeWithOverrides, GROUP_TYPE_COLORS, type GroupType } from "@/lib/group-type-classifier";
 import { updateGroupTypeOverrides as saveGroupTypeOverrides, getGroupTypeOverrides } from "@/app/settings/actions";
-import { useGraphSettings } from "@/hooks/use-graph-settings";
+import { useGraphSettings, type GraphSettings } from "@/hooks/use-graph-settings";
 import { ListTodo, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ContactProfile } from "@/lib/contact-profile";
 
 type NodeMetadata = { groups?: string[];[key: string]: any };
+
+const INFERRED_AFFINITY_RULES = new Set([
+  "shared_group",
+  "shared_current_company",
+  "shared_current_school",
+  "shared_prior_company",
+  "shared_prior_school",
+]);
 
 type Contact = {
   id: string;
   name: string;
   description?: string;
   groups?: string[];
+  profile?: ContactProfile | null;
   phone?: string | null;
   email?: string | null;
   commonPlatform?: string | null;
@@ -56,11 +66,15 @@ type NodeType = Contact; // Alias for graph compatibility if needed, or just use
 // type NodeType = { id: string; title: string; description?: string; group?: string | null; metadata?: NodeMetadata };
 type LinkType = { id: string; fromId: string; toId: string; label?: string; metadata?: any };
 
+const GRAPH_VIEW_STORAGE_KEY = "networkplus-graph-view";
+
 export default function Home() {
   const { resolvedTheme } = useTheme();
   const graphRef = useRef<HTMLDivElement | null>(null);
   const graphInstanceRef = useRef<any>(null);
   const asyncCleanupRef = useRef<(() => void) | null>(null);
+  const graphDataRef = useRef<{ nodes: unknown[]; links: unknown[] }>({ nodes: [], links: [] });
+  const nodeLinksRef = useRef<LinkType[]>([]);
   const [nodes, setNodes] = useState<NodeType[]>([]);
   const [links, setLinks] = useState<LinkType[]>([]);
 
@@ -98,6 +112,12 @@ export default function Home() {
 
   // Graph Settings
   const { settings } = useGraphSettings();
+  const settingsRef = useRef<GraphSettings>(settings);
+  const highlightNodesRef = useRef<Set<string>>(new Set());
+  const showDueNodesRef = useRef(false);
+  const dueNodeIdsRef = useRef<Set<string>>(new Set());
+  const resolvedThemeRef = useRef<string | undefined>(undefined);
+  const nodesRef = useRef<NodeType[]>([]);
   const CLUSTER_ENTER_ZOOM = settings.clusterThreshold;  // collapse groups when zoomed out to here
   const CLUSTER_EXIT_ZOOM = settings.clusterThreshold + 1.0;   // expand groups only when zoomed in to here (added hysteresis gap)
   const CLUSTER_MIN_SIZE = 3;      // min group members to form a cluster
@@ -346,9 +366,14 @@ export default function Home() {
         isCluster: false,
       })),
       links: nodeLinks.map((l) => {
-        const effectiveLabel = (l.metadata as any)?.rule === "shared_group" && (l.metadata as any)?.group
-          ? (l.metadata as any).group
-          : (l.label ?? "");
+        const rule = (l.metadata as any)?.rule;
+        const linkGroupLabel = (l.metadata as any)?.group;
+        const effectiveLabel =
+          typeof rule === "string" &&
+          INFERRED_AFFINITY_RULES.has(rule) &&
+          typeof linkGroupLabel === "string"
+            ? linkGroupLabel
+            : (l.label ?? "");
         return {
           source: l.fromId,
           target: l.toId,
@@ -360,24 +385,41 @@ export default function Home() {
     };
   }, [visibleNodes, nodeLinks, isClusterMode, selectedGroupFilters, groupTypeOverrides]);
 
-  // ── Create / rebuild ForceGraph when core deps change ──────────────
-  // (NOT triggered by isClusterMode — that uses data-swap below)
+  useLayoutEffect(() => {
+    settingsRef.current = settings;
+    highlightNodesRef.current = highlightNodes;
+    showDueNodesRef.current = showDueNodes;
+    dueNodeIdsRef.current = dueNodeIds;
+    resolvedThemeRef.current = resolvedTheme;
+    nodesRef.current = nodes;
+    graphDataRef.current = graphData;
+    nodeLinksRef.current = nodeLinks;
+  }, [settings, highlightNodes, showDueNodes, dueNodeIds, resolvedTheme, nodes, graphData, nodeLinks]);
+
+  const saveViewState = useCallback((k: number, x: number, y: number) => {
+    try {
+      sessionStorage.setItem(GRAPH_VIEW_STORAGE_KEY, JSON.stringify({ k, x, y }));
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, []);
+
+  // ── Create / rebuild ForceGraph only when structure or force params change ─
+  // Data, highlights, and theme update via graphData + graphStyle effects; refs keep canvas callbacks current.
   useEffect(() => {
     const el = graphRef.current;
     if (!el) return;
 
-    // Curvature helper for multi-links
-    const pairMap = new Map<string, string[]>();
-    nodeLinks.forEach(l => {
-      const [a, b] = [l.fromId, l.toId].sort();
-      const key = `${a}:${b}`;
-      if (!pairMap.has(key)) pairMap.set(key, []);
-      pairMap.get(key)?.push(l.id);
-    });
-
     const getCurvature = (link: any) => {
-      const sId = typeof link.source === 'object' ? link.source.id : link.source;
-      const tId = typeof link.target === 'object' ? link.target.id : link.target;
+      const pairMap = new Map<string, string[]>();
+      for (const l of nodeLinksRef.current) {
+        const [a, b] = [l.fromId, l.toId].sort();
+        const key = `${a}:${b}`;
+        if (!pairMap.has(key)) pairMap.set(key, []);
+        pairMap.get(key)!.push(l.id);
+      }
+      const sId = typeof link.source === "object" ? link.source.id : link.source;
+      const tId = typeof link.target === "object" ? link.target.id : link.target;
       const [id1, id2] = [sId, tId].sort();
       const key = `${id1}:${id2}`;
       const siblings = pairMap.get(key) || [];
@@ -391,15 +433,19 @@ export default function Home() {
     import("force-graph").then(({ default: ForceGraph }) => {
       myGraph = new ForceGraph(el)
         .nodeAutoColorBy("group")
-        .linkColor(() => resolvedTheme === "dark" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.2)")
-        .linkLineDash((link: any) => link.metadata?.source === "inferred" ? [4, 4] : [])
+        .linkColor(() =>
+          resolvedThemeRef.current === "dark" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.2)"
+        )
+        .linkLineDash((link: any) => (link.metadata?.source === "inferred" ? [4, 4] : []))
         .linkCurvature((link: any) => getCurvature(link))
         .nodeVal((node: any) => {
           if (node.isCluster) return Math.max(15, Math.min(node.clusterSize * 3, 50));
-          if (settings.sizeNodesByStrength === false) return 8;
+          const s = settingsRef.current;
+          if (s.sizeNodesByStrength === false) return 8;
           return Math.max(3, Math.min((node.strengthScore || 0) / 4, 15));
         })
         .nodeCanvasObject((node: any, ctx) => {
+          const themeDark = resolvedThemeRef.current === "dark";
           if (node.isCluster) {
             const memberCount = node.clusterSize || 3;
             const baseRadius = 8 + memberCount * 1.5;
@@ -429,23 +475,23 @@ export default function Home() {
 
             const fontSize = Math.max(4, Math.min(radius / 3, 8));
             ctx.font = `bold ${fontSize}px Sans-Serif`;
-            ctx.fillStyle = resolvedTheme === "dark" ? "#fff" : "#111";
+            ctx.fillStyle = themeDark ? "#fff" : "#111";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(node.name, node.x, node.y);
 
             const countFontSize = fontSize * 0.7;
             ctx.font = `${countFontSize}px Sans-Serif`;
-            ctx.fillStyle = resolvedTheme === "dark" ? "#aaa" : "#666";
+            ctx.fillStyle = themeDark ? "#aaa" : "#666";
             ctx.fillText(`${memberCount} contacts`, node.x, node.y + fontSize + 2);
             return;
           }
 
           const score = node.strengthScore || 0;
-          const size = (settings.sizeNodesByStrength === false)
-            ? 6.5
-            : (3 + (score / 100) * 12);
-          const isHighlighted = highlightNodes.has(node.id);
+          const s = settingsRef.current;
+          const size =
+            s.sizeNodesByStrength === false ? 6.5 : 3 + (score / 100) * 12;
+          const isHighlighted = highlightNodesRef.current.has(node.id);
 
           ctx.beginPath();
           ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
@@ -460,7 +506,7 @@ export default function Home() {
             ctx.stroke();
           }
 
-          if (showDueNodes && dueNodeIds.has(node.id)) {
+          if (showDueNodesRef.current && dueNodeIdsRef.current.has(node.id)) {
             ctx.beginPath();
             ctx.arc(node.x, node.y, size + 4, 0, 2 * Math.PI, false);
             ctx.strokeStyle = "#ff4444";
@@ -473,41 +519,50 @@ export default function Home() {
           const label = node.name;
           const fontSize = 3.5;
           ctx.font = `${fontSize}px Sans-Serif`;
-          ctx.fillStyle = isHighlighted ? (resolvedTheme === "dark" ? "#fff" : "#000") : (resolvedTheme === "dark" ? "#aaa" : "#666");
+          ctx.fillStyle = isHighlighted
+            ? themeDark
+              ? "#fff"
+              : "#000"
+            : themeDark
+              ? "#aaa"
+              : "#666";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(label, node.x, node.y + size + fontSize);
         })
         .linkCanvasObjectMode(() => "after")
-        .linkCanvasObject((link: any, ctx) => {
+        .linkCanvasObject(() => {
           return;
         })
         .enablePanInteraction(true)
         .enableZoomInteraction(true)
-        .onZoom((zoomParams: { k: number, x: number, y: number }) => {
+        .onZoom((zoomParams: { k: number; x: number; y: number }) => {
           setCurrentZoom(zoomParams.k);
+          saveViewState(zoomParams.k, zoomParams.x, zoomParams.y);
         })
-        .onZoomEnd((zoomParams: { k: number, x: number, y: number }) => {
+        .onZoomEnd((zoomParams: { k: number; x: number; y: number }) => {
           setCurrentZoom(zoomParams.k);
+          saveViewState(zoomParams.k, zoomParams.x, zoomParams.y);
         })
         .onNodeClick((node: any) => {
+          const clusterExit = settingsRef.current.clusterThreshold + 1.0;
           if (node.isCluster) {
             myGraph.centerAt(node.x, node.y, 1000);
-            myGraph.zoom(CLUSTER_EXIT_ZOOM + 0.5, 1500);
+            myGraph.zoom(clusterExit + 0.5, 1500);
             return;
           }
           myGraph.centerAt(node.x, node.y, 1000);
           myGraph.zoom(8, 2000);
-          const originalNode = nodes.find((n) => n.id === node.id);
+          const originalNode = nodesRef.current.find((n) => n.id === node.id);
           setSelectedNode(originalNode || null);
         })
         .onLinkClick((link: any) => {
-          if (link.id?.startsWith('cl-')) return;
+          if (link.id?.startsWith("cl-")) return;
           const fromName = link.source.name || link.source.id;
           const toName = link.target.name || link.target.id;
           setSelectedLink({ id: link.id, label: link.label, fromName, toName });
         })
-        .graphData(graphData as any);
+        .graphData(graphDataRef.current as any);
 
       // Contact spacing is controlled from Graph Settings via a single slider.
       const chargeForce = myGraph.d3Force("charge");
@@ -518,18 +573,50 @@ export default function Home() {
       if (linkForce) {
         if (typeof linkForce.distance === "function") {
           linkForce.distance((link: any) =>
-            link?.metadata?.rule === "shared_group" ? sharedGroupLinkDistance : defaultLinkDistance
+            link?.metadata?.rule &&
+            INFERRED_AFFINITY_RULES.has(String(link.metadata.rule))
+              ? sharedGroupLinkDistance
+              : defaultLinkDistance
           );
         }
         if (typeof linkForce.strength === "function") {
           linkForce.strength((link: any) =>
-            link?.metadata?.rule === "shared_group" ? sharedGroupLinkStrength : defaultLinkStrength
+            link?.metadata?.rule &&
+            INFERRED_AFFINITY_RULES.has(String(link.metadata.rule))
+              ? sharedGroupLinkStrength
+              : defaultLinkStrength
           );
         }
       }
       myGraph.d3ReheatSimulation();
 
       graphInstanceRef.current = myGraph;
+
+      const applySavedView = () => {
+        try {
+          const raw = sessionStorage.getItem(GRAPH_VIEW_STORAGE_KEY);
+          if (!raw) return;
+          const parsed = JSON.parse(raw) as { k?: number; x?: number; y?: number };
+          const { k, x, y } = parsed;
+          if (
+            typeof k === "number" &&
+            Number.isFinite(k) &&
+            typeof x === "number" &&
+            Number.isFinite(x) &&
+            typeof y === "number" &&
+            Number.isFinite(y)
+          ) {
+            myGraph.zoom(k, 0);
+            myGraph.centerAt(x, y, 0);
+            setCurrentZoom(k);
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+      requestAnimationFrame(() => {
+        requestAnimationFrame(applySavedView);
+      });
 
       // Resize graph when container size changes (e.g. mobile layout, orientation, window resize)
       const resizeObserver = new ResizeObserver(() => {
@@ -560,14 +647,10 @@ export default function Home() {
       }
       graphInstanceRef.current = null;
     };
+    // Intentionally omit nodes/links/theme/highlights: graphData + graphStyle effects update those without a full rebuild.
   }, [
-    nodes,
-    links,
+    saveViewState,
     selectedGroupFilters,
-    highlightNodes,
-    showDueNodes,
-    dueNodeIds,
-    resolvedTheme,
     chargeStrength,
     sharedGroupLinkDistance,
     defaultLinkDistance,
@@ -575,13 +658,25 @@ export default function Home() {
     defaultLinkStrength,
   ]);
 
-  // ── Swap graph data in-place when cluster mode changes ─────────────
-  // This avoids destroying/rebuilding the ForceGraph (which resets zoom).
+  // ── Push graph data in-place (preserves zoom/pan) ───────────────────
   useEffect(() => {
     const instance = graphInstanceRef.current;
     if (!instance) return;
     instance.graphData(graphData as any);
-  }, [isClusterMode, graphData]);
+  }, [graphData]);
+
+  // ── Re-apply accessors so canvas repaints when theme, highlights, or node sizing change ─
+  useEffect(() => {
+    const instance = graphInstanceRef.current;
+    if (!instance) return;
+    const dark = resolvedTheme === "dark";
+    instance.linkColor(() => (dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.2)"));
+    instance.nodeVal((node: any) => {
+      if (node.isCluster) return Math.max(15, Math.min(node.clusterSize * 3, 50));
+      if (settings.sizeNodesByStrength === false) return 8;
+      return Math.max(3, Math.min((node.strengthScore || 0) / 4, 15));
+    });
+  }, [resolvedTheme, highlightNodes, showDueNodes, dueNodeIds, settings.sizeNodesByStrength]);
 
   // Handle selected groups cleanup
   useEffect(() => {
@@ -625,10 +720,8 @@ export default function Home() {
           const updatedNode = await res.json();
           // Update nodes list
           setNodes(prev => prev.map(n => n.id === id ? updatedNode : n));
-          // Update selected node if it's the one currently open
-          if (selectedNode?.id === id) {
-            setSelectedNode(updatedNode);
-          }
+          // Only update selection if this contact is still open (avoid stale closure after close/switch)
+          setSelectedNode((prev) => (prev?.id === id ? updatedNode : prev));
         }
       } catch (e) {
         console.error(`Failed to refresh contact ${id}:`, e);
@@ -646,9 +739,7 @@ export default function Home() {
 
     // Update local state immediately
     setNodes(nodes.map(n => n.id === id ? updatedNode : n));
-    if (selectedNode?.id === id) {
-      setSelectedNode(updatedNode);
-    }
+    setSelectedNode((prev) => (prev?.id === id ? updatedNode : prev));
 
     try {
       const res = await fetch(`/api/contacts/${id}`, {
@@ -667,34 +758,27 @@ export default function Home() {
       setNodes(prev => prev.map(n => n.id === id ? updatedData : n));
 
       // If groups were updated, refresh links because the backend might have created/deleted inferred links
-      if (updates.groups) {
+      if (updates.groups || updates.profile) {
         await loadData();
       }
 
-      // Update selected node with freshest data
-      if (selectedNode?.id === id) {
-        // After loadData(), derive from the fresh nodes state rather than stale PATCH response
-        setSelectedNode(prev => {
-          // Use a functional update: we'll read freshest from the nodes set by loadData
-          return updatedData; // fallback to PATCH response; loadData's setNodes will trigger connectedNeighbors recalc via useMemo
-        });
-        // Re-fetch the individual contact to get the absolute freshest data (including links)
-        try {
-          const freshRes = await fetch(`/api/contacts/${id}`);
-          if (freshRes.ok) {
-            const freshData = await freshRes.json();
-            setSelectedNode(freshData);
-            setNodes(prev => prev.map(n => n.id === id ? freshData : n));
-          }
-        } catch { /* fallback to updatedData already set */ }
+      // Merge server PATCH + optional full refetch into selection only if this contact is still open
+      setSelectedNode((prev) => (prev?.id === id ? updatedData : prev));
+      try {
+        const freshRes = await fetch(`/api/contacts/${id}`);
+        if (freshRes.ok) {
+          const freshData = await freshRes.json();
+          setSelectedNode((prev) => (prev?.id === id ? freshData : prev));
+          setNodes((prev) => prev.map((n) => (n.id === id ? freshData : n)));
+        }
+      } catch {
+        /* keep updatedData / loadData state */
       }
     } catch (err: any) {
       console.error("Update node failed:", err);
       // Revert on error
       setNodes(previousNodes);
-      if (selectedNode?.id === id) {
-        setSelectedNode(targetNode);
-      }
+      setSelectedNode((prev) => (prev?.id === id ? targetNode : prev));
       setError(String(err?.message ?? err));
     }
   }

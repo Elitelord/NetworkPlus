@@ -13,6 +13,7 @@ export async function GET() {
     select: {
       groups: true,
       groupTypeOverrides: true,
+      inferenceIncludePriorAffiliations: true,
     },
   });
 

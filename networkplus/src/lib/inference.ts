@@ -1,163 +1,221 @@
-
 import prisma from "@lib/prisma";
+import type { Prisma } from "@prisma/client";
+import {
+  getProfileAffinities,
+  makeInferredAffinityKey,
+  inferredLinkRowToAffinityKey,
+  buildInferredLinkMetadata,
+  parseContactProfile,
+  type InferredLinkRule,
+  INFERRED_LINK_RULES,
+} from "@/lib/contact-profile";
 
 /**
- * Updates inferred links for a specific contact based on the "Shared Group" rule.
+ * Updates inferred links for a specific contact based on shared groups and profile affinities.
  */
 export async function updateInferredLinks(contactId: string) {
-    return updateInferredLinksBulk([contactId]);
+  return updateInferredLinksBulk([contactId]);
 }
 
 const INFERENCE_CHUNK_SIZE = 200;
 const INFERENCE_CREATE_BATCH_SIZE = 1000;
 
-function makeLinkKey(a: string, b: string, group: string): string {
-    // JSON tuples avoid delimiter collisions in user-defined group names (e.g. "Team:Alpha").
-    return JSON.stringify([a, b, group]);
+function isInferredRule(rule: string): rule is InferredLinkRule {
+  return (INFERRED_LINK_RULES as readonly string[]).includes(rule);
 }
 
-function parseLinkKey(linkKey: string): [string, string, string] {
-    return JSON.parse(linkKey) as [string, string, string];
+type Affinity = { rule: InferredLinkRule; key: string; label: string };
+
+function groupAffinities(groups: string[]): Affinity[] {
+  return (groups || []).map((g) => ({
+    rule: "shared_group" as const,
+    key: g,
+    label: g,
+  }));
+}
+
+function contactAffinities(
+  groups: string[],
+  profile: unknown,
+  includePriorProfile: boolean
+): Affinity[] {
+  const list: Affinity[] = groupAffinities(groups || []);
+  const parsed = parseContactProfile(profile);
+  list.push(...getProfileAffinities(parsed, includePriorProfile));
+  return list;
+}
+
+function affinityMatchKey(a: Affinity): string {
+  return `${a.rule}\0${a.key}`;
 }
 
 /**
  * Updates inferred links for multiple contacts efficiently.
- * Processes in chunks to avoid oversized transactions and DB load.
  */
 export async function updateInferredLinksBulk(contactIds: string[]) {
-    if (contactIds.length === 0) return;
+  if (contactIds.length === 0) return;
 
-    const chunks: string[][] = [];
-    for (let i = 0; i < contactIds.length; i += INFERENCE_CHUNK_SIZE) {
-        chunks.push(contactIds.slice(i, i + INFERENCE_CHUNK_SIZE));
-    }
+  const chunks: string[][] = [];
+  for (let i = 0; i < contactIds.length; i += INFERENCE_CHUNK_SIZE) {
+    chunks.push(contactIds.slice(i, i + INFERENCE_CHUNK_SIZE));
+  }
 
-    for (const chunk of chunks) {
-        await updateInferredLinksBulkChunk(chunk);
-    }
+  for (const chunk of chunks) {
+    await updateInferredLinksBulkChunk(chunk);
+  }
 }
 
 async function updateInferredLinksBulkChunk(contactIds: string[]) {
-    if (contactIds.length === 0) return;
+  if (contactIds.length === 0) return;
 
-    // 1. Fetch all involved contacts
-    const contacts = await prisma.contact.findMany({
-        where: { id: { in: contactIds } },
-        select: { id: true, groups: true, ownerId: true }
+  const contacts = await prisma.contact.findMany({
+    where: { id: { in: contactIds } },
+    select: { id: true, groups: true, profile: true, ownerId: true },
+  });
+
+  if (contacts.length === 0) return;
+
+  const ownerId = contacts[0].ownerId;
+  const allAffectedContactIds = new Set(contacts.map((c) => c.id));
+
+  const user = await prisma.user.findUnique({
+    where: { id: ownerId },
+    select: { inferenceIncludePriorAffiliations: true },
+  });
+  const includePriorProfile = user?.inferenceIncludePriorAffiliations === true;
+
+  const allOwnerContacts = await prisma.contact.findMany({
+    where: { ownerId },
+    select: { id: true, groups: true, profile: true },
+  });
+
+  const affinitiesById = new Map<string, Affinity[]>();
+  for (const c of allOwnerContacts) {
+    affinitiesById.set(
+      c.id,
+      contactAffinities(c.groups || [], c.profile, includePriorProfile)
+    );
+  }
+
+  const validLinkKeys = new Set<string>();
+
+  for (const source of contacts) {
+    const sourceAff = affinitiesById.get(source.id) || [];
+    if (sourceAff.length === 0) continue;
+
+    for (const target of allOwnerContacts) {
+      if (source.id === target.id) continue;
+      const targetAff = affinitiesById.get(target.id) || [];
+      if (targetAff.length === 0) continue;
+
+      const targetKeys = new Set(targetAff.map(affinityMatchKey));
+      for (const sa of sourceAff) {
+        if (targetKeys.has(affinityMatchKey(sa))) {
+          const [a, b] = [source.id, target.id].sort();
+          validLinkKeys.add(makeInferredAffinityKey(a, b, sa.rule, sa.key));
+        }
+      }
+    }
+  }
+
+  const existingInferred = await prisma.link.findMany({
+    where: {
+      AND: [
+        {
+          OR: [
+            { fromId: { in: Array.from(allAffectedContactIds) } },
+            { toId: { in: Array.from(allAffectedContactIds) } },
+          ],
+        },
+        {
+          OR: INFERRED_LINK_RULES.map((rule) => ({
+            metadata: { path: ["rule"], equals: rule },
+          })),
+        },
+      ],
+    },
+  });
+
+  const linksToDelete: string[] = [];
+  const existingLinkMap = new Set<string>();
+
+  for (const link of existingInferred) {
+    const tupleKey = inferredLinkRowToAffinityKey(link);
+    const isAffected =
+      allAffectedContactIds.has(link.fromId) ||
+      allAffectedContactIds.has(link.toId);
+
+    if (!isAffected) continue;
+
+    if (!tupleKey) {
+      linksToDelete.push(link.id);
+      continue;
+    }
+
+    const meta = link.metadata as { rule?: string } | null;
+    const rule = meta?.rule;
+    if (typeof rule !== "string" || !isInferredRule(rule)) {
+      linksToDelete.push(link.id);
+      continue;
+    }
+
+    if (validLinkKeys.has(tupleKey)) {
+      existingLinkMap.add(tupleKey);
+    } else {
+      linksToDelete.push(link.id);
+    }
+  }
+
+  if (linksToDelete.length > 0) {
+    await prisma.link.deleteMany({
+      where: { id: { in: linksToDelete } },
     });
+  }
 
-    if (contacts.length === 0) return;
+  const linksToCreate: {
+    fromId: string;
+    toId: string;
+    label: string;
+    weight: number;
+    metadata: Prisma.InputJsonValue;
+  }[] = [];
 
-    // group by owner to handle multi-user scenarios if necessary, 
-    // though usually one request is for one user.
-    const ownerId = contacts[0].ownerId;
-    const allAffectedContactIds = new Set(contacts.map(c => c.id));
+  for (const linkKey of validLinkKeys) {
+    if (existingLinkMap.has(linkKey)) continue;
 
-    // 2. For each contact, identify what groups they are in
-    const contactGroupsMap = new Map<string, string[]>();
-    const allGroupsInvolved = new Set<string>();
+    const parsed = JSON.parse(linkKey) as [string, string, string, string];
+    const [fromId, toId, rule, affinityKey] = parsed;
+    if (!isInferredRule(rule)) continue;
 
-    contacts.forEach(c => {
-        const gs = c.groups || [];
-        contactGroupsMap.set(c.id, gs);
-        gs.forEach(g => allGroupsInvolved.add(g));
+    const aAffs = affinitiesById.get(fromId) || [];
+    const label =
+      aAffs.find((x) => x.rule === rule && x.key === affinityKey)?.label ??
+      affinityKey;
+
+    linksToCreate.push({
+      fromId,
+      toId,
+      label,
+      weight: 1.0,
+      metadata: buildInferredLinkMetadata(rule, affinityKey, label) as Prisma.InputJsonValue,
     });
+  }
 
-    // 3. Find ALL contacts in the database that share ANY of these groups
-    // This is much faster than doing it per-contact.
-    const allGroupsArray = Array.from(allGroupsInvolved);
-    const potentialTargets = allGroupsArray.length === 0
-        ? []
-        : await prisma.contact.findMany({
-            where: {
-                ownerId: ownerId,
-                groups: { hasSome: allGroupsArray }
-            },
-            select: { id: true, groups: true }
-        });
-
-    // 4. Determine valid links that SHOULD exist
-    // Link key format: "LowID:HighID:GroupName"
-    const validLinkKeys = new Set<string>();
-
-    // We only need to check links where at least one side is in our `contactIds` list
-    for (const source of contacts) {
-        const sourceGroups = contactGroupsMap.get(source.id) || [];
-        if (sourceGroups.length === 0) continue;
-
-        for (const target of potentialTargets) {
-            if (source.id === target.id) continue;
-
-            const shared = sourceGroups.filter(g => target.groups.includes(g));
-            for (const g of shared) {
-                const [a, b] = [source.id, target.id].sort();
-                validLinkKeys.add(makeLinkKey(a, b, g));
-            }
-        }
+  if (linksToCreate.length > 0) {
+    for (let i = 0; i < linksToCreate.length; i += INFERENCE_CREATE_BATCH_SIZE) {
+      const batch = linksToCreate.slice(i, i + INFERENCE_CREATE_BATCH_SIZE);
+      await prisma.$transaction(batch.map((data) => prisma.link.create({ data })));
     }
+  }
+}
 
-    // 5. Fetch existing inferred (shared_group) links by metadata.rule, not label
-    const existingInferred = await prisma.link.findMany({
-        where: {
-            OR: [
-                { fromId: { in: Array.from(allAffectedContactIds) } },
-                { toId: { in: Array.from(allAffectedContactIds) } }
-            ],
-            metadata: { path: ["rule"], equals: "shared_group" }
-        }
-    });
-
-    // 6. Partition existing links: stay, delete, or ignore (if unrelated to our current targets)
-    const linksToDelete: string[] = [];
-    const existingLinkMap = new Set<string>(); // "LowID:HighID:GroupName"
-
-    for (const link of existingInferred) {
-        const meta = link.metadata as any;
-        const group = meta?.group;
-        const [a, b] = [link.fromId, link.toId].sort();
-        const key = typeof group === "string" ? makeLinkKey(a, b, group) : "";
-
-        // If one of the contacts is in our updated list, we must validate it
-        const isAffected = allAffectedContactIds.has(link.fromId) || allAffectedContactIds.has(link.toId);
-        
-        if (isAffected) {
-            if (group && validLinkKeys.has(key)) {
-                existingLinkMap.add(key);
-            } else {
-                linksToDelete.push(link.id);
-            }
-        }
-    }
-
-    // 7. Perform Deletions
-    if (linksToDelete.length > 0) {
-        await prisma.link.deleteMany({
-            where: { id: { in: linksToDelete } }
-        });
-    }
-
-    // 8. Create Missing Links
-    const linksToCreate = [];
-    for (const linkKey of validLinkKeys) {
-        if (existingLinkMap.has(linkKey)) continue;
-
-        const [fromId, toId, groupName] = parseLinkKey(linkKey);
-
-        linksToCreate.push({
-            fromId,
-            toId,
-            label: groupName,
-            weight: 1.0,
-            metadata: { rule: "shared_group", group: groupName, source: "inferred" }
-        });
-    }
-
-    if (linksToCreate.length > 0) {
-        for (let i = 0; i < linksToCreate.length; i += INFERENCE_CREATE_BATCH_SIZE) {
-            const batch = linksToCreate.slice(i, i + INFERENCE_CREATE_BATCH_SIZE);
-            await prisma.$transaction(
-                batch.map(data => prisma.link.create({ data }))
-            );
-        }
-    }
+/**
+ * Recompute all inferred links for every contact owned by the user (e.g. after toggling prior-affiliation inference).
+ */
+export async function updateInferredLinksForOwner(ownerId: string) {
+  const ids = await prisma.contact.findMany({
+    where: { ownerId },
+    select: { id: true },
+  });
+  await updateInferredLinksBulk(ids.map((c) => c.id));
 }

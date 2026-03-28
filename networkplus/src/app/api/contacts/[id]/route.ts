@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
-import { Platform } from "@prisma/client";
+import { Platform, Prisma } from "@prisma/client";
 import { parseJsonBody, apiError, LIMITS, clampString, clampGroupsArray } from "@/lib/api-utils";
 import { getDefaultEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
+import { mergeContactProfile, parseContactProfile } from "@/lib/contact-profile";
 
 const PLATFORM_VALUES = new Set<string>(Object.values(Platform));
 const VALID_CADENCES = new Set(["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"]);
@@ -61,6 +62,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (groupsFromBody !== undefined && group && typeof group === "string") {
             const g = clampString(group, LIMITS.groupItem);
             if (g && !groupsFromBody.includes(g)) validGroups = [...groupsFromBody, g];
+        }
+
+        let profileUpdate: object | null | undefined = undefined;
+        if (body.profile === null) {
+            profileUpdate = null;
+        } else if (body.profile !== undefined) {
+            const existingProfile = parseContactProfile(existing.profile);
+            const merged = mergeContactProfile(existingProfile, body.profile);
+            if (!merged.ok) {
+                return NextResponse.json({ error: merged.error }, { status: 400 });
+            }
+            profileUpdate = merged.profile as object;
         }
 
         const nameFromBody = body.name !== undefined ? clampString(body.name, LIMITS.name) : undefined;
@@ -130,6 +143,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             nameFromBody !== undefined ||
             description !== undefined ||
             validGroups !== undefined ||
+            profileUpdate !== undefined ||
             email !== undefined ||
             phone !== undefined ||
             commonPlatform !== undefined ||
@@ -150,6 +164,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(nameFromBody !== undefined && { name: nameFromBody }),
                 ...(description !== undefined && { description }),
                 ...(validGroups !== undefined && { groups: validGroups }),
+                ...(profileUpdate !== undefined && {
+                    profile:
+                        profileUpdate === null
+                            ? Prisma.DbNull
+                            : (profileUpdate as Prisma.InputJsonValue),
+                }),
                 ...(email !== undefined && { email }),
                 ...(phone !== undefined && { phone }),
                 ...(commonPlatform !== undefined && { commonPlatform }),
@@ -162,7 +182,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
         });
 
-        // Trigger inference
+        // Trigger inference (groups or profile affinities)
         const { updateInferredLinks } = await import("@/lib/inference");
         await updateInferredLinks(contact.id);
 

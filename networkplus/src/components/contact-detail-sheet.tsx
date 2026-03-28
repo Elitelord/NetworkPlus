@@ -25,6 +25,7 @@ type NodeData = {
     name: string;
     description?: string;
     groups?: string[];
+    profile?: ContactProfile | null;
     email?: string | null;
     phone?: string | null;
     commonPlatform?: string | null;
@@ -69,6 +70,8 @@ interface ContactDetailSheetProps {
 }
 
 import { MultiSelect } from "@/components/ui/multi-select";
+import { ContactProfileSection } from "@/components/contact-profile-section";
+import type { ContactProfile } from "@/lib/contact-profile";
 
 function GroupsEditor({
     initialGroups,
@@ -240,6 +243,14 @@ export function ContactDetailSheet({
                                         </Button>
                                     </div>
                                 )}
+
+                                <ContactProfileSection
+                                    contactId={node.id}
+                                    profile={node.profile}
+                                    onSave={async (patch) => {
+                                        await onUpdateNode(node.id, { profile: patch });
+                                    }}
+                                />
 
                                 <div className="flex items-center gap-2 mb-4">
                                     <span className="text-sm font-medium text-muted-foreground">Groups:</span>

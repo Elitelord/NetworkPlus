@@ -29,6 +29,7 @@ model User {
   lastCatchUpSentAt           DateTime?
   filterReachOutByPreferences Boolean    @default(false)
   groupTypeOverrides          Json?
+  inferenceIncludePriorAffiliations Boolean @default(false)
   accounts                    Account[]
   contacts                    Contact[]  @relation("UserContacts")
   reminders                   Reminder[]
@@ -84,6 +85,7 @@ model Contact {
   description                String?
   groups                     String[]      @default([])
   metadata                   Json?
+  profile                    Json?
   updatedAt                  DateTime      @default(now()) @updatedAt
   strengthScore              Float         @default(0)
   monthsKnown                Int           @default(0)

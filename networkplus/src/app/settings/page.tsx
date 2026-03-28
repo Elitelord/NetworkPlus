@@ -8,6 +8,7 @@ import { DeleteAccount } from "../../components/settings/delete-account"
 import { Separator } from "@/components/ui/separator"
 import { NotificationForm } from "@/components/settings/notification-form"
 import { GraphSettingsForm } from "@/components/settings/graph-settings-form"
+import { GraphInferenceSettingsForm } from "@/components/settings/graph-inference-settings-form"
 import { EstimatedFrequencyBackfill } from "@/components/settings/estimated-frequency-backfill"
 import { GroupTypeOverridesEditor } from "@/components/settings/group-type-overrides-editor"
 import { UserGroupsEditor } from "@/components/settings/user-groups-editor"
@@ -146,6 +147,13 @@ export default async function SettingsPage() {
                             </div>
                             <div className="max-w-md w-full">
                                 <GraphSettingsForm />
+                            </div>
+                            <div className="max-w-xl w-full">
+                                <GraphInferenceSettingsForm
+                                    initialIncludePriorAffiliations={
+                                        (user as any).inferenceIncludePriorAffiliations === true
+                                    }
+                                />
                             </div>
                             <Separator />
                         </section>

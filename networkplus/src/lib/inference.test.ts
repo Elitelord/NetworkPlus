@@ -5,6 +5,9 @@ vi.mock("@lib/prisma", () => ({
     contact: {
       findMany: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+    },
     link: {
       findMany: vi.fn(),
       deleteMany: vi.fn(),
@@ -19,6 +22,7 @@ import { updateInferredLinksBulk, updateInferredLinks } from "./inference";
 
 const mockPrisma = prisma as unknown as {
   contact: { findMany: ReturnType<typeof vi.fn> };
+  user: { findUnique: ReturnType<typeof vi.fn> };
   link: {
     findMany: ReturnType<typeof vi.fn>;
     deleteMany: ReturnType<typeof vi.fn>;
@@ -27,24 +31,42 @@ const mockPrisma = prisma as unknown as {
   $transaction: ReturnType<typeof vi.fn>;
 };
 
+function withProfile<T extends { id: string; groups: string[]; ownerId?: string }>(
+  rows: T[]
+) {
+  return rows.map((r) => ({
+    ...r,
+    profile: null,
+  }));
+}
+
+function ownerRows(rows: { id: string; groups: string[] }[]) {
+  return rows.map((r) => ({ ...r, profile: null }));
+}
+
 describe("updateInferredLinksBulk", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrisma.user.findUnique.mockResolvedValue({
+      inferenceIncludePriorAffiliations: false,
+    });
   });
 
   it("creates shared_group links for contacts that share groups and deletes stale shared_group links, regardless of metadata.source", async () => {
     // Two contacts share group "G1"; one has an existing shared_group link with metadata.source = 'manual'
     mockPrisma.contact.findMany
-      // First call: fetch involved contacts
-      .mockResolvedValueOnce([
-        { id: "a", groups: ["G1"], ownerId: "user1" },
-        { id: "b", groups: ["G1"], ownerId: "user1" },
-      ])
-      // Second call: fetch potential targets
-      .mockResolvedValueOnce([
-        { id: "a", groups: ["G1"] },
-        { id: "b", groups: ["G1"] },
-      ]);
+      .mockResolvedValueOnce(
+        withProfile([
+          { id: "a", groups: ["G1"], ownerId: "user1" },
+          { id: "b", groups: ["G1"], ownerId: "user1" },
+        ])
+      )
+      .mockResolvedValueOnce(
+        ownerRows([
+          { id: "a", groups: ["G1"] },
+          { id: "b", groups: ["G1"] },
+        ])
+      );
 
     // Existing inferred link between a and b (identified by metadata.rule)
     mockPrisma.link.findMany.mockResolvedValueOnce([
@@ -85,16 +107,16 @@ describe("updateInferredLinksBulk", () => {
   it("reconciles links when groups change (creates new link and deletes stale one)", async () => {
     // Contact a was in G1 with b; now moved to G2 with c
     mockPrisma.contact.findMany
-      // First call: involved contacts (only "a" is passed in)
-      .mockResolvedValueOnce([
-        { id: "a", groups: ["G2"], ownerId: "user1" },
-      ])
-      // Second call: potential targets (b in G1, c in G2)
-      .mockResolvedValueOnce([
-        { id: "a", groups: ["G2"] },
-        { id: "b", groups: ["G1"] },
-        { id: "c", groups: ["G2"] },
-      ]);
+      .mockResolvedValueOnce(
+        withProfile([{ id: "a", groups: ["G2"], ownerId: "user1" }])
+      )
+      .mockResolvedValueOnce(
+        ownerRows([
+          { id: "a", groups: ["G2"] },
+          { id: "b", groups: ["G1"] },
+          { id: "c", groups: ["G2"] },
+        ])
+      );
 
     // Existing links: one stale (a-b, G1), one missing (a-c, G2)
     mockPrisma.link.findMany.mockResolvedValueOnce([
@@ -153,16 +175,20 @@ describe("updateInferredLinksBulk", () => {
 
   it("creates links when three contacts share one group", async () => {
     mockPrisma.contact.findMany
-      .mockResolvedValueOnce([
-        { id: "a", groups: ["G1"], ownerId: "user1" },
-        { id: "b", groups: ["G1"], ownerId: "user1" },
-        { id: "c", groups: ["G1"], ownerId: "user1" },
-      ])
-      .mockResolvedValueOnce([
-        { id: "a", groups: ["G1"] },
-        { id: "b", groups: ["G1"] },
-        { id: "c", groups: ["G1"] },
-      ]);
+      .mockResolvedValueOnce(
+        withProfile([
+          { id: "a", groups: ["G1"], ownerId: "user1" },
+          { id: "b", groups: ["G1"], ownerId: "user1" },
+          { id: "c", groups: ["G1"], ownerId: "user1" },
+        ])
+      )
+      .mockResolvedValueOnce(
+        ownerRows([
+          { id: "a", groups: ["G1"] },
+          { id: "b", groups: ["G1"] },
+          { id: "c", groups: ["G1"] },
+        ])
+      );
     mockPrisma.link.findMany.mockResolvedValueOnce([]);
     mockPrisma.link.deleteMany.mockResolvedValue({ count: 0 });
     const createdLinks: any[] = [];
@@ -187,14 +213,18 @@ describe("updateInferredLinksBulk", () => {
 
   it("preserves full group names when they contain colons", async () => {
     mockPrisma.contact.findMany
-      .mockResolvedValueOnce([
-        { id: "a", groups: ["Team:Alpha"], ownerId: "user1" },
-        { id: "b", groups: ["Team:Alpha"], ownerId: "user1" },
-      ])
-      .mockResolvedValueOnce([
-        { id: "a", groups: ["Team:Alpha"] },
-        { id: "b", groups: ["Team:Alpha"] },
-      ]);
+      .mockResolvedValueOnce(
+        withProfile([
+          { id: "a", groups: ["Team:Alpha"], ownerId: "user1" },
+          { id: "b", groups: ["Team:Alpha"], ownerId: "user1" },
+        ])
+      )
+      .mockResolvedValueOnce(
+        ownerRows([
+          { id: "a", groups: ["Team:Alpha"] },
+          { id: "b", groups: ["Team:Alpha"] },
+        ])
+      );
     mockPrisma.link.findMany.mockResolvedValueOnce([]);
     mockPrisma.link.deleteMany.mockResolvedValue({ count: 0 });
 
@@ -220,7 +250,10 @@ describe("updateInferredLinksBulk", () => {
 
   it("creates no links when contact has no groups", async () => {
     mockPrisma.contact.findMany
-      .mockResolvedValueOnce([{ id: "solo", groups: [], ownerId: "user1" }]);
+      .mockResolvedValueOnce(
+        withProfile([{ id: "solo", groups: [], ownerId: "user1" }])
+      )
+      .mockResolvedValueOnce(ownerRows([{ id: "solo", groups: [] }]));
     mockPrisma.link.findMany.mockResolvedValueOnce([]);
 
     await updateInferredLinksBulk(["solo"]);
@@ -231,11 +264,15 @@ describe("updateInferredLinksBulk", () => {
 
   it("updateInferredLinks single contact delegates to bulk", async () => {
     mockPrisma.contact.findMany
-      .mockResolvedValueOnce([{ id: "x", groups: ["G1"], ownerId: "user1" }])
-      .mockResolvedValueOnce([
-        { id: "x", groups: ["G1"] },
-        { id: "y", groups: ["G1"] },
-      ]);
+      .mockResolvedValueOnce(
+        withProfile([{ id: "x", groups: ["G1"], ownerId: "user1" }])
+      )
+      .mockResolvedValueOnce(
+        ownerRows([
+          { id: "x", groups: ["G1"] },
+          { id: "y", groups: ["G1"] },
+        ])
+      );
     mockPrisma.link.findMany.mockResolvedValueOnce([]);
     const createdLinks: any[] = [];
     mockPrisma.link.create.mockImplementation(({ data }) => {

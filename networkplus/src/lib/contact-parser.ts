@@ -8,6 +8,10 @@ export type NormalizedContact = {
     phone?: string;
     group?: string;
     description?: string;
+    /** CSV columns mapped to contact profile */
+    city?: string;
+    currentCompany?: string;
+    currentSchool?: string;
     metadata?: Record<string, any>;
 };
 
@@ -64,6 +68,22 @@ const DESCRIPTION_HEADERS = new Set([
     "bio",
 ]);
 
+const CITY_HEADERS = new Set(["city", "hometown", "location"]);
+
+const CURRENT_COMPANY_HEADERS = new Set([
+    "current company",
+    "current employer",
+    "workplace",
+    "employer",
+]);
+
+const CURRENT_SCHOOL_HEADERS = new Set([
+    "current school",
+    "school",
+    "university",
+    "college",
+]);
+
 const NAME_HEADERS = new Set([
     "name",
     "full name",
@@ -96,6 +116,9 @@ const N_DESCRIPTION_HEADERS = normalizeSet(DESCRIPTION_HEADERS);
 const N_NAME_HEADERS = normalizeSet(NAME_HEADERS);
 const N_FIRST_NAME_HEADERS = normalizeSet(FIRST_NAME_HEADERS);
 const N_LAST_NAME_HEADERS = normalizeSet(LAST_NAME_HEADERS);
+const N_CITY_HEADERS = normalizeSet(CITY_HEADERS);
+const N_CURRENT_COMPANY_HEADERS = normalizeSet(CURRENT_COMPANY_HEADERS);
+const N_CURRENT_SCHOOL_HEADERS = normalizeSet(CURRENT_SCHOOL_HEADERS);
 
 // Headers we handle explicitly — everything else becomes metadata
 const KNOWN_HEADERS = new Set([
@@ -106,6 +129,9 @@ const KNOWN_HEADERS = new Set([
     ...NAME_HEADERS,
     ...FIRST_NAME_HEADERS,
     ...LAST_NAME_HEADERS,
+    ...CITY_HEADERS,
+    ...CURRENT_COMPANY_HEADERS,
+    ...CURRENT_SCHOOL_HEADERS,
 ]);
 
 const N_KNOWN_HEADERS = normalizeSet(KNOWN_HEADERS);
@@ -217,6 +243,9 @@ export function parseCSV(file: File): Promise<ParseResult> {
                             phone: keys.find(k => N_PHONE_HEADERS.has(normalize(k))),
                             group: keys.find(k => N_GROUP_HEADERS.has(normalize(k))),
                             description: keys.find(k => N_DESCRIPTION_HEADERS.has(normalize(k))),
+                            city: keys.find(k => N_CITY_HEADERS.has(normalize(k))),
+                            currentCompany: keys.find(k => N_CURRENT_COMPANY_HEADERS.has(normalize(k))),
+                            currentSchool: keys.find(k => N_CURRENT_SCHOOL_HEADERS.has(normalize(k))),
                         };
 
                         const metadataKeys = keys.filter(k => {
@@ -250,6 +279,9 @@ export function parseCSV(file: File): Promise<ParseResult> {
                                 phone: colMap.phone ? (row[colMap.phone]?.trim() || undefined) : undefined,
                                 group: colMap.group ? (row[colMap.group]?.trim() || undefined) : undefined,
                                 description: colMap.description ? (row[colMap.description]?.trim() || undefined) : undefined,
+                                city: colMap.city ? (row[colMap.city]?.trim() || undefined) : undefined,
+                                currentCompany: colMap.currentCompany ? (row[colMap.currentCompany]?.trim() || undefined) : undefined,
+                                currentSchool: colMap.currentSchool ? (row[colMap.currentSchool]?.trim() || undefined) : undefined,
                             };
 
                             const metadata: Record<string, any> = {};

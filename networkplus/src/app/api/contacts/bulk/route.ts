@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
-import { Platform } from "@prisma/client";
+import { Platform, Prisma } from "@prisma/client";
 import { parseJsonBody, apiError, checkRateLimit, getRateLimitId, RATE_LIMITS, LIMITS, clampGroupsArray } from "@/lib/api-utils";
+import { mergeContactProfile, parseContactProfile } from "@/lib/contact-profile";
 import { getDefaultEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
 import type { GroupType } from "@/lib/group-type-classifier";
 
@@ -37,7 +38,7 @@ export async function PATCH(req: Request) {
             );
         }
 
-        const validActions = ["add_group", "remove_group", "set_estimated_frequency", "clear_estimated_frequency", "backfill_estimated_frequency"];
+        const validActions = ["add_group", "remove_group", "set_estimated_frequency", "clear_estimated_frequency", "backfill_estimated_frequency", "merge_profile"];
         if (typeof action !== "string" || !validActions.includes(action)) {
             return NextResponse.json({ error: "Invalid action" }, { status: 400 });
         }
@@ -145,6 +146,40 @@ export async function PATCH(req: Request) {
                 updatedCount,
                 skippedCount: (contactIds as string[]).length - updatedCount,
             });
+        }
+
+        // ─── Merge profile patch into many contacts ─────────────────────
+        if (action === "merge_profile") {
+            const profilePatch = body.profile;
+            if (profilePatch === undefined || profilePatch === null || typeof profilePatch !== "object" || Array.isArray(profilePatch)) {
+                return NextResponse.json({ error: "profile object is required" }, { status: 400 });
+            }
+
+            const contactsForProfile = await prisma.contact.findMany({
+                where: { id: { in: contactIds as string[] }, ownerId: userId },
+                select: { id: true, profile: true },
+            });
+
+            if (contactsForProfile.length === 0) {
+                return NextResponse.json({ error: "No valid contacts found" }, { status: 404 });
+            }
+
+            for (const c of contactsForProfile) {
+                const existing = parseContactProfile(c.profile);
+                const merged = mergeContactProfile(existing, profilePatch);
+                if (!merged.ok) {
+                    return NextResponse.json({ error: merged.error }, { status: 400 });
+                }
+                await prisma.contact.update({
+                    where: { id: c.id },
+                    data: { profile: merged.profile as Prisma.InputJsonValue },
+                });
+            }
+
+            const { updateInferredLinksBulk } = await import("@/lib/inference");
+            await updateInferredLinksBulk(contactsForProfile.map((c) => c.id));
+
+            return NextResponse.json({ success: true, updatedCount: contactsForProfile.length });
         }
 
         // ─── Group actions ───────────────────────────────────────────────
