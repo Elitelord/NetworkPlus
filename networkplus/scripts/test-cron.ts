@@ -1,5 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-import axios from "axios";
 
 const prisma = new PrismaClient();
 
@@ -37,9 +36,9 @@ async function main() {
     // 3. Call the API route
     console.log("Triggering cron API route...");
     try {
-        // Assuming running locally on port 3000
-        const response = await axios.get("http://localhost:3000/api/cron/process-notifications");
-        console.log("API Response:", response.data);
+        const response = await fetch("http://localhost:3000/api/cron/process-notifications");
+        const data = await response.json();
+        console.log("API Response:", data);
     } catch (error) {
         console.error("API Call failed:", error);
     }

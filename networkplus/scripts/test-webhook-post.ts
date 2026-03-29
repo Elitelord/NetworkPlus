@@ -1,4 +1,3 @@
-import axios from "axios";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -12,24 +11,27 @@ async function main() {
 
     console.log("Triggering POST to process-notifications route...");
     try {
-        const response = await axios.post(
+        const response = await fetch(
             "http://localhost:3000/api/cron/process-notifications",
-            {},
             {
+                method: "POST",
                 headers: {
-                    Authorization: `Bearer ${cronSecret}`
-                }
+                    Authorization: `Bearer ${cronSecret}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({}),
             }
         );
-        console.log("Success! Response:");
-        console.log(response.data);
-    } catch (error: any) {
-        if (error.response) {
-            console.error(`Error: ${error.response.status} ${error.response.statusText}`);
-            console.error(error.response.data);
+        const data = await response.json();
+        if (!response.ok) {
+            console.error(`Error: ${response.status} ${response.statusText}`);
+            console.error(data);
         } else {
-            console.error("Failed to make request:", error.message);
+            console.log("Success! Response:");
+            console.log(data);
         }
+    } catch (error: any) {
+        console.error("Failed to make request:", error.message);
     }
 }
 

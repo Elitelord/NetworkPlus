@@ -117,13 +117,17 @@ export async function POST(req: Request) {
 
         const rawMessages: RawMessage[] = [];
 
-        // --- Fetch full message details ---
-        for (const msgObj of messagesToFetch) {
+        const extractEmail = (str: string) => {
+            const match = str.match(/<([^>]+)>/);
+            return (match ? match[1] : str).trim().toLowerCase();
+        };
+
+        const processMessage = async (msgObj: any) => {
             const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgObj.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
 
-            if (!msgRes.ok) continue;
+            if (!msgRes.ok) return [];
 
             const msgData = await msgRes.json();
             const headers = msgData.payload?.headers || [];
@@ -136,26 +140,17 @@ export async function POST(req: Request) {
                 if (h.name.toLowerCase() === "to") toHeader = h.value;
             }
 
-            // Extract mere email strings from e.g. "John Doe <john@doe.com>"
-            const extractEmail = (str: string) => {
-                const match = str.match(/<([^>]+)>/);
-                return (match ? match[1] : str).trim().toLowerCase();
-            };
-
             const fromEmail = extractEmail(fromHeader);
             const toEmails = toHeader.split(",").map(extractEmail);
 
             const internalDate = parseInt(msgData.internalDate, 10);
-            if (isNaN(internalDate)) continue;
+            if (isNaN(internalDate)) return [];
 
             const date = new Date(internalDate);
             const threadId = msgData.threadId;
 
-            // Determine direction and contact matching
-            // We check only ONE primary contact involved to keep it simple, OR create multiple Interactions per contact involved.
-            // Let's create an Interaction entry for EVERY mapped contact in this email.
             const relatedEmails = new Set<string>();
-            let direction: "INBOUND" | "OUTBOUND" = "INBOUND"; // Default
+            let direction: "INBOUND" | "OUTBOUND" = "INBOUND";
 
             if (fromEmail === userEmail?.toLowerCase()) {
                 direction = "OUTBOUND";
@@ -163,13 +158,13 @@ export async function POST(req: Request) {
             } else {
                 direction = "INBOUND";
                 relatedEmails.add(fromEmail);
-                // CC/To emails could also yield other mutual contacts, but generally From is the contact.
             }
 
+            const results: RawMessage[] = [];
             for (const email of relatedEmails) {
                 const contactId = contactEmailMap.get(email);
                 if (contactId) {
-                    rawMessages.push({
+                    results.push({
                         id: msgData.id,
                         threadId,
                         platform: "EMAIL",
@@ -179,6 +174,17 @@ export async function POST(req: Request) {
                         content: msgData.snippet || undefined,
                     });
                 }
+            }
+            return results;
+        };
+
+        // Fetch messages in batches of 10 for controlled concurrency
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < messagesToFetch.length; i += BATCH_SIZE) {
+            const batch = messagesToFetch.slice(i, i + BATCH_SIZE);
+            const results = await Promise.all(batch.map(processMessage));
+            for (const msgs of results) {
+                rawMessages.push(...msgs);
             }
         }
 
@@ -245,7 +251,7 @@ export async function POST(req: Request) {
         const { recalculateContactScore } = await import("@/lib/strength-scoring");
         const affectedContactIds = new Set(sessions.map(s => s.contactId));
 
-        for (const cId of affectedContactIds) {
+        await Promise.all(Array.from(affectedContactIds).map(async (cId) => {
             const latestInteraction = await prisma.interaction.findFirst({
                 where: { contacts: { some: { id: cId } } },
                 orderBy: { date: "desc" },
@@ -263,7 +269,7 @@ export async function POST(req: Request) {
             }
 
             await recalculateContactScore(cId);
-        }
+        }));
 
         return NextResponse.json({ message: "Gmail sync complete", importedSessions });
 

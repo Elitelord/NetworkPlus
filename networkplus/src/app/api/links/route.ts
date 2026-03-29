@@ -44,9 +44,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Label must be 500 characters or less" }, { status: 400 });
     }
 
-    // Validate that contacts exist AND belong to user
-    const c1 = await prisma.contact.findFirst({ where: { id: fromId, ownerId: session.user.id } });
-    const c2 = await prisma.contact.findFirst({ where: { id: toId, ownerId: session.user.id } });
+    const [c1, c2] = await Promise.all([
+      prisma.contact.findFirst({ where: { id: fromId, ownerId: session.user.id }, select: { id: true } }),
+      prisma.contact.findFirst({ where: { id: toId, ownerId: session.user.id }, select: { id: true } }),
+    ]);
 
     if (!c1 || !c2) {
       return NextResponse.json({ error: "Source or target contact not found or unauthorized" }, { status: 400 });

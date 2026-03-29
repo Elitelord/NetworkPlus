@@ -92,38 +92,23 @@ export default function CalendarPage() {
     const fetchInteractions = useCallback(async () => {
         setLoadingInteractions(true);
         try {
-            // Fetch all interactions (we'll filter by month client-side)
-            const res = await fetch("/api/contacts", { credentials: "include" });
-            if (!res.ok) return;
-            const contactsData: any[] = await res.json();
-            setContacts(contactsData.map((c: any) => ({ id: c.id, name: c.name, email: c.email })));
+            const [contactsRes, interactionsRes] = await Promise.all([
+                fetch("/api/contacts", { credentials: "include" }),
+                fetch("/api/interactions/all", { credentials: "include" }),
+            ]);
 
-            // Fetch ALL interactions from all contacts in the visible range
-            const allInteractions: Interaction[] = [];
-            for (const contact of contactsData) {
-                const iRes = await fetch(`/api/contacts/${contact.id}/interactions`);
-                if (iRes.ok) {
-                    const data = await iRes.json();
-                    for (const interaction of data) {
-                        // Avoid duplicates
-                        if (!allInteractions.some(i => i.id === interaction.id)) {
-                            allInteractions.push({
-                                ...interaction,
-                                contacts: [{ id: contact.id, name: contact.name }],
-                            });
-                        } else {
-                            // Merge contact info
-                            const existing = allInteractions.find(i => i.id === interaction.id);
-                            if (existing && existing.contacts) {
-                                if (!existing.contacts.some(c => c.id === contact.id)) {
-                                    existing.contacts.push({ id: contact.id, name: contact.name });
-                                }
-                            }
-                        }
-                    }
-                }
+            if (contactsRes.ok) {
+                const contactsData: any[] = await contactsRes.json();
+                setContacts(contactsData.map((c: any) => ({ id: c.id, name: c.name, email: c.email })));
             }
-            setInteractions(allInteractions);
+
+            if (interactionsRes.ok) {
+                const data: any[] = await interactionsRes.json();
+                setInteractions(data.map((i: any) => ({
+                    ...i,
+                    contacts: i.contacts || [],
+                })));
+            }
         } catch (err) {
             console.error("Failed to fetch interactions:", err);
         } finally {

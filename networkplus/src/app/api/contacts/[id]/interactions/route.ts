@@ -15,6 +15,10 @@ export async function GET(
         //     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         // }
 
+        const url = new URL(req.url);
+        const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 200);
+        const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+
         const interactions = await prisma.interaction.findMany({
             where: {
                 contacts: {
@@ -24,6 +28,8 @@ export async function GET(
             orderBy: {
                 date: "desc",
             },
+            take: limit,
+            skip: offset,
         });
 
         return NextResponse.json(interactions);

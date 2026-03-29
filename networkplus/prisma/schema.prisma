@@ -52,6 +52,7 @@ model Account {
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId, provider])
 }
 
 model Session {
@@ -60,6 +61,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model VerificationToken {
@@ -100,6 +103,8 @@ model Contact {
   incoming                   Link[]        @relation("to")
   Reminder                   Reminder[]
   interactions               Interaction[] @relation("ContactToInteraction")
+
+  @@index([ownerId])
 }
 
 model Relationship {
@@ -110,6 +115,9 @@ model Relationship {
   notes      String?
   createdAt  DateTime  @default(now())
   Contact    Contact[]
+
+  @@index([contactAId])
+  @@index([contactBId])
 }
 
 model Interaction {
@@ -136,6 +144,11 @@ model Interaction {
   parentInteraction   Interaction?  @relation("RecurringInstances", fields: [parentInteractionId], references: [id])
   recurringInstances  Interaction[] @relation("RecurringInstances")
   contacts            Contact[]     @relation("ContactToInteraction")
+
+  @@index([parentInteractionId])
+  @@index([threadId])
+  @@index([calendarEventId])
+  @@index([date])
 }
 
 model Reminder {
@@ -148,6 +161,9 @@ model Reminder {
   createdAt   DateTime @default(now())
   contact     Contact? @relation(fields: [contactId], references: [id])
   user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([contactId])
 }
 
 model Link {
@@ -161,6 +177,9 @@ model Link {
   updatedAt DateTime @updatedAt
   from      Contact  @relation("from", fields: [fromId], references: [id])
   to        Contact  @relation("to", fields: [toId], references: [id])
+
+  @@index([fromId])
+  @@index([toId])
 }
 
 enum Category {

@@ -1,20 +1,21 @@
 "use client";
-import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 
 import { DueSoonList } from "@/components/DueSoonList";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { ContactImportModal } from "@/components/contact-import-modal";
-import { LinkedInImportModal } from "@/components/linkedin-import-modal";
-import { BulkEditModal } from "@/components/bulk-edit-modal";
-import { ContactDetailSheet } from "@/components/contact-detail-sheet";
-import { EditLinkDialog } from "@/components/edit-link-dialog";
-import { AddContactModal } from "@/components/add-contact-modal";
-import { AddLinkModal } from "@/components/add-link-modal";
-import { ReachOutModal } from "@/components/reach-out-modal";
-import { MultiSelect } from "@/components/ui/multi-select";
 import { GraphZoomControls } from "@/components/graph-zoom-controls";
 import { GraphLegendPanel } from "@/components/graph-legend-panel";
+
+const ContactImportModal = dynamic(() => import("@/components/contact-import-modal").then(m => ({ default: m.ContactImportModal })), { ssr: false });
+const LinkedInImportModal = dynamic(() => import("@/components/linkedin-import-modal").then(m => ({ default: m.LinkedInImportModal })), { ssr: false });
+const BulkEditModal = dynamic(() => import("@/components/bulk-edit-modal").then(m => ({ default: m.BulkEditModal })), { ssr: false });
+const ContactDetailSheet = dynamic(() => import("@/components/contact-detail-sheet").then(m => ({ default: m.ContactDetailSheet })), { ssr: false });
+const EditLinkDialog = dynamic(() => import("@/components/edit-link-dialog").then(m => ({ default: m.EditLinkDialog })), { ssr: false });
+const AddContactModal = dynamic(() => import("@/components/add-contact-modal").then(m => ({ default: m.AddContactModal })), { ssr: false });
+const AddLinkModal = dynamic(() => import("@/components/add-link-modal").then(m => ({ default: m.AddLinkModal })), { ssr: false });
+const ReachOutModal = dynamic(() => import("@/components/reach-out-modal").then(m => ({ default: m.ReachOutModal })), { ssr: false });
 import {
   Dialog,
   DialogContent,
@@ -420,19 +421,26 @@ export default function Home() {
     const el = graphRef.current;
     if (!el) return;
 
+    let cachedPairMap: Map<string, string[]> | null = null;
+    let cachedPairMapVersion = -1;
+
     const getCurvature = (link: any) => {
-      const pairMap = new Map<string, string[]>();
-      for (const l of nodeLinksRef.current) {
-        const [a, b] = [l.fromId, l.toId].sort();
-        const key = `${a}:${b}`;
-        if (!pairMap.has(key)) pairMap.set(key, []);
-        pairMap.get(key)!.push(l.id);
+      const currentLinks = nodeLinksRef.current;
+      if (!cachedPairMap || cachedPairMapVersion !== currentLinks.length) {
+        cachedPairMap = new Map<string, string[]>();
+        for (const l of currentLinks) {
+          const [a, b] = [l.fromId, l.toId].sort();
+          const key = `${a}:${b}`;
+          if (!cachedPairMap.has(key)) cachedPairMap.set(key, []);
+          cachedPairMap.get(key)!.push(l.id);
+        }
+        cachedPairMapVersion = currentLinks.length;
       }
       const sId = typeof link.source === "object" ? link.source.id : link.source;
       const tId = typeof link.target === "object" ? link.target.id : link.target;
       const [id1, id2] = [sId, tId].sort();
       const key = `${id1}:${id2}`;
-      const siblings = pairMap.get(key) || [];
+      const siblings = cachedPairMap.get(key) || [];
       const index = siblings.indexOf(link.id);
       const count = siblings.length;
       if (count <= 1) return 0;
@@ -663,10 +671,10 @@ export default function Home() {
       }
       graphInstanceRef.current = null;
     };
-    // Intentionally omit nodes/links/theme/highlights: graphData + graphStyle effects update those without a full rebuild.
+    // Intentionally omit nodes/links/theme/highlights/selectedGroupFilters:
+    // graphData + graphStyle effects update those without a full rebuild.
   }, [
     saveViewState,
-    selectedGroupFilters,
     chargeStrength,
     sharedGroupLinkDistance,
     defaultLinkDistance,
@@ -746,21 +754,16 @@ export default function Home() {
   }
 
   async function updateNode(id: string, updates: Partial<NodeType>) {
-    // Optimistic update
-    const previousNodes = [...nodes];
     const targetNode = nodes.find(n => n.id === id);
     if (!targetNode) return;
 
-    // Do not optimistically set `profile` directly if it's a deep patch, but merge top-level if possible 
-    // to avoid flickering in the UI while waiting for the server response.
     let updatedProfile = targetNode.profile;
     if (updates.profile && typeof updates.profile === "object") {
       updatedProfile = { ...(targetNode.profile || {}), ...updates.profile } as ContactProfile;
     }
     const updatedNode = { ...targetNode, ...updates, profile: updatedProfile };
 
-    // Update local state immediately
-    setNodes(nodes.map(n => n.id === id ? updatedNode : n));
+    setNodes(prev => prev.map(n => n.id === id ? updatedNode : n));
     setSelectedNode((prev) => (prev?.id === id ? updatedNode : prev));
 
     try {
@@ -789,14 +792,16 @@ export default function Home() {
       setNodes(prev => prev.map(n => n.id === id ? updatedData : n));
       setSelectedNode((prev) => (prev?.id === id ? updatedData : prev));
 
-      // Refresh graph in the background (inference runs after response; links arrive shortly after)
+      // Only re-fetch links when groups/profile change (inference may create new links)
       if (updates.groups || updates.profile) {
-        void loadData();
+        fetch("/api/links", { credentials: "include" })
+          .then(res => res.ok ? res.json() : [])
+          .then(data => setLinks(Array.isArray(data) ? data : []))
+          .catch(err => console.error("Failed to refresh links:", err));
       }
     } catch (err: any) {
       console.error("Update node failed:", err);
-      // Revert on error
-      setNodes(previousNodes);
+      setNodes(prev => prev.map(n => n.id === id ? targetNode : n));
       setSelectedNode((prev) => (prev?.id === id ? targetNode : prev));
       setError(String(err?.message ?? err));
       throw err;
@@ -811,7 +816,8 @@ export default function Home() {
         body: JSON.stringify({ label }),
       });
       if (!res.ok) throw new Error("Update failed");
-      await loadData();
+      const updated = await res.json();
+      setLinks(prev => prev.map(l => l.id === id ? updated : l));
     } catch (err: any) {
       console.error(err);
       setError("Failed to update link");
@@ -826,7 +832,6 @@ export default function Home() {
       if (!res.ok) throw new Error("Delete failed");
       setSelectedLink(null);
       setLinks((prev) => prev.filter((l) => l.id !== id));
-      loadData().catch((err) => console.error("Refresh after delete failed:", err));
     } catch (err: any) {
       console.error(err);
       setError("Failed to delete link");
@@ -1107,24 +1112,7 @@ export default function Home() {
       <ContactDetailSheet
         open={!!selectedNode}
         onOpenChange={(open) => !open && setSelectedNode(null)}
-        node={selectedNode ? {
-          id: selectedNode.id,
-          name: selectedNode.name,
-          description: selectedNode.description || "",
-          groups: selectedNode.groups || [],
-          email: selectedNode.email || "",
-          phone: selectedNode.phone || "",
-          instagram: selectedNode.instagram || "",
-          commonPlatform: selectedNode.commonPlatform || "",
-          interactions: selectedNode.interactions,
-          lastInteractionAt: selectedNode.lastInteractionAt,
-          strengthScore: selectedNode.strengthScore,
-          monthsKnown: selectedNode.monthsKnown,
-          estimatedFrequencyCount: selectedNode.estimatedFrequencyCount,
-          estimatedFrequencyCadence: selectedNode.estimatedFrequencyCadence,
-          estimatedFrequencyPlatform: selectedNode.estimatedFrequencyPlatform,
-          estimatedFrequencyIsAuto: selectedNode.estimatedFrequencyIsAuto,
-        } : null}
+        node={selectedNode}
         groups={groups}
         dueNodeIds={dueNodeIds}
         onLogInteraction={handleInteractionLogged}

@@ -146,13 +146,17 @@ export function GraphLegendPanel({
         [onFocusNode]
     );
 
-    // Count contacts per group
-    const groupCounts = groups.reduce<Record<string, number>>((acc, g) => {
-        acc[g] = nodes.filter(
-            (n) => n.groups?.includes(g)
-        ).length;
-        return acc;
-    }, {});
+    const groupCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        for (const node of nodes) {
+            if (node.groups) {
+                for (const g of node.groups) {
+                    counts[g] = (counts[g] || 0) + 1;
+                }
+            }
+        }
+        return counts;
+    }, [nodes]);
 
     return (
         <div id="tour-legend" className={cn("absolute bottom-4 left-3 sm:bottom-6 sm:left-6 z-10 flex flex-col items-start gap-2", className)}>
