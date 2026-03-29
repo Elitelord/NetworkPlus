@@ -52,6 +52,7 @@ export function GraphLegendPanel({
     const [activeTab, setActiveTab] = useState<TabId>("individual");
     const [individualSearch, setIndividualSearch] = useState("");
     const [groupSearch, setGroupSearch] = useState("");
+    const [customGroupInput, setCustomGroupInput] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Individual search results
@@ -136,7 +137,17 @@ export function GraphLegendPanel({
     const clearAllFilters = useCallback(() => {
         onGroupFiltersChange([]);
         setGroupSearch("");
+        setCustomGroupInput("");
     }, [onGroupFiltersChange]);
+
+    const addCustomGroupFilter = useCallback(() => {
+        const name = customGroupInput.trim();
+        if (!name) return;
+        if (!selectedGroupFilters.includes(name)) {
+            onGroupFiltersChange([...selectedGroupFilters, name]);
+        }
+        setCustomGroupInput("");
+    }, [customGroupInput, selectedGroupFilters, onGroupFiltersChange]);
 
     const handleNodeSelect = useCallback(
         (nodeId: string) => {
@@ -204,7 +215,7 @@ export function GraphLegendPanel({
                 </div>
 
                 {/* Tab Content */}
-                <div className="p-3">
+                <div className="min-w-0 overflow-x-hidden p-3">
                     {activeTab === "individual" ? (
                         /* Individual Search Tab */
                         <div>
@@ -330,10 +341,44 @@ export function GraphLegendPanel({
                                         </button>
                                     ))
                                 ) : (
-                                    <div className="px-3 py-3 text-sm text-muted-foreground text-center">
-                                        {groups.length === 0
-                                            ? "No groups yet"
-                                            : "No groups match your search"}
+                                    <div className="px-3 py-3 text-sm text-muted-foreground text-center space-y-2">
+                                        <p>
+                                            {groups.length === 0
+                                                ? "No groups yet"
+                                                : "No groups match your search"}
+                                        </p>
+                                        {groups.length === 0 && (
+                                            <div className="flex flex-col gap-2 pt-1 text-left">
+                                                <label className="text-[11px] text-muted-foreground">
+                                                    Add a filter by name (e.g. before you tag contacts):
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={customGroupInput}
+                                                        onChange={(e) => setCustomGroupInput(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter") {
+                                                                e.preventDefault();
+                                                                addCustomGroupFilter();
+                                                            }
+                                                        }}
+                                                        placeholder="Group name"
+                                                        className="flex-1 min-w-0 py-1.5 px-2 text-sm border rounded-md bg-background"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="secondary"
+                                                        className="shrink-0 h-8"
+                                                        disabled={!customGroupInput.trim()}
+                                                        onClick={addCustomGroupFilter}
+                                                    >
+                                                        Add
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

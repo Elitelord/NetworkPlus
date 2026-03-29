@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -155,6 +155,14 @@ export function EditNodeDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [freqEnabled, groupTypeOverrides]);
 
+    const groupMultiSelectOptions = useMemo(() => {
+        const s = new Set<string>();
+        for (const g of groups) if (g) s.add(g);
+        for (const g of userGroups) if (g) s.add(g);
+        for (const g of formData.groups || []) if (g) s.add(g);
+        return Array.from(s).sort((a, b) => a.localeCompare(b));
+    }, [groups, userGroups, formData.groups]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!node) return;
@@ -270,7 +278,7 @@ export function EditNodeDialog({
                     <div className="border rounded-lg p-3 space-y-3">
                         <div className="text-sm font-medium">Groups</div>
                         <MultiSelect
-                            options={groups}
+                            options={groupMultiSelectOptions}
                             selected={formData.groups || []}
                             onChange={handleGroupsChange}
                             placeholder="Select groups..."

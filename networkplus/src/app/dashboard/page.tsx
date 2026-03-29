@@ -247,6 +247,14 @@ export default function Home() {
     return Array.from(s).sort();
   }, [nodes]);
 
+  /** Contact tags plus profile groups so pickers list names before any contact uses them. */
+  const groupSelectOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const g of groups) if (g) s.add(g);
+    for (const g of userGroups) if (g) s.add(g);
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [groups, userGroups]);
+
   // ── Compute visible nodes/links ─────────────────────────────────────
   const { visibleNodes, nodeLinks } = useMemo(() => {
     const vis = nodes.filter((n) => {
@@ -704,11 +712,11 @@ export default function Home() {
 
   // Handle selected groups cleanup
   useEffect(() => {
-    const valid = selectedGroupFilters.filter(g => groups.includes(g));
+    const valid = selectedGroupFilters.filter(g => groupSelectOptions.includes(g));
     if (valid.length !== selectedGroupFilters.length) {
       setSelectedGroupFilters(valid);
     }
-  }, [groups, selectedGroupFilters]);
+  }, [groupSelectOptions, selectedGroupFilters]);
 
   async function handleInteractionLogged(contactIds: string[]) {
     // Optimistic update: Remove from due list and highlights immediately
@@ -838,6 +846,50 @@ export default function Home() {
     }
   }
 
+  async function deleteContact(id: string) {
+    const linkIdsInvolved = new Set(
+      links.filter((l) => l.fromId === id || l.toId === id).map((l) => l.id)
+    );
+    try {
+      const res = await fetch(`/api/contacts/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        let detail = `Delete failed (${res.status})`;
+        try {
+          const errBody = await res.json();
+          if (errBody && typeof errBody.error === "string") detail = errBody.error;
+        } catch {
+          /* ignore */
+        }
+        throw new Error(detail);
+      }
+      setNodes((prev) => prev.filter((n) => n.id !== id));
+      setLinks((prev) => prev.filter((l) => !linkIdsInvolved.has(l.id)));
+      setSelectedLink((prev) => (prev && linkIdsInvolved.has(prev.id) ? null : prev));
+      setSelectedNode(null);
+      setHighlightNodes((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setDueNodeIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setDueContacts((prev) => prev.filter((c) => c.id !== id));
+      setReachOutContact((c) => (c?.id === id ? null : c));
+      setReachOutPreselectedIds((ids) => {
+        if (!ids) return null;
+        const next = ids.filter((x) => x !== id);
+        return next.length ? next : null;
+      });
+    } catch (err: unknown) {
+      console.error(err);
+      setError(String((err as Error)?.message ?? err));
+      throw err;
+    }
+  }
+
   const focusNode = (nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId);
     if (node) {
@@ -926,7 +978,7 @@ export default function Home() {
           </div>
           <BulkEditModal
             contacts={nodes}
-            allGroups={groups}
+            allGroups={groupSelectOptions}
             initialGroupFilter={selectedGroupFilters}
             onSuccess={() => loadData()}
             onOpenReachOutForLog={(ids) => {
@@ -940,7 +992,7 @@ export default function Home() {
       <div className="flex flex-col gap-3 p-4 border rounded-xl bg-card/50 shadow-sm">
         <h3 className="font-semibold text-sm px-1 flex items-center gap-2">Management</h3>
         <div className="flex flex-col gap-2">
-          <AddContactModal groups={groups} onSuccess={loadData} />
+          <AddContactModal groups={groupSelectOptions} onSuccess={loadData} />
           <AddLinkModal nodes={nodes} links={links} onSuccess={loadData} />
         </div>
       </div>
@@ -1068,7 +1120,7 @@ export default function Home() {
         <GraphLegendPanel
           className="pointer-events-auto"
           nodes={nodes}
-          groups={groups}
+          groups={groupSelectOptions}
           selectedGroupFilters={selectedGroupFilters}
           onGroupFiltersChange={setSelectedGroupFilters}
           onFocusNode={focusNode}
@@ -1113,7 +1165,7 @@ export default function Home() {
         open={!!selectedNode}
         onOpenChange={(open) => !open && setSelectedNode(null)}
         node={selectedNode}
-        groups={groups}
+        groups={groupSelectOptions}
         dueNodeIds={dueNodeIds}
         onLogInteraction={handleInteractionLogged}
         onOpenReachOutForLog={(ids) => {
@@ -1121,6 +1173,7 @@ export default function Home() {
           setReachOutInitialTab("other");
         }}
         onUpdateNode={updateNode}
+        onDeleteContact={deleteContact}
         onFocusNode={focusNode}
         connectedNeighbors={connectedNeighbors}
         groupTypeOverrides={groupTypeOverrides}

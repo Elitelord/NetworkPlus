@@ -73,31 +73,33 @@ export function MultiSelect({
             : "flex-wrap";
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover modal open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className={cn("w-full justify-between h-auto min-h-10", className)}
+                    className={cn("w-full min-w-0 justify-between h-auto min-h-10 gap-2", className)}
                 >
-                    <div className={cn("flex gap-1 items-center", selectedContainerClass)}>
+                    <div className={cn("flex gap-1 items-center min-w-0 flex-1", selectedContainerClass)}>
                         {selected.length === 0 && (
-                            <span className="text-muted-foreground font-normal">{placeholder}</span>
+                            <span className="text-muted-foreground font-normal truncate text-left">{placeholder}</span>
                         )}
                         {selected.map((option) => (
                             <Badge
                                 key={option}
                                 variant="secondary"
-                                className="mr-1 mb-1 hover:bg-secondary/80"
+                                className="mr-1 mb-1 max-w-[min(14rem,calc(100%-0.25rem))] min-w-0 shrink-0 justify-start gap-1 hover:bg-secondary/80"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleUnselect(option);
                                 }}
                             >
-                                {renderSelectedItem ? renderSelectedItem(option) : option}
+                                <span className="min-w-0 flex-1 truncate text-left font-medium">
+                                    {renderSelectedItem ? renderSelectedItem(option) : option}
+                                </span>
                                 <div
-                                    className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
+                                    className="shrink-0 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter") {
                                             handleUnselect(option);
@@ -118,13 +120,16 @@ export function MultiSelect({
                             </Badge>
                         ))}
                     </div>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-full p-0" align="start">
-                <Command>
-                    <CommandInput
-                        placeholder="Search or create group..."
+            <PopoverContent
+                className="min-w-0 p-0 w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)]"
+                align="start"
+            >
+                <Command className="max-w-full overflow-hidden">
+                        <CommandInput
+                        placeholder={options.length === 0 && creatable ? "Type a new group name..." : "Search or create group..."}
                         value={inputValue}
                         onValueChange={setInputValue}
                     />
@@ -143,6 +148,10 @@ export function MultiSelect({
                                     <Plus className="size-4" />
                                     Create "{inputValue}"
                                 </div>
+                            ) : creatable && options.length === 0 ? (
+                                <span className="text-muted-foreground">
+                                    Type a group name above to create your first one.
+                                </span>
                             ) : (
                                 "No groups found."
                             )}
@@ -152,6 +161,7 @@ export function MultiSelect({
                                 <CommandItem
                                     key={option}
                                     value={option}
+                                    className="min-w-0"
                                     onSelect={() => {
                                         handleSelect(option);
                                         setInputValue("");
@@ -159,11 +169,13 @@ export function MultiSelect({
                                 >
                                     <Check
                                         className={cn(
-                                            "mr-2 h-4 w-4",
+                                            "mr-2 h-4 w-4 shrink-0",
                                             selected.includes(option) ? "opacity-100" : "opacity-0"
                                         )}
                                     />
-                                    {renderOption ? renderOption(option) : option}
+                                    <span className="min-w-0 truncate">
+                                        {renderOption ? renderOption(option) : option}
+                                    </span>
                                 </CommandItem>
                             ))}
                             {creatable && inputValue.trim() !== "" && !availableOptions.some(o => o.toLowerCase() === inputValue.trim().toLowerCase()) && !selected.some(s => s.toLowerCase() === inputValue.trim().toLowerCase()) && (

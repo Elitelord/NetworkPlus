@@ -30,6 +30,7 @@ model User {
   groupTypeOverrides                Json?
   groups                            String[]   @default([])
   inferenceIncludePriorAffiliations Boolean    @default(false)
+  hasCompletedOnboarding            Boolean    @default(false)
   accounts                          Account[]
   contacts                          Contact[]  @relation("UserContacts")
   reminders                         Reminder[]

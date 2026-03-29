@@ -266,7 +266,7 @@ export function BulkEditModal({
                     </Button>
                 </DialogTrigger>
             )}
-            <DialogContent className="sm:max-w-[800px] h-[85vh] flex flex-col p-4 sm:p-6 border border-border dark:border-border/30">
+            <DialogContent className="sm:max-w-[800px] h-[85vh] flex flex-col overflow-x-hidden p-4 sm:p-6 border border-border dark:border-border/30">
                 <DialogHeader className="shrink-0">
                     <DialogTitle>
                         {intent.kind === "link-selection" ? "Select Contacts to Link" : "Bulk Edit Contacts"}
@@ -279,9 +279,9 @@ export function BulkEditModal({
                 </DialogHeader>
 
                 {/* Filters */}
-                <div className="flex flex-col gap-2 py-4 shrink-0">
-                    <div className="flex flex-col sm:flex-row gap-3">
-                        <div className="relative flex-1">
+                <div className="flex min-w-0 flex-col gap-2 py-4 shrink-0">
+                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row">
+                        <div className="relative min-w-0 flex-1">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                             <input
                                 type="text"
@@ -291,13 +291,12 @@ export function BulkEditModal({
                                 onChange={e => setSearchQuery(e.target.value)}
                             />
                         </div>
-                        <div className="w-full sm:w-[250px]">
+                        <div className="w-full min-w-0 sm:w-[250px] sm:shrink-0">
                             <MultiSelect
                                 options={allGroups}
                                 selected={selectedGroupFilters}
                                 onChange={filters => setSelectedGroupFilters(filters)}
                                 placeholder="Filter by groups..."
-                                creatable={false}
                                 selectedLayout="scroll-x"
                             />
                         </div>

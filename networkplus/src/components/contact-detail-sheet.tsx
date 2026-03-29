@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Loader2, Trash2 } from "lucide-react";
 import {
     Sheet,
     SheetContent,
@@ -63,6 +64,8 @@ interface ContactDetailSheetProps {
     /** Open Reach Out modal on the Other tab with these contact ids (for "Log interaction" / new log). */
     onOpenReachOutForLog?: (contactIds: string[]) => void;
     onUpdateNode: (id: string, updates: Partial<NodeData>) => Promise<void>;
+    /** Permanently delete the contact (server + parent state). */
+    onDeleteContact: (id: string) => Promise<void>;
     onFocusNode: (id: string) => void;
     // Passing "connectedNeighbors" or "links/nodes" to calculate them?
     // It's cleaner to pass computed neighbors.
@@ -110,11 +113,13 @@ export function ContactDetailSheet({
     onLogInteraction,
     onOpenReachOutForLog,
     onUpdateNode,
+    onDeleteContact,
     onFocusNode,
     connectedNeighbors,
     groupTypeOverrides,
     userGroups = [],
 }: ContactDetailSheetProps) {
+    const [deletingContact, setDeletingContact] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -147,6 +152,26 @@ export function ContactDetailSheet({
         }
     };
 
+    const handleDeleteContact = async () => {
+        if (!node) return;
+        if (
+            !confirm(
+                `Delete "${node.name}"? This cannot be undone. All interactions and links for this contact will be removed.`
+            )
+        ) {
+            return;
+        }
+        setDeletingContact(true);
+        try {
+            await onDeleteContact(node.id);
+            onOpenChange(false);
+        } catch {
+            /* setError on dashboard */
+        } finally {
+            setDeletingContact(false);
+        }
+    };
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent
@@ -156,13 +181,27 @@ export function ContactDetailSheet({
                 <SheetHeader className="shrink-0 mb-4">
                     <div className="flex items-start justify-between gap-2">
                         <SheetTitle className="truncate min-w-0">{node?.name}</SheetTitle>
-                        <div className="flex gap-2 shrink-0">
+                        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                             <Button variant="outline" size="sm" className="text-xs sm:text-sm" onClick={() => node && onOpenReachOutForLog?.([node.id])}>
                                 <span className="hidden sm:inline">Log Interaction</span>
                                 <span className="sm:hidden">Log</span>
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(true)}>
                                 Edit
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                disabled={deletingContact || !node}
+                                onClick={() => void handleDeleteContact()}
+                            >
+                                {deletingContact ? (
+                                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                                ) : (
+                                    <Trash2 className="size-3.5" aria-hidden />
+                                )}
+                                <span className="ml-1.5">Delete</span>
                             </Button>
                         </div>
                     </div>
