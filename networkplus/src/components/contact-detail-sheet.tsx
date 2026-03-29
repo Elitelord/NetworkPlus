@@ -28,6 +28,7 @@ type NodeData = {
     profile?: ContactProfile | null;
     email?: string | null;
     phone?: string | null;
+    instagram?: string | null;
     commonPlatform?: string | null;
     metadata?: any;
     lastInteractionAt?: string;
