@@ -108,17 +108,21 @@ export function LinkedInImportModal({
             const contacts: { id: string; name: string; interactions?: { date: string; platform: string }[] }[] =
                 await contactsRes.json();
 
-            // Build a name lookup map (case-insensitive)
-            const contactMap = new Map<string, { id: string; name: string; interactions?: { date: string; platform: string }[] }>();
+            // Case-insensitive full-name lookup; duplicate display names → no auto-match (avoid wrong person)
+            const nameBuckets = new Map<
+                string,
+                { id: string; name: string; interactions?: { date: string; platform: string }[] }[]
+            >();
             for (const c of contacts) {
-                contactMap.set(c.name.toLowerCase(), c);
+                const k = c.name.trim().toLowerCase();
+                if (!nameBuckets.has(k)) nameBuckets.set(k, []);
+                nameBuckets.get(k)!.push(c);
             }
 
             const matched: MatchedConversation[] = result.conversations.map(
                 (conv) => {
-                    const contact = contactMap.get(
-                        conv.contactName.toLowerCase()
-                    );
+                    const bucket = nameBuckets.get(conv.contactName.trim().toLowerCase());
+                    const contact = bucket?.length === 1 ? bucket[0] : undefined;
                     let possibleDuplicate = false;
 
                     if (contact?.interactions) {

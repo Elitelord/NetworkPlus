@@ -38,21 +38,33 @@ export async function POST(req: Request) {
                 continue;
             }
 
-            // Find matching contact by name (case-insensitive)
-            const contact = await prisma.contact.findFirst({
+            // Match by full display name; require a single unambiguous contact
+            const nameMatches = await prisma.contact.findMany({
                 where: {
                     ownerId: userId,
-                    name: { equals: contactName, mode: "insensitive" },
+                    name: { equals: contactName.trim(), mode: "insensitive" },
                 },
+                take: 2,
             });
 
-            if (!contact) {
+            if (nameMatches.length === 0) {
                 skippedRows.push({
                     name: contactName,
                     reason: "No matching contact found",
                 });
                 continue;
             }
+
+            if (nameMatches.length > 1) {
+                skippedRows.push({
+                    name: contactName,
+                    reason:
+                        "Multiple contacts share this name — skipped. Rename one contact to disambiguate.",
+                });
+                continue;
+            }
+
+            const contact = nameMatches[0]!;
 
             const interactionDate = new Date(latestDate);
             if (isNaN(interactionDate.getTime())) {

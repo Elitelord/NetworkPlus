@@ -3,6 +3,7 @@ import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { inferPlatformFromEvent, getValidGoogleAccessToken } from "@/lib/calendar-utils";
+import { textMentionsDistinctName } from "@/lib/contact-name-matching";
 
 export async function POST(req: Request) {
     try {
@@ -40,17 +41,25 @@ export async function POST(req: Request) {
         });
 
         const contactEmailMap = new Map<string, string>();
-        const contactNameMap = new Map<string, string>();
+        /** Lowercased full name → contact ids (multiple if duplicate display names) */
+        const nameToIds = new Map<string, string[]>();
         for (const contact of contacts) {
             if (contact.email) {
                 contactEmailMap.set(contact.email.toLowerCase(), contact.id);
             }
-            if (contact.name) {
-                contactNameMap.set(contact.name.toLowerCase(), contact.id);
+            if (contact.name?.trim()) {
+                const k = contact.name.trim().toLowerCase();
+                if (!nameToIds.has(k)) nameToIds.set(k, []);
+                nameToIds.get(k)!.push(contact.id);
             }
         }
+        /** Only names unique in the address book; longest first so "Jane Doe" wins over "Jane" in text */
+        const unambiguousNameMatchers = [...nameToIds.entries()]
+            .filter(([, ids]) => ids.length === 1)
+            .map(([norm, ids]) => ({ norm, id: ids[0]! }))
+            .sort((a, b) => b.norm.length - a.norm.length);
 
-        if (contactEmailMap.size === 0 && contactNameMap.size === 0) {
+        if (contactEmailMap.size === 0 && unambiguousNameMatchers.length === 0) {
             return NextResponse.json({ message: "No contacts found to match.", synced: 0 });
         }
 
@@ -114,11 +123,12 @@ export async function POST(req: Request) {
                 }
             }
 
-            // Also try matching name from summary
+            // Also try matching full display name in summary/description (only if that name is unique)
             if (matchedContactIds.size === 0) {
-                for (const [name, contactId] of contactNameMap) {
-                    if (summary.toLowerCase().includes(name) || description.toLowerCase().includes(name)) {
-                        matchedContactIds.add(contactId);
+                const haystack = `${summary}\n${description}`;
+                for (const { norm, id } of unambiguousNameMatchers) {
+                    if (textMentionsDistinctName(haystack, norm)) {
+                        matchedContactIds.add(id);
                     }
                 }
             }

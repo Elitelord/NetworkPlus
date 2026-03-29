@@ -19,14 +19,13 @@ import { Loader2, Sparkles, Calendar, FileText, MessageSquare, ChevronDown, Chec
 import { MultiSelect } from "@/components/ui/multi-select";
 import { LogInteractionModal } from "@/components/log-interaction-modal";
 
-type SendPlatform = "email" | "sms" | "whatsapp" | "call" | "instagram";
+type SendPlatform = "email" | "sms" | "whatsapp" | "call";
 
 const SEND_PLATFORM_OPTIONS: { value: SendPlatform; label: string }[] = [
   { value: "email", label: "Email" },
   { value: "sms", label: "SMS / iMessage" },
   { value: "whatsapp", label: "WhatsApp" },
   { value: "call", label: "Phone Call" },
-  { value: "instagram", label: "Instagram" },
 ];
 
 function normalizePhone(phone: string): string {
@@ -43,73 +42,6 @@ function buildWhatsAppUri(phone: string, body: string): string {
   const normalized = normalizePhone(phone).replace(/^\+/, "");
   const encoded = encodeURIComponent(body);
   return `https://wa.me/${normalized}?text=${encoded}`;
-}
-
-/** Instagram usernames: letters, numbers, periods, underscores (no @). */
-const IG_USERNAME_RE = /^[A-Za-z0-9._]{1,30}$/;
-
-/**
- * Normalize whatever the user saved: @handle, full profile URL, direct thread URL, or numeric thread id.
- */
-function parseInstagramRef(raw: string): { kind: "thread"; id: string } | { kind: "username"; handle: string } | null {
-  const s = raw.trim();
-  if (!s) return null;
-
-  // Plain numeric thread id
-  if (/^\d+$/.test(s)) {
-    return { kind: "thread", id: s };
-  }
-
-  // /direct/t/17846677488209806/ anywhere in the string
-  const threadInPath = s.match(/\/direct\/t\/(\d+)/i);
-  if (threadInPath) {
-    return { kind: "thread", id: threadInPath[1] };
-  }
-
-  // ig.me/m/username
-  const igMe = s.match(/ig\.me\/m\/([^/?#\s]+)/i);
-  if (igMe) {
-    const h = decodeURIComponent(igMe[1]).replace(/^@+/, "");
-    if (IG_USERNAME_RE.test(h)) return { kind: "username", handle: h };
-  }
-
-  // https://www.instagram.com/username/ or instagram.com/username
-  try {
-    const url = s.startsWith("http") ? new URL(s) : new URL(`https://${s}`);
-    if (url.hostname === "instagram.com" || url.hostname.endsWith(".instagram.com")) {
-      const parts = url.pathname.split("/").filter(Boolean);
-      if (parts[0] === "direct" && parts[1] === "t" && /^\d+$/.test(parts[2] ?? "")) {
-        return { kind: "thread", id: parts[2]! };
-      }
-      const first = parts[0];
-      if (
-        first &&
-        !["p", "reel", "reels", "tv", "stories", "explore", "accounts", "legal", "direct"].includes(first) &&
-        IG_USERNAME_RE.test(first)
-      ) {
-        return { kind: "username", handle: first };
-      }
-    }
-  } catch {
-    /* not a URL */
-  }
-
-  const handle = s.replace(/^@+/, "").trim();
-  if (IG_USERNAME_RE.test(handle)) {
-    return { kind: "username", handle };
-  }
-
-  return null;
-}
-
-function buildInstagramOpenUrl(raw: string): string | null {
-  const parsed = parseInstagramRef(raw);
-  if (!parsed) return null;
-  if (parsed.kind === "thread") {
-    return `https://www.instagram.com/direct/t/${parsed.id}/`;
-  }
-  // ig.me expects the raw handle segment (encoding can break redirects for some clients).
-  return `https://ig.me/m/${parsed.handle}`;
 }
 
 export type Contact = {
@@ -192,8 +124,8 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
   const selectedContacts = allContacts.filter(c => selectedContactIds.includes(c.id));
   const contactNames = selectedContacts.map(c => c.name).join(", ");
   const firstContactPhone = selectedContacts[0]?.phone;
-  const firstContactInstagram = selectedContacts[0]?.instagram;
-  const isDeepLink = sendPlatform === "sms" || sendPlatform === "whatsapp" || sendPlatform === "call" || sendPlatform === "instagram";
+  const isDeepLink =
+    sendPlatform === "sms" || sendPlatform === "whatsapp" || sendPlatform === "call";
 
   async function handleGenerateMessage() {
     if (selectedContactIds.length === 0) {
@@ -257,16 +189,6 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
       return;
     }
 
-    if (sendPlatform === "instagram") {
-      if (!firstContactInstagram) return;
-      const openUrl = buildInstagramOpenUrl(firstContactInstagram);
-      if (!openUrl) return;
-      navigator.clipboard.writeText(message).catch(() => {});
-      window.open(openUrl, "_blank", "noopener,noreferrer");
-      setAwaitingConfirmation(true);
-      return;
-    }
-
     if (!firstContactPhone) return;
     const uri = sendPlatform === "sms"
       ? buildSmsUri(firstContactPhone, message)
@@ -280,11 +202,11 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
     setIsSubmitting(true);
     setError(null);
     try {
-      const platformMap: Record<string, { platform: string; type: string }> = {
+      const platformMap: Record<SendPlatform, { platform: string; type: string }> = {
+        email: { platform: "EMAIL", type: "Message Sent" },
         sms: { platform: "SMS", type: "Message Sent" },
         whatsapp: { platform: "WHATSAPP", type: "Message Sent" },
         call: { platform: "CALL", type: "Call Made" },
-        instagram: { platform: "INSTAGRAM", type: "Message Sent" },
       };
       const { platform: logPlatform, type: logType } = platformMap[sendPlatform] ?? { platform: "OTHER", type: "Message Sent" };
 
@@ -387,7 +309,6 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
     sms: "Open in Messages",
     whatsapp: "Open in WhatsApp",
     call: "Start Call",
-    instagram: "Copy & Open Instagram",
   };
 
   const messageFooterLabelShort: Record<SendPlatform, string> = {
@@ -395,15 +316,11 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
     sms: "Open in Messages",
     whatsapp: "Open in WhatsApp",
     call: "Start Call",
-    instagram: "Copy & Open",
   };
 
-  const needsPhone = sendPlatform === "sms" || sendPlatform === "whatsapp" || sendPlatform === "call";
-  const needsInstagram = sendPlatform === "instagram";
-  const instagramParsed = firstContactInstagram ? parseInstagramRef(firstContactInstagram) : null;
-  const deepLinkDisabled =
-    (needsPhone && !firstContactPhone) ||
-    (needsInstagram && !instagramParsed);
+  const needsPhoneForDeepLink =
+    sendPlatform === "sms" || sendPlatform === "whatsapp" || sendPlatform === "call";
+  const deepLinkDisabled = needsPhoneForDeepLink && !firstContactPhone;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -493,11 +410,7 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
 
                 {deepLinkDisabled && selectedContactIds.length > 0 && (
                   <p className="text-xs text-amber-600 dark:text-amber-400">
-                    {needsInstagram
-                      ? !firstContactInstagram?.trim()
-                        ? `No Instagram username on file for ${selectedContacts[0]?.name || "this contact"}.`
-                        : `Could not open Instagram for ${selectedContacts[0]?.name || "this contact"}. Edit the contact and use @username, a profile URL, or a DM thread link (…/direct/t/…/…).`
-                      : `No phone number on file for ${selectedContacts[0]?.name || "this contact"}.`}
+                    No phone number on file for {selectedContacts[0]?.name || "this contact"}.
                   </p>
                 )}
               </>
@@ -597,8 +510,6 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
               <span>
                 {sendPlatform === "call"
                   ? "Your dialer should have opened. Did you make the call?"
-                  : sendPlatform === "instagram"
-                  ? "Message copied to clipboard. Did you send it on Instagram?"
                   : `${sendPlatform === "sms" ? "Messages" : "WhatsApp"} should have opened. Did you send it?`}
               </span>
             </div>
