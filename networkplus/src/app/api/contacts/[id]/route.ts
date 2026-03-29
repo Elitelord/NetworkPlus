@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@lib/prisma";
@@ -90,6 +91,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const phone = body.phone !== undefined
             ? (clampString(body.phone, LIMITS.phone) ?? null)
             : undefined;
+        const instagram = body.instagram !== undefined
+            ? (clampString(body.instagram, LIMITS.phone) ?? null)
+            : undefined;
 
         let monthsKnown: number | undefined;
         if (body.monthsKnown !== undefined) {
@@ -120,10 +124,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const frequencyExplicitlyProvided = estCount !== undefined || estCadence !== undefined || estPlatform !== undefined;
 
-        // If groups changed and user didn't explicitly set frequency, auto-fill from new groups
+        // If groups changed and user didn't explicitly set frequency, auto-fill from new groups 
+        // ONLY if the contact is currently in "Auto" mode (not manual).
         if (validGroups !== undefined && !frequencyExplicitlyProvided) {
-            const existingHasFrequency = existing.estimatedFrequencyCount !== null;
-            if (!existingHasFrequency) {
+            const isCurrentlyAuto = existing.estimatedFrequencyIsAuto;
+            const hasNoFrequency = existing.estimatedFrequencyCount === null;
+            
+            if (isCurrentlyAuto || hasNoFrequency) {
                 const user = await (prisma.user as any).findUnique({
                     where: { id: (session as any).user.id },
                     select: { groupTypeOverrides: true, groups: true },
@@ -146,6 +153,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             profileUpdate !== undefined ||
             email !== undefined ||
             phone !== undefined ||
+            instagram !== undefined ||
             commonPlatform !== undefined ||
             monthsKnown !== undefined ||
             estCount !== undefined ||
@@ -172,6 +180,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 }),
                 ...(email !== undefined && { email }),
                 ...(phone !== undefined && { phone }),
+                ...(instagram !== undefined && { instagram }),
                 ...(commonPlatform !== undefined && { commonPlatform }),
                 ...(monthsKnown !== undefined && { monthsKnown }),
                 ...(estCount !== undefined && { estimatedFrequencyCount: estCount }),
@@ -182,22 +191,31 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
         });
 
-        // Trigger inference (groups or profile affinities)
-        const { updateInferredLinks } = await import("@/lib/inference");
-        await updateInferredLinks(contact.id);
-
-        // Recalculate score if monthsKnown or estimated frequency changed
-        const needsScoreRecalc = monthsKnown !== undefined || estCount !== undefined || estCadence !== undefined || estPlatform !== undefined;
-        if (needsScoreRecalc) {
+        // Inference scans all owner contacts and can take seconds; defer so PATCH returns quickly.
+        after(async () => {
             try {
-                const { recalculateContactScore } = await import("@/lib/strength-scoring");
-                await recalculateContactScore(contact.id);
-            } catch (scoreErr) {
-                console.error("Score recalculation failed:", scoreErr);
-                throw scoreErr;
+                const { updateInferredLinks } = await import("@/lib/inference");
+                await updateInferredLinks(contact.id);
+            } catch (e) {
+                console.error("Deferred inferred-link update failed:", e);
             }
-            const updatedContact = await prisma.contact.findUnique({ where: { id } });
-            return NextResponse.json(updatedContact);
+        });
+
+        // Score recalculation can be expensive; defer to keep PATCH latency low.
+        const needsScoreRecalc =
+            monthsKnown !== undefined ||
+            estCount !== undefined ||
+            estCadence !== undefined ||
+            estPlatform !== undefined;
+        if (needsScoreRecalc) {
+            after(async () => {
+                try {
+                    const { recalculateContactScore } = await import("@/lib/strength-scoring");
+                    await recalculateContactScore(contact.id);
+                } catch (scoreErr) {
+                    console.error("Deferred score recalculation failed:", scoreErr);
+                }
+            });
         }
 
         return NextResponse.json(contact);

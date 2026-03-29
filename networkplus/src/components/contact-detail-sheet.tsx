@@ -9,7 +9,7 @@ import {
     SheetTitle,
     SheetDescription,
 } from "@/components/ui/sheet";
-import { EditNodeDialog, EditContactData } from "@/components/edit-node-dialog";
+import { EditNodeDialog } from "@/components/edit-node-dialog";
 import { LogInteractionModal, EditInteractionData } from "@/components/log-interaction-modal";
 import { formatEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
 import type { GroupType } from "@/lib/group-type-classifier";
@@ -37,6 +37,7 @@ type NodeData = {
     estimatedFrequencyCount?: number | null;
     estimatedFrequencyCadence?: string | null;
     estimatedFrequencyPlatform?: string | null;
+    estimatedFrequencyIsAuto?: boolean;
 };
 
 type Interaction = {
@@ -70,7 +71,7 @@ interface ContactDetailSheetProps {
 }
 
 import { MultiSelect } from "@/components/ui/multi-select";
-import { ContactProfileSection } from "@/components/contact-profile-section";
+import { ContactProfileSummary } from "@/components/contact-profile-summary";
 import type { ContactProfile } from "@/lib/contact-profile";
 
 function GroupsEditor({
@@ -184,9 +185,11 @@ export function ContactDetailSheet({
                             <span className="text-xs text-muted-foreground">
                                 {formatEstimatedFrequency(node.estimatedFrequencyCount, node.estimatedFrequencyCadence, node.estimatedFrequencyPlatform)}
                             </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium">
-                                auto
-                            </span>
+                            {node.estimatedFrequencyIsAuto && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium">
+                                    auto
+                                </span>
+                            )}
                         </div>
                     )}
                 </SheetHeader>
@@ -204,12 +207,15 @@ export function ContactDetailSheet({
                                     groups: node.groups || [],
                                     email: node.email || "",
                                     phone: node.phone || "",
+                                    instagram: node.instagram || "",
                                     commonPlatform: node.commonPlatform || "",
                                     strengthScore: node.strengthScore,
                                     monthsKnown: node.monthsKnown,
                                     estimatedFrequencyCount: node.estimatedFrequencyCount,
                                     estimatedFrequencyCadence: node.estimatedFrequencyCadence,
                                     estimatedFrequencyPlatform: node.estimatedFrequencyPlatform,
+                                    estimatedFrequencyIsAuto: node.estimatedFrequencyIsAuto,
+                                    profile: node.profile,
                                 }}
                                 groups={groups}
                                 onSave={async (id, updates) => {
@@ -244,13 +250,7 @@ export function ContactDetailSheet({
                                     </div>
                                 )}
 
-                                <ContactProfileSection
-                                    contactId={node.id}
-                                    profile={node.profile}
-                                    onSave={async (patch) => {
-                                        await onUpdateNode(node.id, { profile: patch });
-                                    }}
-                                />
+                                <ContactProfileSummary profile={node.profile} />
 
                                 <div className="flex items-center gap-2 mb-4">
                                     <span className="text-sm font-medium text-muted-foreground">Groups:</span>
@@ -258,7 +258,9 @@ export function ContactDetailSheet({
                                         key={node?.id}
                                         initialGroups={node?.groups ?? node?.metadata?.groups ?? []}
                                         groups={groups}
-                                        onSave={(newGroups) => onUpdateNode(node.id, { groups: newGroups })}
+                                        onSave={(newGroups) => {
+                                            void onUpdateNode(node.id, { groups: newGroups }).catch(() => {});
+                                        }}
                                     />
                                 </div>
 

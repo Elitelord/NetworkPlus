@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -20,6 +20,11 @@ import {
 import { MultiSelect } from "@/components/ui/multi-select";
 import { getDefaultEstimatedFrequency, CADENCE_OPTIONS, formatEstimatedFrequency } from "@/lib/estimated-frequency-defaults";
 import { classifyGroupTypeWithOverrides, GROUP_TYPE_LABELS, type GroupType } from "@/lib/group-type-classifier";
+import type { ContactProfile } from "@/lib/contact-profile";
+import {
+  ContactProfileEditor,
+  type ContactProfileEditorRef,
+} from "@/components/contact-profile-editor";
 
 const PLATFORMS = [
     { value: "SMS", label: "SMS" },
@@ -43,12 +48,15 @@ export type EditContactData = {
     groups?: string[];
     phone?: string;
     email?: string;
+    instagram?: string;
     commonPlatform?: string;
     monthsKnown?: number;
     strengthScore?: number;
     estimatedFrequencyCount?: number | null;
     estimatedFrequencyCadence?: string | null;
     estimatedFrequencyPlatform?: string | null;
+    estimatedFrequencyIsAuto?: boolean;
+    profile?: ContactProfile | null;
 };
 
 interface EditNodeDialogProps {
@@ -71,8 +79,11 @@ export function EditNodeDialog({
     userGroups = [],
 }: EditNodeDialogProps) {
     const [formData, setFormData] = useState<Partial<EditContactData>>({});
+    const [profilePatch, setProfilePatch] = useState<Record<string, unknown> | null>(null);
     const [monthsKnownInput, setMonthsKnownInput] = useState("0");
     const [loading, setLoading] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const profileEditorRef = useRef<ContactProfileEditorRef>(null);
 
     // Estimated frequency local state
     const [freqEnabled, setFreqEnabled] = useState(false);
@@ -82,13 +93,19 @@ export function EditNodeDialog({
     const [freqAutoLabel, setFreqAutoLabel] = useState<string | null>(null);
 
     useEffect(() => {
-        if (node) {
+        if (open) setSaveError(null);
+    }, [open]);
+
+    useEffect(() => {
+        if (open && node) {
+            setProfilePatch(null);
             setFormData({
                 name: node.name,
                 description: node.description || "",
                 groups: node.groups || [],
                 phone: node.phone || "",
                 email: node.email || "",
+                instagram: node.instagram || "",
                 commonPlatform: node.commonPlatform || "",
                 monthsKnown: node.monthsKnown || 0,
             });
@@ -99,9 +116,15 @@ export function EditNodeDialog({
             setFreqCount(hasFreq ? String(node.estimatedFrequencyCount) : "1");
             setFreqCadence(node.estimatedFrequencyCadence || "WEEKLY");
             setFreqPlatform(node.estimatedFrequencyPlatform || "OTHER");
-            setFreqAutoLabel(null);
+            
+            // If it's currently 'auto' in the DB, show the label
+            if (node.estimatedFrequencyIsAuto && hasFreq) {
+                setFreqAutoLabel("Auto-estimated based on current settings.");
+            } else {
+                setFreqAutoLabel(null);
+            }
         }
-    }, [node]);
+    }, [open]); // ONLY initialize when opening the dialog
 
     const handleChange = (field: keyof EditContactData, value: any) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -137,20 +160,59 @@ export function EditNodeDialog({
         if (!node) return;
 
         setLoading(true);
+        setSaveError(null);
         try {
             const finalMonths = parseInt(monthsKnownInput, 10);
             const parsedCount = parseInt(freqCount, 10);
 
-            await onSave(node.id, {
-                ...formData,
-                monthsKnown: isNaN(finalMonths) ? 0 : Math.max(0, finalMonths),
-                estimatedFrequencyCount: freqEnabled && !isNaN(parsedCount) && parsedCount > 0 ? parsedCount : null,
-                estimatedFrequencyCadence: freqEnabled ? freqCadence : null,
-                estimatedFrequencyPlatform: freqEnabled ? freqPlatform : null,
-            });
+            const effectiveProfilePatch = profilePatch ?? profileEditorRef.current?.getProfilePatch();
+            if (effectiveProfilePatch === undefined) {
+                setSaveError("Profile editor is not ready. Close the dialog and try again.");
+                return;
+            }
+
+            // Compute only changed fields to avoid overwriting backend flags like isAuto
+            const updates: Partial<EditContactData> = {};
+            
+            if (formData.name !== node.name) updates.name = formData.name;
+            if (formData.description !== (node.description || "")) updates.description = formData.description;
+            if (JSON.stringify(formData.groups) !== JSON.stringify(node.groups || [])) updates.groups = formData.groups;
+            if (formData.phone !== (node.phone || "")) updates.phone = formData.phone;
+            if (formData.email !== (node.email || "")) updates.email = formData.email;
+            const rawIg = (formData.instagram || "").replace(/^@/, "");
+            if (rawIg !== (node.instagram || "")) updates.instagram = rawIg || undefined;
+            if (formData.commonPlatform !== (node.commonPlatform || "")) updates.commonPlatform = formData.commonPlatform;
+            
+            const monthsVal = isNaN(finalMonths) ? 0 : Math.max(0, finalMonths);
+            if (monthsVal !== (node.monthsKnown || 0)) updates.monthsKnown = monthsVal;
+
+            // Frequency fields
+            const hasFreq = node.estimatedFrequencyCount != null && node.estimatedFrequencyCount > 0;
+            const newFreqCount = freqEnabled && !isNaN(parsedCount) && parsedCount > 0 ? parsedCount : null;
+            const newFreqCadence = freqEnabled ? freqCadence : null;
+            const newFreqPlatform = freqEnabled ? freqPlatform : null;
+
+            if (newFreqCount !== node.estimatedFrequencyCount) updates.estimatedFrequencyCount = newFreqCount;
+            if (newFreqCadence !== node.estimatedFrequencyCadence) updates.estimatedFrequencyCadence = newFreqCadence;
+            if (newFreqPlatform !== node.estimatedFrequencyPlatform) updates.estimatedFrequencyPlatform = newFreqPlatform;
+
+            // Profile - always check if patch has content if we're sending it
+            if (effectiveProfilePatch && Object.keys(effectiveProfilePatch).length > 0) {
+                updates.profile = effectiveProfilePatch;
+            }
+
+            if (Object.keys(updates).length === 0) {
+                onOpenChange(false);
+                return;
+            }
+
+            await onSave(node.id, updates);
             onOpenChange(false);
         } catch (error) {
             console.error("Failed to save contact:", error);
+            setSaveError(
+                error instanceof Error ? error.message : "Could not save changes."
+            );
         } finally {
             setLoading(false);
         }
@@ -168,7 +230,10 @@ export function EditNodeDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[425px] border border-border dark:border-border/30 max-h-[90vh] overflow-y-auto">
+            <DialogContent
+                forceMount
+                className="sm:max-w-[520px] border border-border dark:border-border/30 max-h-[90vh] overflow-y-auto"
+            >
                 <DialogHeader>
                     <DialogTitle>Edit Contact</DialogTitle>
                     <DialogDescription>
@@ -176,86 +241,98 @@ export function EditNodeDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                        <Label htmlFor="name" className="sm:text-right">
-                            Name
-                        </Label>
-                        <Input
-                            id="name"
-                            value={formData.name || ""}
-                            onChange={(e) => handleChange("name", e.target.value)}
-                            className="sm:col-span-3"
-                            required
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                        <Label htmlFor="description" className="sm:text-right">
-                            Description
-                        </Label>
-                        <Input
-                            id="description"
-                            value={formData.description || ""}
-                            onChange={(e) => handleChange("description", e.target.value)}
-                            className="sm:col-span-3"
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                        <Label htmlFor="groups" className="sm:text-right">
-                            Groups
-                        </Label>
-                        <div className="sm:col-span-3">
-                            <MultiSelect
-                                options={groups}
-                                selected={formData.groups || []}
-                                onChange={handleGroupsChange}
-                                placeholder="Select groups..."
-                            />
+                    <div className="border rounded-lg p-3 space-y-3">
+                        <div className="text-sm font-medium">Basics</div>
+                        <div className="space-y-2">
+                            <div className="space-y-1">
+                                <Label htmlFor="name" className="text-xs text-muted-foreground">Name</Label>
+                                <Input
+                                    id="name"
+                                    value={formData.name || ""}
+                                    onChange={(e) => handleChange("name", e.target.value)}
+                                    className="h-9"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="description" className="text-xs text-muted-foreground">Description</Label>
+                                <Input
+                                    id="description"
+                                    value={formData.description || ""}
+                                    onChange={(e) => handleChange("description", e.target.value)}
+                                    className="h-9"
+                                    placeholder="Optional"
+                                />
+                            </div>
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                        <Label htmlFor="phone" className="sm:text-right">
-                            Phone
-                        </Label>
-                        <Input
-                            id="phone"
-                            value={formData.phone || ""}
-                            onChange={(e) => handleChange("phone", e.target.value)}
-                            className="sm:col-span-3"
+
+                    <div className="border rounded-lg p-3 space-y-3">
+                        <div className="text-sm font-medium">Groups</div>
+                        <MultiSelect
+                            options={groups}
+                            selected={formData.groups || []}
+                            onChange={handleGroupsChange}
+                            placeholder="Select groups..."
                         />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                        <Label htmlFor="email" className="sm:text-right">
-                            Email
-                        </Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            value={formData.email || ""}
-                            onChange={(e) => handleChange("email", e.target.value)}
-                            className="sm:col-span-3"
-                        />
+
+                    <div className="border rounded-lg p-3 space-y-3">
+                        <div className="text-sm font-medium">How to reach them</div>
+                        <p className="text-[11px] text-muted-foreground -mt-1">
+                            Used for reach-out and logging.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <Label htmlFor="phone" className="text-xs text-muted-foreground">Phone</Label>
+                                <Input
+                                    id="phone"
+                                    value={formData.phone || ""}
+                                    onChange={(e) => handleChange("phone", e.target.value)}
+                                    className="h-9"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="email" className="text-xs text-muted-foreground">Email</Label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    value={formData.email || ""}
+                                    onChange={(e) => handleChange("email", e.target.value)}
+                                    className="h-9"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="instagram" className="text-xs text-muted-foreground">Instagram</Label>
+                                <Input
+                                    id="instagram"
+                                    value={formData.instagram || ""}
+                                    onChange={(e) => handleChange("instagram", e.target.value)}
+                                    className="h-9"
+                                    placeholder="@username or DM link (…/direct/t/…)"
+                                />
+                            </div>
+                            <div className="space-y-1 sm:col-span-2">
+                                <Label htmlFor="commonPlatform" className="text-xs text-muted-foreground">Primary platform</Label>
+                                <NativeSelect
+                                    id="commonPlatform"
+                                    value={formData.commonPlatform || ""}
+                                    onChange={(e) => handleChange("commonPlatform", e.target.value)}
+                                    className="h-9 w-full"
+                                >
+                                    <NativeSelectOption value="">None</NativeSelectOption>
+                                    {PLATFORMS.map(p => (
+                                        <NativeSelectOption key={p.value} value={p.value}>{p.label}</NativeSelectOption>
+                                    ))}
+                                </NativeSelect>
+                            </div>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
-                        <Label htmlFor="commonPlatform" className="sm:text-right">
-                            Platform
-                        </Label>
-                        <NativeSelect
-                            id="commonPlatform"
-                            value={formData.commonPlatform || ""}
-                            onChange={(e) => handleChange("commonPlatform", e.target.value)}
-                            className="sm:col-span-3"
-                        >
-                            <NativeSelectOption value="">None</NativeSelectOption>
-                            {PLATFORMS.map(p => (
-                                <NativeSelectOption key={p.value} value={p.value}>{p.label}</NativeSelectOption>
-                            ))}
-                        </NativeSelect>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-4">
-                        <Label htmlFor="monthsKnown" className="sm:text-right pt-0 sm:pt-2">
-                            Known for
-                        </Label>
-                        <div className="sm:col-span-3">
+
+                    <div className="border rounded-lg p-3 space-y-3">
+                        <div className="text-sm font-medium">Relationship</div>
+                        <div className="space-y-1">
+                            <Label htmlFor="monthsKnown" className="text-xs text-muted-foreground">Known for (months)</Label>
                             <Input
                                 id="monthsKnown"
                                 type="number"
@@ -263,9 +340,10 @@ export function EditNodeDialog({
                                 value={monthsKnownInput}
                                 onChange={(e) => setMonthsKnownInput(e.target.value)}
                                 placeholder="0"
+                                className="h-9 max-w-[12rem]"
                             />
-                            <p className="text-[10px] text-muted-foreground mt-1">
-                                How long have you known this person? (months) {yearsDisplay}
+                            <p className="text-[10px] text-muted-foreground">
+                                How long you have known this person. {yearsDisplay}
                             </p>
                         </div>
                     </div>
@@ -359,6 +437,22 @@ export function EditNodeDialog({
                             </div>
                         )}
                     </div>
+
+                    {node && (
+                        <ContactProfileEditor
+                            ref={profileEditorRef}
+                            profileKey={node.id}
+                            profile={node.profile}
+                            open={open}
+                            onPatchChange={setProfilePatch}
+                        />
+                    )}
+
+                    {saveError && (
+                        <p className="text-sm text-destructive" role="alert">
+                            {saveError}
+                        </p>
+                    )}
 
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

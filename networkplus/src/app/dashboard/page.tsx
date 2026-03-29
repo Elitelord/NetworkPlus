@@ -49,6 +49,7 @@ type Contact = {
   profile?: ContactProfile | null;
   phone?: string | null;
   email?: string | null;
+  instagram?: string | null;
   commonPlatform?: string | null;
   metadata?: NodeMetadata;
   lastInteractionAt?: string;
@@ -58,6 +59,7 @@ type Contact = {
   estimatedFrequencyCount?: number | null;
   estimatedFrequencyCadence?: string | null;
   estimatedFrequencyPlatform?: string | null;
+  estimatedFrequencyIsAuto?: boolean;
 };
 
 type NodeType = Contact; // Alias for graph compatibility if needed, or just use Contact
@@ -89,7 +91,7 @@ export default function Home() {
   const [selectedLink, setSelectedLink] = useState<{ id: string; label?: string; fromName?: string; toName?: string } | null>(null);
   const [reachOutContact, setReachOutContact] = useState<Contact | null>(null);
   const [reachOutPreselectedIds, setReachOutPreselectedIds] = useState<string[] | null>(null);
-  const [reachOutInitialTab, setReachOutInitialTab] = useState<"email" | "meeting" | "other" | null>(null);
+  const [reachOutInitialTab, setReachOutInitialTab] = useState<"message" | "email" | "meeting" | "other" | null>(null);
   const [groupTypeOverrides, setGroupTypeOverrides] = useState<Record<string, GroupType> | null>(null);
   const [userGroups, setUserGroups] = useState<string[]>([]);
 
@@ -131,6 +133,10 @@ export default function Home() {
 
   const [isClusterMode, setIsClusterMode] = useState(false);
   const clusterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Optimization refs
+  const lastUpdateRef = useRef<number>(0);
+  const saveViewStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounced cluster mode transition
   useEffect(() => {
@@ -397,11 +403,15 @@ export default function Home() {
   }, [settings, highlightNodes, showDueNodes, dueNodeIds, resolvedTheme, nodes, graphData, nodeLinks]);
 
   const saveViewState = useCallback((k: number, x: number, y: number) => {
-    try {
-      sessionStorage.setItem(GRAPH_VIEW_STORAGE_KEY, JSON.stringify({ k, x, y }));
-    } catch {
-      /* ignore quota / private mode */
-    }
+    if (saveViewStateTimeoutRef.current) clearTimeout(saveViewStateTimeoutRef.current);
+
+    saveViewStateTimeoutRef.current = setTimeout(() => {
+      try {
+        sessionStorage.setItem(GRAPH_VIEW_STORAGE_KEY, JSON.stringify({ k, x, y }));
+      } catch {
+        /* ignore quota / private mode */
+      }
+    }, 250); // Debounce to prevent high-frequency blocking I/O
   }, []);
 
   // ── Create / rebuild ForceGraph only when structure or force params change ─
@@ -537,11 +547,16 @@ export default function Home() {
         .enablePanInteraction(true)
         .enableZoomInteraction(true)
         .onZoom((zoomParams: { k: number; x: number; y: number }) => {
-          setCurrentZoom(zoomParams.k);
+          const now = Date.now();
+          // Throttle state updates to ~20FPS while zooming to reduce React overhead
+          if (now - lastUpdateRef.current > 50) {
+            setCurrentZoom(zoomParams.k);
+            lastUpdateRef.current = now;
+          }
           saveViewState(zoomParams.k, zoomParams.x, zoomParams.y);
         })
         .onZoomEnd((zoomParams: { k: number; x: number; y: number }) => {
-          setCurrentZoom(zoomParams.k);
+          setCurrentZoom(zoomParams.k); // Ensure final zoom is always accurate
           saveViewState(zoomParams.k, zoomParams.x, zoomParams.y);
         })
         .onNodeClick((node: any) => {
@@ -631,6 +646,7 @@ export default function Home() {
 
       asyncCleanupRef.current = () => {
         resizeObserver.disconnect();
+        if (saveViewStateTimeoutRef.current) clearTimeout(saveViewStateTimeoutRef.current);
         try {
           if (myGraph) myGraph.graphData({ nodes: [], links: [] });
         } catch {
@@ -735,7 +751,13 @@ export default function Home() {
     const targetNode = nodes.find(n => n.id === id);
     if (!targetNode) return;
 
-    const updatedNode = { ...targetNode, ...updates };
+    // Do not optimistically set `profile` directly if it's a deep patch, but merge top-level if possible 
+    // to avoid flickering in the UI while waiting for the server response.
+    let updatedProfile = targetNode.profile;
+    if (updates.profile && typeof updates.profile === "object") {
+      updatedProfile = { ...(targetNode.profile || {}), ...updates.profile } as ContactProfile;
+    }
+    const updatedNode = { ...targetNode, ...updates, profile: updatedProfile };
 
     // Update local state immediately
     setNodes(nodes.map(n => n.id === id ? updatedNode : n));
@@ -749,30 +771,27 @@ export default function Home() {
       });
 
       if (!res.ok) {
-        throw new Error(`Update failed: ${res.status}`);
+        let detail = `Update failed (${res.status})`;
+        try {
+          const errBody = await res.json();
+          if (errBody && typeof errBody.error === "string") {
+            detail = errBody.error;
+          }
+        } catch {
+          /* ignore */
+        }
+        throw new Error(detail);
       }
 
       const updatedData = await res.json();
 
-      // Update local state with the actual server response (contains recalculated score)
+      // Update local state with the actual server response (includes merged profile)
       setNodes(prev => prev.map(n => n.id === id ? updatedData : n));
-
-      // If groups were updated, refresh links because the backend might have created/deleted inferred links
-      if (updates.groups || updates.profile) {
-        await loadData();
-      }
-
-      // Merge server PATCH + optional full refetch into selection only if this contact is still open
       setSelectedNode((prev) => (prev?.id === id ? updatedData : prev));
-      try {
-        const freshRes = await fetch(`/api/contacts/${id}`);
-        if (freshRes.ok) {
-          const freshData = await freshRes.json();
-          setSelectedNode((prev) => (prev?.id === id ? freshData : prev));
-          setNodes((prev) => prev.map((n) => (n.id === id ? freshData : n)));
-        }
-      } catch {
-        /* keep updatedData / loadData state */
+
+      // Refresh graph in the background (inference runs after response; links arrive shortly after)
+      if (updates.groups || updates.profile) {
+        void loadData();
       }
     } catch (err: any) {
       console.error("Update node failed:", err);
@@ -780,6 +799,7 @@ export default function Home() {
       setNodes(previousNodes);
       setSelectedNode((prev) => (prev?.id === id ? targetNode : prev));
       setError(String(err?.message ?? err));
+      throw err;
     }
   }
 
@@ -1094,6 +1114,7 @@ export default function Home() {
           groups: selectedNode.groups || [],
           email: selectedNode.email || "",
           phone: selectedNode.phone || "",
+          instagram: selectedNode.instagram || "",
           commonPlatform: selectedNode.commonPlatform || "",
           interactions: selectedNode.interactions,
           lastInteractionAt: selectedNode.lastInteractionAt,
@@ -1102,6 +1123,7 @@ export default function Home() {
           estimatedFrequencyCount: selectedNode.estimatedFrequencyCount,
           estimatedFrequencyCadence: selectedNode.estimatedFrequencyCadence,
           estimatedFrequencyPlatform: selectedNode.estimatedFrequencyPlatform,
+          estimatedFrequencyIsAuto: selectedNode.estimatedFrequencyIsAuto,
         } : null}
         groups={groups}
         dueNodeIds={dueNodeIds}

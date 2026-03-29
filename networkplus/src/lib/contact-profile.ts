@@ -6,6 +6,9 @@ export const PROFILE_MAX_BYTES = 32 * 1024;
 /** Max entries per prior-employment / prior-education list. */
 export const PROFILE_MAX_PRIOR_ENTRIES = 20;
 
+/** Max concurrent current employers (e.g. board + day job). */
+export const PROFILE_MAX_CURRENT_EMPLOYERS = 10;
+
 const yearSchema = z
   .union([z.number().int().min(1800).max(2100), z.null()])
   .optional();
@@ -37,6 +40,12 @@ export const contactProfileSchema = z.object({
   version: z.number().int().min(1).max(100).optional(),
   city: z.union([z.string().max(500).trim(), z.null()]).optional(),
   currentCompany: z.union([z.string().max(500).trim(), z.null()]).optional(),
+  /** Additional / multiple current employers; inference dedupes with `currentCompany`. */
+  currentCompanies: z
+    .array(z.string().max(500))
+    .max(PROFILE_MAX_CURRENT_EMPLOYERS)
+    .nullable()
+    .optional(),
   currentSchool: z.union([z.string().max(500).trim(), z.null()]).optional(),
   priorCompanies: z.array(priorCompanySchema).max(PROFILE_MAX_PRIOR_ENTRIES).optional(),
   priorEducation: z.array(priorEducationSchema).max(PROFILE_MAX_PRIOR_ENTRIES).optional(),
@@ -126,6 +135,21 @@ export function mergeContactProfile(
   applyScalar("currentCompany");
   applyScalar("currentSchool");
 
+  if (patch.currentCompanies !== undefined) {
+    if (patch.currentCompanies === null) {
+      delete base.currentCompanies;
+    } else if (patch.currentCompanies.length === 0) {
+      delete base.currentCompanies;
+    } else {
+      const cleaned = patch.currentCompanies
+        .map((s) => (typeof s === "string" ? s.trim() : ""))
+        .filter((s) => s.length > 0)
+        .slice(0, PROFILE_MAX_CURRENT_EMPLOYERS);
+      if (cleaned.length === 0) delete base.currentCompanies;
+      else base.currentCompanies = cleaned;
+    }
+  }
+
   if (patch.priorCompanies !== undefined) {
     if (patch.priorCompanies === null || patch.priorCompanies.length === 0) {
       delete base.priorCompanies;
@@ -172,6 +196,29 @@ export type ProfileAffinity = {
   label: string;
 };
 
+/**
+ * Current employers for display / inference: uses `currentCompanies` when set, else legacy `currentCompany`.
+ * Dedupes by normalized key; preserves first-seen label casing.
+ */
+export function getCurrentEmployerLabels(profile: ContactProfile | null | undefined): string[] {
+  if (!profile) return [];
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  const push = (raw: string) => {
+    const t = raw.trim();
+    if (!t) return;
+    const key = normalizeInferenceKey(t);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    labels.push(t);
+  };
+  for (const s of profile.currentCompanies ?? []) {
+    if (typeof s === "string") push(s);
+  }
+  if (profile.currentCompany) push(profile.currentCompany);
+  return labels;
+}
+
 export function getProfileAffinities(
   profile: ContactProfile | null,
   includePrior: boolean
@@ -179,10 +226,9 @@ export function getProfileAffinities(
   const out: ProfileAffinity[] = [];
   if (!profile) return out;
 
-  const cc = profile.currentCompany?.trim();
-  if (cc) {
-    const key = normalizeInferenceKey(cc);
-    if (key) out.push({ rule: "shared_current_company", key, label: cc });
+  for (const label of getCurrentEmployerLabels(profile)) {
+    const key = normalizeInferenceKey(label);
+    if (key) out.push({ rule: "shared_current_company", key, label });
   }
   const cs = profile.currentSchool?.trim();
   if (cs) {
