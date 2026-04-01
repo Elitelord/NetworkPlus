@@ -194,8 +194,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // Inference scans all owner contacts and can take seconds; defer so PATCH returns quickly.
         after(async () => {
             try {
-                const { updateInferredLinks } = await import("@/lib/inference");
-                await updateInferredLinks(contact.id);
+                const { updateInferredLinks, updateInferredProfile } = await import("@/lib/inference");
+                // Update links and AI bio in parallel
+                await Promise.all([
+                    updateInferredLinks(contact.id),
+                    updateInferredProfile(contact.id)
+                ]);
             } catch (e) {
                 console.error("Deferred inferred-link update failed:", e);
             }

@@ -130,6 +130,12 @@ export async function POST(req: Request) {
 
         // Re-fetch to get updated score
         const finalContact = await prisma.contact.findUnique({ where: { id: newContact.id } });
+
+        // Trigger AI profile enrichment
+        const { updateInferredProfile } = await import("@/lib/inference");
+        // We use a background-like approach here, avoiding blocking the main response
+        updateInferredProfile(newContact.id).catch(e => console.error("Initial AI Enrichment failed:", e));
+
         return NextResponse.json(finalContact ?? newContact);
     } catch (err) {
         console.error("Create contact failed:", err);

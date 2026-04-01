@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, X, Check } from "lucide-react";
+import { Filter, X, Check, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
     classifyGroupType,
@@ -30,26 +30,30 @@ interface GraphLegendPanelProps {
     groups: string[];
     selectedGroupFilters: string[];
     onGroupFiltersChange: (filters: string[]) => void;
+    selectedPeopleFilters: Set<string>;
+    onPeopleFiltersChange: (filters: Set<string>) => void;
     onFocusNode: (nodeId: string) => void;
     className?: string;
     groupTypeOverrides?: Record<string, GroupType> | null;
     onUpdateGroupTypeOverrides?: (overrides: Record<string, GroupType>) => void;
 }
 
-type TabId = "individual" | "groups" | "types";
+type TabId = "people" | "groups" | "types";
 
 export function GraphLegendPanel({
     nodes,
     groups,
     selectedGroupFilters,
     onGroupFiltersChange,
+    selectedPeopleFilters,
+    onPeopleFiltersChange,
     onFocusNode,
     className,
     groupTypeOverrides,
     onUpdateGroupTypeOverrides,
 }: GraphLegendPanelProps) {
     const [isOpen, setIsOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<TabId>("individual");
+    const [activeTab, setActiveTab] = useState<TabId>("people");
     const [individualSearch, setIndividualSearch] = useState("");
     const [groupSearch, setGroupSearch] = useState("");
     const [customGroupInput, setCustomGroupInput] = useState("");
@@ -149,12 +153,27 @@ export function GraphLegendPanel({
         setCustomGroupInput("");
     }, [customGroupInput, selectedGroupFilters, onGroupFiltersChange]);
 
+    const togglePersonFilter = useCallback(
+        (id: string) => {
+            const next = new Set(selectedPeopleFilters);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            onPeopleFiltersChange(next);
+        },
+        [selectedPeopleFilters, onPeopleFiltersChange]
+    );
+
     const handleNodeSelect = useCallback(
         (nodeId: string) => {
+            // In the new 'Filter' mode, clicking a person toggles their visibility
+            togglePersonFilter(nodeId);
+            // We can still focus them optionally, but the user requested 'Filter by people'
             onFocusNode(nodeId);
-            setIndividualSearch("");
         },
-        [onFocusNode]
+        [togglePersonFilter, onFocusNode]
     );
 
     const groupCounts = useMemo(() => {
@@ -182,7 +201,7 @@ export function GraphLegendPanel({
             >
                 {/* Tab Switcher */}
                 <div className="flex border-b">
-                    {(["individual", "groups", "types"] as TabId[]).map((tab) => (
+                    {(["people", "groups", "types"] as TabId[]).map((tab) => (
                         <button
                             key={tab}
                             className={cn(
@@ -193,18 +212,26 @@ export function GraphLegendPanel({
                             )}
                             onClick={() => {
                                 setActiveTab(tab);
-                                if (tab === "individual") {
+                                if (tab === "people") {
                                     setTimeout(() => inputRef.current?.focus(), 50);
                                 }
                             }}
                         >
-                            {tab === "individual" ? "Individual" : tab === "groups" ? "Groups" : "Types"}
-                            {tab === "groups" && selectedGroupFilters.length > 0 && (
+                            {tab === "people" ? "People" : tab === "groups" ? "Groups" : "Types"}
+                            {(tab === "groups" && selectedGroupFilters.length > 0) && (
                                 <Badge
                                     variant="secondary"
                                     className="ml-1.5 h-5 min-w-5 px-1.5 text-[10px] font-semibold"
                                 >
                                     {selectedGroupFilters.length}
+                                </Badge>
+                            )}
+                            {(tab === "people" && selectedPeopleFilters.size > 0) && (
+                                <Badge
+                                    variant="secondary"
+                                    className="ml-1.5 h-5 min-w-5 px-1.5 text-[10px] font-semibold"
+                                >
+                                    {selectedPeopleFilters.size}
                                 </Badge>
                             )}
                             {activeTab === tab && (
@@ -216,18 +243,18 @@ export function GraphLegendPanel({
 
                 {/* Tab Content */}
                 <div className="min-w-0 overflow-x-hidden p-3">
-                    {activeTab === "individual" ? (
-                        /* Individual Search Tab */
+                    {activeTab === "people" ? (
+                        /* People Filter Tab */
                         <div>
                             <div className="relative">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                                <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                                 <input
                                     ref={inputRef}
                                     id="legend-individual-search"
                                     type="text"
                                     value={individualSearch}
                                     onChange={(e) => setIndividualSearch(e.target.value)}
-                                    placeholder="Search contacts..."
+                                    placeholder="Select people to filter..."
                                     className="w-full py-2 pl-8 pr-8 border rounded-lg text-sm bg-background/60 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all"
                                 />
                                 {individualSearch && (
@@ -239,30 +266,72 @@ export function GraphLegendPanel({
                                     </button>
                                 )}
                             </div>
-                            {individualSearch.trim() !== "" && (
-                                <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border bg-background/60">
-                                    {filteredNodes.length > 0 ? (
-                                        filteredNodes.map((n) => (
-                                            <button
-                                                key={n.id}
-                                                className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors border-b last:border-b-0"
-                                                onClick={() => handleNodeSelect(n.id)}
+
+                            {/* Selected people badges */}
+                            {selectedPeopleFilters.size > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                    {Array.from(selectedPeopleFilters).map((id) => {
+                                        const name = nodes.find(n => n.id === id)?.name || id;
+                                        return (
+                                            <Badge
+                                                key={id}
+                                                variant="secondary"
+                                                className="cursor-pointer hover:bg-destructive/20 hover:text-destructive transition-colors text-xs"
+                                                onClick={() => togglePersonFilter(id)}
                                             >
+                                                {name}
+                                                <X className="ml-1 h-3 w-3" />
+                                            </Badge>
+                                        );
+                                    })}
+                                    <button
+                                        className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 px-1"
+                                        onClick={() => onPeopleFiltersChange(new Set())}
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border bg-background/60">
+                                {nodes
+                                    .filter((n) => 
+                                        !individualSearch || n.name.toLowerCase().includes(individualSearch.toLowerCase())
+                                    )
+                                    .slice(0, individualSearch ? 50 : 20) // Show more if searching
+                                    .map((n) => (
+                                        <button
+                                            key={n.id}
+                                            className={cn(
+                                                "w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent transition-colors border-b last:border-b-0",
+                                                selectedPeopleFilters.has(n.id) && "bg-accent/50"
+                                            )}
+                                            onClick={() => togglePersonFilter(n.id)}
+                                        >
+                                            <div
+                                                className={cn(
+                                                    "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                                                    selectedPeopleFilters.has(n.id)
+                                                        ? "bg-primary border-primary"
+                                                        : "border-muted-foreground/40"
+                                                )}
+                                            >
+                                                {selectedPeopleFilters.has(n.id) && (
+                                                    <Check className="w-3 h-3 text-primary-foreground" />
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1 text-left">
                                                 <p className="font-medium truncate">{n.name}</p>
                                                 {n.groups && n.groups.length > 0 && (
-                                                    <p className="text-xs text-muted-foreground truncate">
+                                                    <p className="text-[10px] text-muted-foreground truncate">
                                                         {n.groups.join(", ")}
                                                     </p>
                                                 )}
-                                            </button>
-                                        ))
-                                    ) : (
-                                        <div className="px-3 py-3 text-sm text-muted-foreground text-center">
-                                            No contacts found
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                            </div>
+                                        </button>
+                                    ))
+                                }
+                            </div>
                         </div>
                     ) : activeTab === "groups" ? (
                         /* Groups Filter Tab */
@@ -511,12 +580,12 @@ export function GraphLegendPanel({
                 )}
                 onClick={() => {
                     setIsOpen(!isOpen);
-                    if (!isOpen && activeTab === "individual") {
+                    if (!isOpen && activeTab === "people") {
                         setTimeout(() => inputRef.current?.focus(), 100);
                     }
                 }}
             >
-                <Search className="w-5 h-5" />
+                <Filter className="w-5 h-5" />
             </Button>
         </div>
     );

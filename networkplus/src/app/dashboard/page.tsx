@@ -16,6 +16,7 @@ const EditLinkDialog = dynamic(() => import("@/components/edit-link-dialog").the
 const AddContactModal = dynamic(() => import("@/components/add-contact-modal").then(m => ({ default: m.AddContactModal })), { ssr: false });
 const AddLinkModal = dynamic(() => import("@/components/add-link-modal").then(m => ({ default: m.AddLinkModal })), { ssr: false });
 const ReachOutModal = dynamic(() => import("@/components/reach-out-modal").then(m => ({ default: m.ReachOutModal })), { ssr: false });
+const MagicSearch = dynamic(() => import("@/components/magic-search").then(m => ({ default: m.MagicSearch })), { ssr: false });
 import {
   Dialog,
   DialogContent,
@@ -82,6 +83,7 @@ export default function Home() {
   const [links, setLinks] = useState<LinkType[]>([]);
 
   const [selectedGroupFilters, setSelectedGroupFilters] = useState<string[]>([]);
+  const [selectedPeopleFilters, setSelectedPeopleFilters] = useState<Set<string>>(new Set());
   const [selectedNode, setSelectedNode] = useState<NodeType | null>(null);
   const [highlightNodes, setHighlightNodes] = useState<Set<string>>(new Set());
   const [showDueNodes, setShowDueNodes] = useState(false);
@@ -258,15 +260,26 @@ export default function Home() {
   // ── Compute visible nodes/links ─────────────────────────────────────
   const { visibleNodes, nodeLinks } = useMemo(() => {
     const vis = nodes.filter((n) => {
-      if (selectedGroupFilters.length === 0) return true;
+      // If no filters are active, show all
+      if (selectedGroupFilters.length === 0 && selectedPeopleFilters.size === 0) return true;
+      
+      // Check groups
       const gs = n.groups ?? n.metadata?.groups ?? [];
-      return selectedGroupFilters.some(g => gs.includes(g));
+      const hasGroupMatch = selectedGroupFilters.some(g => gs.includes(g));
+      
+      // Check individual person filter
+      const hasPersonMatch = selectedPeopleFilters.has(n.id);
+      
+      return hasGroupMatch || hasPersonMatch;
     });
     const visIds = new Set(vis.map((n) => n.id));
 
     const nl = links.filter((l) => {
       if (!visIds.has(l.fromId) || !visIds.has(l.toId)) return false;
-      if (selectedGroupFilters.length === 0) return true;
+      // If filtering is on, only show inferred links if the user actively wants to see them 
+      // (or let them show by default if both ends are visible).
+      // The current logic hides inferred links if their group is filtered out.
+      if (selectedGroupFilters.length === 0 && selectedPeopleFilters.size === 0) return true;
       if (l.metadata?.source !== "inferred") return true;
       const linkGroup = l.metadata?.group;
       if (!linkGroup) return true;
@@ -274,7 +287,7 @@ export default function Home() {
     });
 
     return { visibleNodes: vis, nodeLinks: nl };
-  }, [nodes, links, selectedGroupFilters]);
+  }, [nodes, links, selectedGroupFilters, selectedPeopleFilters]);
 
   // ── Build graph data (cluster or normal) ───────────────────────────
   const graphData = useMemo(() => {
@@ -1050,6 +1063,9 @@ export default function Home() {
 
       {/* Main: transparent over graph; pointer-events-none so drag/pan hits the graph layer */}
       <main className="pointer-events-none flex-1 relative overflow-hidden min-w-0 min-h-0">
+        <div className="pointer-events-auto absolute top-4 left-0 right-0 z-30 flex justify-center px-4">
+          <MagicSearch onFocusNode={focusNode} />
+        </div>
         {overlayMode && (
           <div className="pointer-events-auto absolute top-0 left-0 right-0 z-20 flex items-start justify-between p-4 gap-2">
               <Dialog>
@@ -1061,7 +1077,7 @@ export default function Home() {
                     aria-label="Open Catch up list"
                   >
                     <ListTodo className="size-5 shrink-0" />
-                    <span>Catch up</span>
+                    <span className="hidden sm:inline">Catch up</span>
                   </button>
                 </DialogTrigger>
                 <DialogContent
@@ -1076,6 +1092,8 @@ export default function Home() {
                   </div>
                 </DialogContent>
               </Dialog>
+
+
               <Popover>
                 <PopoverTrigger asChild>
                   <button
@@ -1085,7 +1103,7 @@ export default function Home() {
                     aria-label="Open Tools menu"
                   >
                     <Wrench className="size-5 shrink-0" />
-                    <span>Tools</span>
+                    <span className="hidden sm:inline">Tools</span>
                   </button>
                 </PopoverTrigger>
                 <PopoverContent
@@ -1123,6 +1141,8 @@ export default function Home() {
           groups={groupSelectOptions}
           selectedGroupFilters={selectedGroupFilters}
           onGroupFiltersChange={setSelectedGroupFilters}
+          selectedPeopleFilters={selectedPeopleFilters}
+          onPeopleFiltersChange={setSelectedPeopleFilters}
           onFocusNode={focusNode}
           groupTypeOverrides={groupTypeOverrides}
           onUpdateGroupTypeOverrides={async (overrides) => {

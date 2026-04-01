@@ -25,6 +25,40 @@ export async function POST(req: Request) {
         name: true,
         description: true,
         groups: true,
+        profile: true,
+        strengthScore: true,
+        monthsKnown: true,
+        interactions: {
+          orderBy: { date: "desc" },
+          take: 5,
+          select: {
+            date: true,
+            type: true,
+            content: true,
+          }
+        },
+        outgoing: {
+          select: {
+            to: {
+              select: {
+                id: true,
+                name: true,
+                strengthScore: true,
+              }
+            }
+          }
+        },
+        incoming: {
+          select: {
+            from: {
+              select: {
+                id: true,
+                name: true,
+                strengthScore: true,
+              }
+            }
+          }
+        }
       },
     });
 
@@ -32,10 +66,55 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
     }
 
-    const prompt = `You are a helpful assistant writing a ${platform === 'email' ? 'professional but friendly email' : 'short and casual check-in message'} to a contact named ${contact.name}. 
-Their description/notes are: ${contact.description || 'No description provided.'}
-Their groups/tags are: ${(contact.groups && contact.groups.length > 0) ? contact.groups.join(', ') : 'No groups specified.'}
-Write a short, engaging message to check-in or catch up. 
+    // Process network links to find top shared connections
+    const connections = [
+      ...contact.outgoing.map(l => l.to),
+      ...contact.incoming.map(l => l.from)
+    ].filter(c => c && c.id !== contactId);
+    
+    // Pick the connection with the highest strength score for social proof
+    const topConnection = connections.sort((a, b) => (b.strengthScore || 0) - (a.strengthScore || 0))[0];
+
+    // Build context parts
+    const interactionHistory = contact.interactions.length > 0 
+      ? contact.interactions.map(i => {
+          const dateStr = new Date(i.date).toLocaleDateString();
+          const content = i.content ? ` (Topic: ${i.content.slice(0, 200)}${i.content.length > 200 ? '...' : ''})` : "";
+          return `- ${dateStr} [${i.type}]${content}`;
+        }).join("\n")
+      : "No recorded interaction history.";
+
+    const profileData = contact.profile ? JSON.stringify(contact.profile) : "No detailed profile data.";
+    
+    // Relationship "Warmth" Strategy
+    const isNewConnection = contact.monthsKnown < 3 || contact.strengthScore < 40;
+    const relationshipType = isNewConnection ? "New connection / Lead" : "Established friend / Multi-year connection";
+    
+    const socialProof = topConnection 
+      ? `Highest strength mutual contact is ${topConnection.name}. Mentioning this person provides social proof.`
+      : "No shared connections recorded.";
+
+    const prompt = `You are a helpful CRM personal assistant writing a ${platform === 'email' ? 'professional but friendly email' : 'short and casual check-in message'} to a contact named ${contact.name}. 
+
+RELATIONSHIP CONTEXT:
+- Type: ${relationshipType} (Strength Score: ${contact.strengthScore}/100, Months Known: ${contact.monthsKnown})
+- Description: ${contact.description || 'No notes provided.'}
+- Groups/Tags: ${(contact.groups && contact.groups.length > 0) ? contact.groups.join(', ') : 'None'}
+- Profile Snippets: ${profileData}
+
+SOCIAL PROOF:
+- ${socialProof}
+
+INTERACTION HISTORY (Most Recent First):
+${interactionHistory}
+
+TONE & STRATEGY:
+${isNewConnection 
+  ? "Since this is a NEW CONNECTION or LEAD, focus on building rapport and establishing a bridge using the shared connections if available. Be slightly more formal but warm."
+  : "Since this is an ESTABLISHED FRIEND, use more casual, familiar language. Reference past interactions if they exist. Focus on genuine catching up."}
+
+TASK:
+Write a short, engaging message to check-in. Use the context naturally but briefly. DO NOT hallucinate details not provided above.
 
 Output your response as a raw JSON object string (no markdown formatting, no \`\`\`json blocks) with strictly this structure:
 {
@@ -43,8 +122,8 @@ Output your response as a raw JSON object string (no markdown formatting, no \`\
   "subject": "The subject line here" // Only include if it's an email
 }`;
 
-    // Use gemini-flash-latest which should resolve the 404 error by pointing to the latest available flash model.
-    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    // Standardize on a reliable gemini model (1.5 Flash is best for speed/cost here)
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
     
     try {
       const result = await model.generateContent(prompt);
@@ -57,8 +136,6 @@ Output your response as a raw JSON object string (no markdown formatting, no \`\
       return NextResponse.json(parsedResponse);
     } catch (genError: any) {
       console.error("Gemini specific error:", genError);
-      // If gemini-1.5-flash fails, it might be a region or account issue, but 1.5-flash should generally be available.
-      // We'll throw so it's caught by the outer block.
       throw genError;
     }
   } catch (error: any) {

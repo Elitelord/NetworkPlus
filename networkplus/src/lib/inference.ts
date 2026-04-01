@@ -9,6 +9,9 @@ import {
   type InferredLinkRule,
   INFERRED_LINK_RULES,
 } from "@/lib/contact-profile";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 /**
  * Updates inferred links for a specific contact based on shared groups and profile affinities.
@@ -218,4 +221,83 @@ export async function updateInferredLinksForOwner(ownerId: string) {
     select: { id: true },
   });
   await updateInferredLinksBulk(ids.map((c) => c.id));
+}
+
+/**
+ * Generates an AI-powered summarized bio for a contact and stores it in metadata.inferredBio.
+ */
+export async function updateInferredProfile(contactId: string) {
+  const contact = await prisma.contact.findUnique({
+    where: { id: contactId },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      groups: true,
+      profile: true,
+      metadata: true,
+    },
+  });
+
+  if (!contact) return;
+
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    const prompt = `
+      You are an expert CRM assistant. Summarize this contact's background into a 1-2 sentence "Searchable Bio".
+      Focus on their current role, company, school, or key interests mentioned in their groups or profile data.
+      Use professional but concise language.
+      
+      CONTACT DATA:
+      Name: ${contact.name}
+      Description: ${contact.description || "N/A"}
+      Groups: ${contact.groups.join(", ")}
+      Profile JSON: ${JSON.stringify(contact.profile || {})}
+
+      BIO rules:
+      - Max 40 words.
+      - Return ONLY the bio text.
+      - No intro (e.g., "This person is...") - just the facts.
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const bio = response.text().trim();
+
+    if (bio) {
+      const currentMetadata = (contact.metadata as Record<string, any>) || {};
+      await prisma.contact.update({
+        where: { id: contactId },
+        data: {
+          metadata: {
+            ...currentMetadata,
+            inferredBio: bio,
+          },
+        },
+      });
+    }
+  } catch (err) {
+    console.error(`AI Enrichment failed for contact ${contactId}:`, err);
+  }
+}
+
+/**
+ * Bulk updates inferred profiles for a list of contacts.
+ */
+export async function updateInferredProfilesBulk(contactIds: string[]) {
+  // We process these sequentially or in small batches to avoid hitting rate limits too hard
+  for (const id of contactIds) {
+    await updateInferredProfile(id);
+  }
+}
+
+/**
+ * Recomputes all inferred bios for every contact owned by the user.
+ */
+export async function updateInferredProfilesForOwner(ownerId: string) {
+  const ids = await prisma.contact.findMany({
+    where: { ownerId },
+    select: { id: true },
+  });
+  await updateInferredProfilesBulk(ids.map((c) => c.id));
 }
