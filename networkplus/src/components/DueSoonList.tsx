@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Bell } from "lucide-react";
 import Link from "next/link";
+import { DailyRecommendationCard } from "./daily-recommendation-card";
 
 export type Contact = {
     id: string;
@@ -15,7 +16,7 @@ export type Contact = {
 
 interface DueSoonListProps {
     className?: string;
-    onSelect?: (contact: Contact) => void;
+    onSelect?: (contact: Contact, initialMessage?: string) => void;
     contacts: Contact[];
     isLoading?: boolean;
 }
@@ -108,6 +109,9 @@ export function DueSoonList({ className, onSelect, contacts, isLoading = false }
             </CardHeader>
             {isExpanded && (
                 <CardContent className="grid gap-4">
+                    <DailyRecommendationCard 
+                        onReachOut={(id: string, initialMessage?: string) => onSelect?.({ id, name: "" }, initialMessage)} // Placeholder name, will be caught by parent
+                    />
                     {contacts.map((contact) => (
                         <div
                             key={contact.id}

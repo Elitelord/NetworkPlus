@@ -95,6 +95,7 @@ export default function Home() {
   const [reachOutContact, setReachOutContact] = useState<Contact | null>(null);
   const [reachOutPreselectedIds, setReachOutPreselectedIds] = useState<string[] | null>(null);
   const [reachOutInitialTab, setReachOutInitialTab] = useState<"message" | "email" | "meeting" | "other" | null>(null);
+  const [reachOutInitialMessage, setReachOutInitialMessage] = useState<string | undefined>(undefined);
   const [groupTypeOverrides, setGroupTypeOverrides] = useState<Record<string, GroupType> | null>(null);
   const [userGroups, setUserGroups] = useState<string[]>([]);
 
@@ -969,8 +970,9 @@ export default function Home() {
     setCurrentZoom(zoomLevel);
   }, []);
 
-  const dueSoonSelect = useCallback((contact: Contact) => {
+  const dueSoonSelect = useCallback((contact: Contact, initialMessage?: string) => {
     const targetNode = nodes.find(n => n.id === contact.id);
+    setReachOutInitialMessage(initialMessage);
     if (targetNode) {
       setReachOutContact(targetNode);
     } else {
@@ -1160,12 +1162,14 @@ export default function Home() {
         <ReachOutModal 
           allContacts={nodes}
           initialContact={reachOutContact ?? (reachOutPreselectedIds?.[0] ? (nodes.find(n => n.id === reachOutPreselectedIds[0]) ?? null) : null)} 
+          initialMessage={reachOutInitialMessage}
           open={!!reachOutContact || !!(reachOutPreselectedIds && reachOutPreselectedIds.length > 0)} 
           onOpenChange={(open) => {
             if (!open) {
               setReachOutContact(null);
               setReachOutPreselectedIds(null);
               setReachOutInitialTab(null);
+              setReachOutInitialMessage(undefined);
             }
           }} 
           onSuccess={handleInteractionLogged}

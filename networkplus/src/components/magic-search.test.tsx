@@ -25,7 +25,7 @@ describe('MagicSearch', () => {
   it('opens the dialog when clicked', () => {
     render(<MagicSearch onFocusNode={vi.fn()} />);
     fireEvent.click(screen.getByText('Ask anything or search...'));
-    expect(screen.getByPlaceholderText(/e.g. 'Engineers in NYC'/)).toBeTruthy();
+    expect(screen.getByPlaceholderText(/Ask AI about your network/)).toBeTruthy();
   });
 
   it('displays search results from API', async () => {

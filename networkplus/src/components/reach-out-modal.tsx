@@ -67,9 +67,24 @@ interface ReachOutModalProps {
   initialTab?: "message" | "email" | "meeting" | "other";
   /** Pre-fill date in the Other tab form (e.g. from calendar "Add" for selected day). */
   initialDefaultDate?: string;
+  /** Pre-fill message body (e.g. from AI recommendation). */
+  initialMessage?: string;
+  /** Pre-fill email subject. */
+  initialSubject?: string;
 }
 
-export function ReachOutModal({ allContacts, initialContact, open, onOpenChange, onSuccess, initialPreselectedIds, initialTab, initialDefaultDate }: ReachOutModalProps) {
+export function ReachOutModal({ 
+  allContacts, 
+  initialContact, 
+  open, 
+  onOpenChange, 
+  onSuccess, 
+  initialPreselectedIds, 
+  initialTab, 
+  initialDefaultDate,
+  initialMessage,
+  initialSubject,
+}: ReachOutModalProps) {
   const resolvedInitialTab = initialTab === "email" ? "message" : initialTab;
 
   const [activeTab, setActiveTab] = useState<string>("message");
@@ -94,6 +109,11 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
       setAwaitingConfirmation(false);
       return;
     }
+    
+    // Set initial content if provided
+    if (initialMessage) setMessage(initialMessage);
+    if (initialSubject) setSubject(initialSubject);
+
     if (initialPreselectedIds && initialPreselectedIds.length > 0) {
       setSelectedContactIds(initialPreselectedIds);
       setActiveTab(resolvedInitialTab ?? "other");
@@ -101,7 +121,7 @@ export function ReachOutModal({ allContacts, initialContact, open, onOpenChange,
       setSelectedContactIds([initialContact.id]);
       setActiveTab(resolvedInitialTab ?? "message");
     }
-  }, [open, initialContact, initialPreselectedIds, resolvedInitialTab]);
+  }, [open, initialContact, initialPreselectedIds, resolvedInitialTab, initialMessage, initialSubject]);
 
   React.useEffect(() => {
     if (activeTab !== "message") {

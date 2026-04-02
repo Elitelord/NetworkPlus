@@ -92,8 +92,9 @@ describe('GraphLegendPanel', () => {
             renderPanel({ selectedPeopleFilters: new Set(['1', '2']) });
             fireEvent.click(document.getElementById('legend-toggle-button')!);
             
-            expect(screen.getByText('Alice Smith')).toBeTruthy();
-            expect(screen.getByText('Bob Jones')).toBeTruthy();
+            // Multiple elements may exist (one in badges, one in the list)
+            expect(screen.getAllByText('Alice Smith').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('Bob Jones').length).toBeGreaterThan(0);
             expect(screen.getByText('Clear')).toBeTruthy();
         });
 

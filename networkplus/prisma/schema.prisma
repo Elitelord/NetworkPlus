@@ -35,6 +35,7 @@ model User {
   contacts                          Contact[]  @relation("UserContacts")
   reminders                         Reminder[]
   sessions                          Session[]
+  recommendations                   Recommendation[]
 }
 
 model Account {
@@ -104,6 +105,7 @@ model Contact {
   incoming                   Link[]        @relation("to")
   Reminder                   Reminder[]
   interactions               Interaction[] @relation("ContactToInteraction")
+  recommendations            Recommendation[]
 
   @@index([ownerId])
 }
@@ -165,6 +167,21 @@ model Reminder {
 
   @@index([userId])
   @@index([contactId])
+}
+
+model Recommendation {
+  id          String   @id @default(cuid())
+  userId      String
+  contactId   String
+  reason      String
+  icebreaker  String?
+  date        DateTime @default(now())
+  dismissed   Boolean  @default(false)
+  
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
 }
 
 model Link {
