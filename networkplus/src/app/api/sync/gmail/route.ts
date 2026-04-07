@@ -123,7 +123,7 @@ export async function POST(req: Request) {
         };
 
         const processMessage = async (msgObj: any) => {
-            const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgObj.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`, {
+            const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgObj.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date&metadataHeaders=Subject`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
 
@@ -134,10 +134,12 @@ export async function POST(req: Request) {
 
             let fromHeader = "";
             let toHeader = "";
+            let subjectHeader = "";
 
             for (const h of headers) {
                 if (h.name.toLowerCase() === "from") fromHeader = h.value;
                 if (h.name.toLowerCase() === "to") toHeader = h.value;
+                if (h.name.toLowerCase() === "subject") subjectHeader = h.value;
             }
 
             const fromEmail = extractEmail(fromHeader);
@@ -171,7 +173,7 @@ export async function POST(req: Request) {
                         date,
                         contactId,
                         direction,
-                        content: msgData.snippet || undefined,
+                        content: subjectHeader || undefined,
                     });
                 }
             }

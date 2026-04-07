@@ -25,10 +25,10 @@ export const STRENGTH_THRESHOLD = 10;
 function getTimeDecayMultiplier(daysAgo: number): number {
     if (daysAgo <= 3) return 1.0;
     if (daysAgo <= 7) return 0.8;
-    if (daysAgo <= 14) return 0.6;
-    if (daysAgo <= 30) return 0.4;
-    if (daysAgo <= 90) return 0.15;
-    if (daysAgo <= 180) return 0.05;
+    if (daysAgo <= 14) return 0.5;
+    if (daysAgo <= 30) return 0.2;
+    if (daysAgo <= 90) return 0.05;
+    if (daysAgo <= 180) return 0.02;
     return 0.01; // > 180 days
 }
 
