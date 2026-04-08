@@ -87,3 +87,22 @@ export async function getValidGoogleAccessToken(account: any, prisma: any): Prom
 
     return tokens.access_token;
 }
+
+/** Minimal shape Google Calendar accepts in attendees[].email (rejects names, placeholders, etc.). */
+const ATTENDEE_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function filterValidAttendeeEmails(emails: unknown): string[] {
+    if (!Array.isArray(emails)) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const e of emails) {
+        if (typeof e !== "string") continue;
+        const trimmed = e.trim();
+        if (!trimmed || !ATTENDEE_EMAIL_RE.test(trimmed)) continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(trimmed);
+    }
+    return out;
+}

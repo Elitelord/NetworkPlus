@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
-import { inferPlatformFromEvent, getValidGoogleAccessToken } from "@/lib/calendar-utils";
+import { inferPlatformFromEvent, getValidGoogleAccessToken, filterValidAttendeeEmails } from "@/lib/calendar-utils";
 
 // GET: List upcoming calendar events (next 30 days)
 export async function GET(req: Request) {
@@ -132,10 +132,9 @@ export async function POST(req: Request) {
             },
         };
 
-        // Add attendees
-        const emails = attendeeEmails || [];
+        const emails = filterValidAttendeeEmails(attendeeEmails);
         if (emails.length > 0) {
-            eventBody.attendees = emails.map((email: string) => ({ email }));
+            eventBody.attendees = emails.map((email) => ({ email }));
         }
 
         if (createMeetLink) {
@@ -161,9 +160,15 @@ export async function POST(req: Request) {
         );
 
         if (!createRes.ok) {
-            const err = await createRes.text();
-            console.error("Failed to create calendar event:", err);
-            return NextResponse.json({ error: "Failed to create calendar event" }, { status: 500 });
+            const errBody = await createRes.json().catch(() => ({}));
+            console.error("Failed to create calendar event. Google API response:", JSON.stringify(errBody, null, 2));
+            return NextResponse.json(
+                { 
+                    error: "Failed to create calendar event", 
+                    details: errBody?.error?.message || "Check server logs for details."
+                }, 
+                { status: 500 }
+            );
         }
 
         const createdEvent = await createRes.json();

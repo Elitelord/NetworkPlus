@@ -72,6 +72,7 @@ interface LogInteractionModalProps {
 interface ContactOption {
     id: string;
     name: string;
+    email: string | null;
 }
 
 export function LogInteractionModal({
@@ -175,7 +176,13 @@ export function LogInteractionModal({
                 .then((res) => res.json())
                 .then((data) => {
                     if (Array.isArray(data)) {
-                        setContacts(data.map((c: any) => ({ id: c.id, name: c.name })));
+                        setContacts(
+                            data.map((c: { id: string; name: string; email?: string | null }) => ({
+                                id: c.id,
+                                name: c.name,
+                                email: c.email ?? null,
+                            }))
+                        );
                     }
                 })
                 .catch((err) => console.error("Failed to fetch contacts", err));
@@ -218,8 +225,8 @@ export function LogInteractionModal({
             if (!isEditing && syncToCalendar) {
                 // Get emails of selected contacts for calendar invites
                 const attendeeEmails = selectedContactIds
-                    .map(id => contacts.find(c => c.id === id)?.name) // Ideally email, but we only have name in this pickers context, we can fetch email or just map it if we load emails
-                    .filter(Boolean) as string[];
+                    .map((id) => contacts.find((c) => c.id === id)?.email)
+                    .filter((e): e is string => typeof e === "string" && e.trim().length > 0);
 
                 const startD = parseLocalISO(formData.date);
                 const endD = endTime ? parseLocalISO(endTime) : undefined;
