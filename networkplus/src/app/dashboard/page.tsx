@@ -233,6 +233,26 @@ export default function Home() {
     getGroupTypeOverrides().then(o => setGroupTypeOverrides(o as Record<string, GroupType>));
   }, []);
 
+  // Pull recent Gmail metadata into interactions (inbound mail from saved contacts, etc.) on each visit / refresh.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/sync/gmail", {
+          method: "POST",
+          credentials: "include",
+        });
+        if (cancelled || !res.ok) return;
+        loadData();
+      } catch {
+        // No Google account, expired token, or network — keep showing cached graph.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const groups = useMemo(() => {
     const s = new Set<string>();
     nodes.forEach((n) => {
