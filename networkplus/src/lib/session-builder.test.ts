@@ -46,6 +46,33 @@ describe("Session Builder", () => {
         expect(thread2Session?.directionSummary).toBe("INBOUND");
     });
 
+    it("uses the latest non-empty subject as Email Thread content", () => {
+        const messages: RawMessage[] = [
+            {
+                id: "1",
+                threadId: "thread-a",
+                platform: "EMAIL",
+                date: new Date("2026-02-21T10:00:00Z"),
+                contactId: "contact-1",
+                direction: "INBOUND",
+                content: "Hello",
+            },
+            {
+                id: "2",
+                threadId: "thread-a",
+                platform: "EMAIL",
+                date: new Date("2026-02-21T10:10:00Z"),
+                contactId: "contact-1",
+                direction: "OUTBOUND",
+                content: "Re: Hello",
+            },
+        ];
+        const sessions = buildSessions(messages);
+        expect(sessions.length).toBe(1);
+        expect(sessions[0].content).toBe("Re: Hello");
+        expect((sessions[0].metadata as { subject: string }).subject).toBe("Re: Hello");
+    });
+
     it("groups platform messages by 30-minute gaps", () => {
         const messages: RawMessage[] = [
             {

@@ -48,6 +48,7 @@ type Interaction = {
     platform: string;
     date: string;
     content?: string;
+    metadata?: unknown;
     isRecurring?: boolean;
     parentInteractionId?: string;
     durationSeconds?: number;
@@ -77,6 +78,7 @@ interface ContactDetailSheetProps {
 import { MultiSelect } from "@/components/ui/multi-select";
 import { ContactProfileSummary } from "@/components/contact-profile-summary";
 import type { ContactProfile } from "@/lib/contact-profile";
+import { emailInteractionPreview } from "@/lib/interaction-display";
 
 function GroupsEditor({
     initialGroups,
@@ -335,7 +337,9 @@ export function ContactDetailSheet({
                                                 <>
                                                     <h3 className="font-semibold text-sm mb-3">Upcoming</h3>
                                                     <div className="space-y-3 mb-6">
-                                                        {upcoming.map((interaction) => (
+                                                        {upcoming.map((interaction) => {
+                                                            const subjectPreview = emailInteractionPreview(interaction);
+                                                            return (
                                                             <div key={interaction.id} className="text-sm border-l-2 border-blue-400 pl-3 py-1 bg-blue-50/50 dark:bg-blue-950/20 rounded-r">
                                                                 <div className="flex items-center justify-between">
                                                                     <span className="font-medium">
@@ -352,7 +356,7 @@ export function ContactDetailSheet({
                                                                                     id: interaction.id,
                                                                                     type: interaction.type,
                                                                                     platform: interaction.platform,
-                                                                                    content: interaction.content,
+                                                                                    content: subjectPreview,
                                                                                     date: interaction.date,
                                                                                     durationMinutes: interaction.durationSeconds ? String(Math.round(interaction.durationSeconds / 60)) : undefined,
                                                                                     messageCount: interaction.messageCount ? String(interaction.messageCount) : undefined,
@@ -370,11 +374,12 @@ export function ContactDetailSheet({
                                                                 <div className="text-xs text-muted-foreground flex gap-2">
                                                                     <span>via {interaction.platform}</span>
                                                                 </div>
-                                                                {interaction.content && (
-                                                                    <p className="mt-1 text-muted-foreground/90">{interaction.content}</p>
+                                                                {subjectPreview && (
+                                                                    <p className="mt-1 text-muted-foreground/90">{subjectPreview}</p>
                                                                 )}
                                                             </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </div>
                                                 </>
                                             );
@@ -389,7 +394,9 @@ export function ContactDetailSheet({
                                         <p className="text-xs text-muted-foreground">No interactions logged yet.</p>
                                     ) : (
                                         <div className="space-y-3">
-                                            {interactions.filter(i => new Date(i.date) <= new Date()).map((interaction) => (
+                                            {interactions.filter(i => new Date(i.date) <= new Date()).map((interaction) => {
+                                                const subjectPreview = emailInteractionPreview(interaction);
+                                                return (
                                                 <div key={interaction.id} className="text-sm border-l-2 border-muted pl-3 py-1">
                                                     <div className="flex items-center justify-between">
                                                         <span className="font-medium">
@@ -406,7 +413,7 @@ export function ContactDetailSheet({
                                                                         id: interaction.id,
                                                                         type: interaction.type,
                                                                         platform: interaction.platform,
-                                                                        content: interaction.content,
+                                                                        content: subjectPreview,
                                                                         date: interaction.date,
                                                                         durationMinutes: interaction.durationSeconds ? String(Math.round(interaction.durationSeconds / 60)) : undefined,
                                                                         messageCount: interaction.messageCount ? String(interaction.messageCount) : undefined,
@@ -424,11 +431,12 @@ export function ContactDetailSheet({
                                                     <div className="text-xs text-muted-foreground flex gap-2">
                                                         <span>via {interaction.platform}</span>
                                                     </div>
-                                                    {interaction.content && (
-                                                        <p className="mt-1 text-muted-foreground/90">{interaction.content}</p>
+                                                    {subjectPreview && (
+                                                        <p className="mt-1 text-muted-foreground/90">{subjectPreview}</p>
                                                     )}
                                                 </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>

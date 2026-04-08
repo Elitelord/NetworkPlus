@@ -222,6 +222,7 @@ export async function POST(req: Request) {
                         directionSummary: rest.directionSummary,
                         rawMessageCount: rest.rawMessageCount,
                         date: rest.endTime, // Use endTime as primary display date
+                        content: rest.content ?? null,
                         metadata: rest.metadata || {},
                     }
                 });
@@ -239,6 +240,7 @@ export async function POST(req: Request) {
                         directionSummary: rest.directionSummary,
                         rawMessageCount: rest.rawMessageCount,
                         threadId: rest.threadId,
+                        content: rest.content ?? null,
                         metadata: rest.metadata || {},
                         contacts: {
                             connect: { id: contactId }

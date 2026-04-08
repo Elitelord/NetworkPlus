@@ -22,6 +22,8 @@ export interface SessionInteraction {
     directionSummary: Direction;
     rawMessageCount: number;
     threadId?: string;
+    /** Email thread: latest non-empty subject from synced message metadata (shown in interaction history). */
+    content?: string;
     metadata?: any;
 }
 
@@ -75,6 +77,15 @@ export function buildSessions(messages: RawMessage[]): SessionInteraction[] {
         const durationSeconds = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
         const directions = group.map(m => m.direction);
 
+        let emailSubject: string | undefined;
+        for (let i = group.length - 1; i >= 0; i--) {
+            const line = group[i].content?.trim();
+            if (line) {
+                emailSubject = line;
+                break;
+            }
+        }
+
         sessions.push({
             contactId,
             platform: "EMAIL",
@@ -85,6 +96,8 @@ export function buildSessions(messages: RawMessage[]): SessionInteraction[] {
             rawMessageCount: group.length,
             directionSummary: getDirectionSummary(directions),
             threadId,
+            content: emailSubject,
+            metadata: emailSubject ? { subject: emailSubject } : undefined,
         });
     }
 

@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { LogInteractionModal, EditInteractionData } from "@/components/log-interaction-modal";
 import { ReachOutModal } from "@/components/reach-out-modal";
+import { emailInteractionPreview } from "@/lib/interaction-display";
 
 type CalendarEvent = {
     id: string;
@@ -24,6 +25,7 @@ type Interaction = {
     platform: string;
     date: string;
     content?: string;
+    metadata?: unknown;
     calendarEventId?: string;
     isRecurring?: boolean;
     contacts?: { id: string; name: string }[];
@@ -374,7 +376,7 @@ export default function CalendarPage() {
                                                                 className={`text-[10px] leading-tight truncate px-1 py-0.5 rounded ${PLATFORM_COLORS[interaction.platform] || PLATFORM_COLORS.OTHER
                                                                     }`}
                                                             >
-                                                                {interaction.content || interaction.type}
+                                                                {emailInteractionPreview(interaction) || interaction.type}
                                                             </div>
                                                         ))}
                                                         {dayEvents.filter(e => !dayInteractions.some(i => i.calendarEventId === e.id)).slice(0, 2).map((event, i) => (
@@ -486,7 +488,7 @@ export default function CalendarPage() {
                                                     <div className="flex-1 min-w-0">
                                                         <p className="font-medium text-sm truncate">
                                                             {interaction.isRecurring && "🔁 "}
-                                                            {interaction.content || interaction.type}
+                                                            {emailInteractionPreview(interaction) || interaction.type}
                                                         </p>
                                                         <p className="text-xs text-muted-foreground mt-0.5">
                                                             {new Date(interaction.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -511,7 +513,7 @@ export default function CalendarPage() {
                                                                     id: interaction.id,
                                                                     type: interaction.type,
                                                                     platform: interaction.platform,
-                                                                    content: interaction.content,
+                                                                    content: emailInteractionPreview(interaction),
                                                                     date: interaction.date,
                                                                     durationMinutes: interaction.durationSeconds ? String(Math.round(interaction.durationSeconds / 60)) : undefined,
                                                                     messageCount: interaction.messageCount ? String(interaction.messageCount) : undefined,
@@ -560,7 +562,7 @@ export default function CalendarPage() {
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-sm font-medium truncate">
                                                         {interaction.isRecurring && "🔁 "}
-                                                        {interaction.content || interaction.type}
+                                                        {emailInteractionPreview(interaction) || interaction.type}
                                                     </span>
                                                     <Badge variant="outline" className="text-[10px] shrink-0 ml-2">
                                                         {new Date(interaction.date).toLocaleDateString([], { month: "short", day: "numeric" })}
