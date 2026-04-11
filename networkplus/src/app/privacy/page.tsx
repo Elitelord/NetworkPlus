@@ -52,30 +52,47 @@ export default function PrivacyPolicy() {
                 <section className="space-y-4">
                     <h2 className="text-2xl font-semibold">4. Google API Services User Data Policy</h2>
                     <p>
-                        NetworkPlus's use and transfer to any other app of information received from Google APIs will adhere to the{' '}
+                        NetworkPlus&apos;s use and transfer of information received from Google APIs to any other app will adhere to the{' '}
                         <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                             Google API Services User Data Policy
                         </a>
                         , including the Limited Use requirements.
                     </p>
+                    <p>
+                        We use Google user data to synchronize your calendar events and contacts to provide a unified network visualization. We do not use this data for any other purposes.
+                    </p>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">5. Data Security</h2>
+                    <h2 className="text-2xl font-semibold">5. Data Sharing and Disclosure</h2>
+                    <p>
+                        We do not share, sell, or disclose your personal data, including Google user data, to any third-party applications, services, or entities, except in the following limited circumstances:
+                    </p>
+                    <ul className="list-disc pl-6 space-y-2">
+                        <li><strong>To provide the Service:</strong> We may use third-party infrastructure providers (e.g., database hosting) to store and process data, but they do not have access to your data for their own use.</li>
+                        <li><strong>Legal Requirements:</strong> We may disclose information if required to do so by law or in response to valid requests by public authorities.</li>
+                    </ul>
+                    <p>
+                        We do not transfer Google user data to third-party AI models or other applications except as necessary to provide the core functionality of NetworkPlus.
+                    </p>
+                </section>
+
+                <section className="space-y-4">
+                    <h2 className="text-2xl font-semibold">6. Data Security</h2>
                     <p>
                         We have put in place appropriate security measures to prevent your personal data from being accidentally lost, used or accessed in an unauthorized way, altered or disclosed.
                     </p>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">6. Your Legal Rights</h2>
+                    <h2 className="text-2xl font-semibold">7. Your Legal Rights</h2>
                     <p>
                         Under certain circumstances, you have rights under data protection laws in relation to your personal data, including the right to request access, correction, erasure, restriction, transfer, or to object to processing.
                     </p>
                 </section>
 
                 <section className="space-y-4">
-                    <h2 className="text-2xl font-semibold">7. Contact Us</h2>
+                    <h2 className="text-2xl font-semibold">8. Contact Us</h2>
                     <p>
                         If you have any questions about this Privacy Policy or our privacy practices, please contact us.
                     </p>
