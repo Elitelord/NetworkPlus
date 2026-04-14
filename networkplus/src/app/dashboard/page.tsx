@@ -234,6 +234,7 @@ export default function Home() {
   }, []);
 
   // Pull recent Gmail metadata into interactions (inbound mail from saved contacts, etc.) on each visit / refresh.
+  /* Temporarily disabled to avoid CASA assessment requirement
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -252,6 +253,7 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
+  */
 
   const groups = useMemo(() => {
     const s = new Set<string>();

@@ -18,14 +18,20 @@ export async function GET(req: NextRequest) {
 
         const dbUser = await prisma.user.findUnique({
             where: { id: session.user.id },
-            select: { hasCompletedOnboarding: true },
+            select: { 
+                hasCompletedOnboarding: true,
+                hasCompletedTour: true,
+                useCase: true,
+                industryField: true,
+                primaryGoal: true
+            },
         });
 
         if (!dbUser) {
-            return NextResponse.json({ hasCompletedOnboarding: true });
+            return NextResponse.json({ hasCompletedOnboarding: true, hasCompletedTour: true });
         }
 
-        return NextResponse.json({ hasCompletedOnboarding: dbUser.hasCompletedOnboarding });
+        return NextResponse.json(dbUser);
     } catch (error) {
         if (isOnboardingColumnMissing(error)) {
             console.warn(
@@ -46,15 +52,21 @@ export async function PATCH(req: NextRequest) {
         }
 
         const body = await req.json();
-        const hasCompletedOnboarding = body.hasCompletedOnboarding;
+        
+        const updateData: any = {};
+        if (typeof body.hasCompletedOnboarding === "boolean") updateData.hasCompletedOnboarding = body.hasCompletedOnboarding;
+        if (typeof body.hasCompletedTour === "boolean") updateData.hasCompletedTour = body.hasCompletedTour;
+        if (body.useCase !== undefined) updateData.useCase = body.useCase;
+        if (body.industryField !== undefined) updateData.industryField = body.industryField;
+        if (body.primaryGoal !== undefined) updateData.primaryGoal = body.primaryGoal;
 
-        if (typeof hasCompletedOnboarding !== "boolean") {
-            return NextResponse.json({ error: "Invalid flag" }, { status: 400 });
+        if (Object.keys(updateData).length === 0) {
+            return NextResponse.json({ error: "Missing fields" }, { status: 400 });
         }
 
         await prisma.user.update({
             where: { id: session.user.id },
-            data: { hasCompletedOnboarding },
+            data: updateData,
         });
 
         return NextResponse.json({ success: true });

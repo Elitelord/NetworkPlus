@@ -13,6 +13,7 @@ import { EstimatedFrequencyBackfill } from "@/components/settings/estimated-freq
 import { GroupTypeOverridesEditor } from "@/components/settings/group-type-overrides-editor"
 import { UserGroupsEditor } from "@/components/settings/user-groups-editor"
 import { SettingsSidebar } from "@/components/settings/settings-sidebar"
+import { OnboardingProfileForm } from "@/components/settings/onboarding-profile-form"
 import { classifyGroupTypeWithOverrides } from "@/lib/group-type-classifier"
 
 export default async function SettingsPage() {
@@ -69,6 +70,22 @@ export default async function SettingsPage() {
                             </div>
                             <div className="max-w-xl w-full">
                                 <ProfileForm user={session.user} />
+                            </div>
+                            <Separator />
+                        </section>
+
+                        {/* ── Usage Preferences ────────────────────────────────────────── */}
+                        <section id="usage-preferences" className="scroll-mt-24 space-y-6">
+                            <div>
+                                <h2 className="text-xl sm:text-2xl font-semibold">Usage Preferences</h2>
+                                <p className="text-sm sm:text-base text-muted-foreground">Adjust how NetworkPlus acts based on your goals and industry.</p>
+                            </div>
+                            <div className="max-w-xl w-full">
+                                <OnboardingProfileForm 
+                                    initialUseCase={(user as any).useCase} 
+                                    initialIndustry={(user as any).industryField} 
+                                    initialGoal={(user as any).primaryGoal} 
+                                />
                             </div>
                             <Separator />
                         </section>

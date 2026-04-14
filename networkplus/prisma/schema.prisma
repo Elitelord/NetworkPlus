@@ -31,6 +31,10 @@ model User {
   groups                            String[]   @default([])
   inferenceIncludePriorAffiliations Boolean    @default(false)
   hasCompletedOnboarding            Boolean    @default(false)
+  hasCompletedTour                  Boolean    @default(false)
+  useCase                           String?
+  industryField                     String?
+  primaryGoal                       String?
   accounts                          Account[]
   contacts                          Contact[]  @relation("UserContacts")
   reminders                         Reminder[]

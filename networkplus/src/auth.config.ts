@@ -9,7 +9,9 @@ export default {
             allowDangerousEmailAccountLinking: true,
             authorization: {
                 params: {
-                    scope: "openid profile email https://www.googleapis.com/auth/gmail.metadata https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events",
+                    // Temporarily removed gmail.metadata scope to avoid CASA assessment requirement.
+                    // To restore: add " https://www.googleapis.com/auth/gmail.metadata" back to scope
+                    scope: "openid profile email https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events",
                     access_type: "offline",
                     prompt: "consent",
                 },

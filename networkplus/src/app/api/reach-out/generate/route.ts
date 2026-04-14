@@ -62,6 +62,11 @@ export async function POST(req: Request) {
       },
     });
 
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { useCase: true, industryField: true, primaryGoal: true }
+    });
+
     if (!contact) {
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
     }
@@ -94,8 +99,26 @@ export async function POST(req: Request) {
       ? `Highest strength mutual contact is ${topConnection.name}. Mentioning this person provides social proof.`
       : "No shared connections recorded.";
 
+    let userContextStr = "";
+    if (dbUser) {
+      const intentContext = [];
+      if (dbUser.industryField) {
+        intentContext.push(`in the ${dbUser.industryField} industry`);
+      }
+      if (dbUser.primaryGoal) {
+        intentContext.push(`with a primary goal of ${dbUser.primaryGoal}`);
+      }
+      if (dbUser.useCase && dbUser.useCase.toLowerCase() !== "both" && dbUser.useCase.trim() !== "") {
+        intentContext.push(`for ${dbUser.useCase} networking`);
+      }
+      if (intentContext.length > 0) {
+        userContextStr = `USER INTENT/CONTEXT:\nYou are writing on behalf of a user who is ${intentContext.join(' and ')}. Frame your suggestion appropriately considering this goal and field.\n`;
+      }
+    }
+
     const prompt = `You are a helpful CRM personal assistant writing a ${platform === 'email' ? 'professional but friendly email' : 'short and casual check-in message'} to a contact named ${contact.name}. 
 
+${userContextStr}
 RELATIONSHIP CONTEXT:
 - Type: ${relationshipType} (Strength Score: ${contact.strengthScore}/100, Months Known: ${contact.monthsKnown})
 - Description: ${contact.description || 'No notes provided.'}
@@ -115,6 +138,11 @@ ${isNewConnection
 
 TASK:
 Write a short, engaging message to check-in. Use the context naturally but briefly. DO NOT hallucinate details not provided above.
+
+CRITICAL REQUIREMENT ON PLACEHOLDERS:
+If you do not have enough information and MUST use a placeholder (e.g. for a company name, a project, or a specific date), you MUST format it in all caps with brackets, like [FILL IN: COMPANY] or [FILL IN: SPECIFIC PROJECT].
+Additionally, if ANY placeholder is used, you MUST prefix the very beginning of the message with EXACTLY this string:
+"⚠️ CAUTION: Please fill in the bracketed placeholders before sending! ⚠️\n\n"
 
 Output your response as a raw JSON object string (no markdown formatting, no \`\`\`json blocks) with strictly this structure:
 {

@@ -9,12 +9,14 @@ import {
   BarChart3, 
   Network, 
   Users, 
-  AlertTriangle 
+  AlertTriangle,
+  Briefcase
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const sections = [
   { id: "profile", label: "Profile", icon: User },
+  { id: "usage-preferences", label: "Preferences", icon: Briefcase },
   { id: "security", label: "Security", icon: Lock },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "group-types", label: "Group Types", icon: Tags },

@@ -57,11 +57,11 @@ export function OnboardingTour() {
 
     useEffect(() => {
         setMounted(true);
-        // Check if user has completed the onboarding
+        // Check if user has completed the tour
         fetch("/api/user/onboarding")
             .then(res => res.json())
             .then(data => {
-                if (data && data.hasCompletedOnboarding === false) {
+                if (data && data.hasCompletedTour === false) {
                     setRun(true);
                 }
             })
@@ -97,7 +97,7 @@ export function OnboardingTour() {
                 await fetch("/api/user/onboarding", {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ hasCompletedOnboarding: true })
+                    body: JSON.stringify({ hasCompletedTour: true })
                 });
             } catch (err) {
                 console.error("Failed to update onboarding status:", err);
