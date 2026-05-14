@@ -20,6 +20,7 @@ export default function Navbar() {
         { href: "/", label: "Home" },
         { href: "/dashboard", label: "Dashboard" },
         { href: "/calendar", label: "Calendar" },
+        { href: "/trends", label: "Trends" },
     ];
 
     return (

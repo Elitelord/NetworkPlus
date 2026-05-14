@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Check } from "lucide-react"
+import { getDefaultTone, TONE_OPTIONS } from "@/lib/tone-presets"
+import type { CommunicationTone } from "@prisma/client"
 
 const USE_CASE_OPTIONS = [
   { value: "personal", label: "Personal" },
@@ -34,9 +36,15 @@ interface OnboardingProfileProps {
   initialUseCase: string
   initialIndustry: string
   initialGoal: string
+  initialCommunicationTone: CommunicationTone | null
 }
 
-export function OnboardingProfileForm({ initialUseCase, initialIndustry, initialGoal }: OnboardingProfileProps) {
+export function OnboardingProfileForm({
+  initialUseCase,
+  initialIndustry,
+  initialGoal,
+  initialCommunicationTone,
+}: OnboardingProfileProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -51,11 +59,29 @@ export function OnboardingProfileForm({ initialUseCase, initialIndustry, initial
   const [goalSelect, setGoalSelect] = useState(isCustomGoal ? "Other" : (initialGoal || ""))
   const [customGoal, setCustomGoal] = useState(isCustomGoal ? initialGoal : "")
 
+  const resolvedIndustry =
+    industrySelect === "Other" && customIndustry.trim() ? customIndustry : industrySelect
+  const resolvedGoal = goalSelect === "Other" && customGoal.trim() ? customGoal : goalSelect
+
+  const initialResolvedIndustryForTone =
+    initialIndustry && !INDUSTRY_OPTIONS.includes(initialIndustry) ? initialIndustry : initialIndustry || ""
+
+  const [tone, setTone] = useState<CommunicationTone>(() =>
+    initialCommunicationTone ??
+    getDefaultTone(initialUseCase || null, initialResolvedIndustryForTone || null, initialGoal || null)
+  )
+
+  const applySuggestedTone = () => {
+    const t = getDefaultTone(useCase || null, resolvedIndustry || null, resolvedGoal || null)
+    setTone(t)
+    toast.message("Suggested tone applied", { description: "Save to keep this change." })
+  }
+
   const handleSave = async () => {
     setLoading(true)
     const finalIndustry = industrySelect === "Other" && customIndustry.trim() ? customIndustry : industrySelect
     const finalGoal = goalSelect === "Other" && customGoal.trim() ? customGoal : goalSelect
-    
+
     try {
       const res = await fetch("/api/user/onboarding", {
         method: "PATCH",
@@ -63,7 +89,8 @@ export function OnboardingProfileForm({ initialUseCase, initialIndustry, initial
         body: JSON.stringify({
           useCase,
           industryField: finalIndustry,
-          primaryGoal: finalGoal
+          primaryGoal: finalGoal,
+          communicationTone: tone,
         }),
       })
 
@@ -141,6 +168,30 @@ export function OnboardingProfileForm({ initialUseCase, initialIndustry, initial
                 />
             </div>
         )}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <Label htmlFor="tone">Messaging tone</Label>
+          <Button type="button" variant="ghost" size="sm" className="h-8 text-xs shrink-0" onClick={applySuggestedTone}>
+            Use suggested
+          </Button>
+        </div>
+        <NativeSelect
+          id="tone"
+          value={tone}
+          onChange={(e) => setTone(e.target.value as CommunicationTone)}
+        >
+          {TONE_OPTIONS.map((opt) => (
+            <NativeSelectOption key={opt.value} value={opt.value}>
+              {opt.label} — {opt.description}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        <p className="text-xs text-muted-foreground">
+          Used for AI-generated reach-outs, daily suggestions, and notification wording. We pick a default from your
+          use case and industry; you can override anytime.
+        </p>
       </div>
 
       <Button 

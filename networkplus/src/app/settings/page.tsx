@@ -85,6 +85,7 @@ export default async function SettingsPage() {
                                     initialUseCase={(user as any).useCase} 
                                     initialIndustry={(user as any).industryField} 
                                     initialGoal={(user as any).primaryGoal} 
+                                    initialCommunicationTone={(user as any).communicationTone ?? null}
                                 />
                             </div>
                             <Separator />

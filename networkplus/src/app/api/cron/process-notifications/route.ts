@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { initAdmin } from "@/lib/firebase-admin";
 import { getDueSoonContacts } from "@/lib/contacts";
 import { getOrCreateDailyRecommendation } from "@/lib/recommendations";
+import { getCatchUpNotificationCopy } from "@/lib/notification-copy";
 
 export async function GET(req: Request) {
     return handleCron(req);
@@ -56,6 +57,9 @@ async function handleCron(req: Request): Promise<NextResponse> {
                 catchUpCategories: true,
                 catchUpContactIds: true,
                 lastCatchUpSentAt: true,
+                useCase: true,
+                primaryGoal: true,
+                communicationTone: true,
             }
         });
 
@@ -103,24 +107,27 @@ async function handleCron(req: Request): Promise<NextResponse> {
                 // Get AI Recommendation for today
                 const recommendation = await getOrCreateDailyRecommendation(user.id);
 
-                // Construct notification payload
-                let body = "";
-                if (recommendation && !recommendation.dismissed) {
-                    body = `💡 ${recommendation.contact.name}: ${recommendation.reason}`;
-                } else {
-                    // Fallback to generic message if no AI recommendation or it's dismissed
-                    const contactNames = contacts.slice(0, 3).map(c => c.name).join(", ");
-                    const remaining = contacts.length - 3;
-                    body = remaining > 0
-                        ? `Time to catch up with ${contactNames} and ${remaining} others.`
-                        : `Time to catch up with ${contactNames}.`;
-                }
+                const contactNames = contacts.map((c) => c.name);
+                const { title: notificationTitle, body: notificationBody } = getCatchUpNotificationCopy({
+                    useCase: user.useCase ?? null,
+                    primaryGoal: user.primaryGoal ?? null,
+                    tone: user.communicationTone ?? null,
+                    recommendation:
+                        recommendation && !recommendation.dismissed
+                            ? {
+                                  dismissed: recommendation.dismissed,
+                                  reason: recommendation.reason,
+                                  contact: { name: recommendation.contact.name },
+                              }
+                            : null,
+                    contactNames,
+                });
 
                 const message = {
                     token: user.fcmToken!,
                     notification: {
-                        title: "Daily Catch-up",
-                        body: body,
+                        title: notificationTitle,
+                        body: notificationBody,
                     },
                     data: {
                         url: "/dashboard", // or a specific catch-up page

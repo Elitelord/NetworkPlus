@@ -52,19 +52,21 @@ export function SettingsSidebar() {
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
-    // Find the scrollable <main> ancestor (overflow-auto container)
     const scrollableMain = el.closest("main");
     if (scrollableMain) {
-      const offset = 24; // small buffer
-      const top = el.offsetTop - offset;
-      scrollableMain.scrollTo({ top, behavior: "smooth" });
+      const mainRect = scrollableMain.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const buffer = 24;
+      const top =
+        scrollableMain.scrollTop + (elRect.top - mainRect.top) - buffer;
+      scrollableMain.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
     } else {
       el.scrollIntoView({ behavior: "smooth" });
     }
   };
 
   return (
-    <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-x-visible pb-4 md:pb-0 sticky top-24 h-fit max-h-[calc(100vh-8rem)]">
+    <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-x-visible md:overflow-y-auto pb-4 md:pb-0 sticky top-24 h-fit max-h-[calc(100vh-8rem)]">
       {sections.map((section) => (
         <button
           key={section.id}

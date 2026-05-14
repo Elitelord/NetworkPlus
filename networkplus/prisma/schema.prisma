@@ -9,6 +9,13 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum CommunicationTone {
+  WARM
+  PROFESSIONAL
+  CONCISE
+  FRIENDLY
+}
+
 model User {
   id                                String     @id @default(cuid())
   name                              String
@@ -35,6 +42,8 @@ model User {
   useCase                           String?
   industryField                     String?
   primaryGoal                       String?
+  communicationTone                 CommunicationTone?
+  onboardingCatchUpPresetApplied    Boolean    @default(false)
   accounts                          Account[]
   contacts                          Contact[]  @relation("UserContacts")
   reminders                         Reminder[]

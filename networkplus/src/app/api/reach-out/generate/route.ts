@@ -3,6 +3,7 @@ import { type Session } from "next-auth";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { toneToPromptInstruction } from "@/lib/tone-presets";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
 
     const dbUser = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { useCase: true, industryField: true, primaryGoal: true }
+      select: { useCase: true, industryField: true, primaryGoal: true, communicationTone: true }
     });
 
     if (!contact) {
@@ -116,9 +117,14 @@ export async function POST(req: Request) {
       }
     }
 
+    const toneLine = toneToPromptInstruction(dbUser?.communicationTone ?? null);
+
     const prompt = `You are a helpful CRM personal assistant writing a ${platform === 'email' ? 'professional but friendly email' : 'short and casual check-in message'} to a contact named ${contact.name}. 
 
 ${userContextStr}
+USER MESSAGING TONE (apply to the entire message):
+${toneLine}
+
 RELATIONSHIP CONTEXT:
 - Type: ${relationshipType} (Strength Score: ${contact.strengthScore}/100, Months Known: ${contact.monthsKnown})
 - Description: ${contact.description || 'No notes provided.'}

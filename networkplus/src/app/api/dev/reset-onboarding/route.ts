@@ -17,7 +17,9 @@ export async function GET(req: Request) {
         hasCompletedTour: false,
         useCase: null,
         industryField: null,
-        primaryGoal: null
+        primaryGoal: null,
+        communicationTone: null,
+        onboardingCatchUpPresetApplied: false,
       },
     });
 
